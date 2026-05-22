@@ -1,6 +1,6 @@
 # Algebraic Structures in Julia the Viper
 
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 This document provides rigorous algebraic foundations for JtV's seven number systems, establishing their group, ring, and field properties, and proving key algebraic theorems.
 

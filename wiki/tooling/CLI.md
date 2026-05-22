@@ -5,7 +5,7 @@ The `jtv` CLI is the primary tool for working with Julia the Viper programs.
 ## Installation
 
 ```bash
-cargo install jtv-lang
+cargo install jtzig
 ```
 
 ## Commands

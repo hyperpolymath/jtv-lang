@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # META.a2ml — Julia The Viper meta-level information
@@ -7,7 +7,7 @@ version = "0.2.0"
 last-updated = "2026-04-19"
 
 [project-info]
-license = "PMPL-1.0-or-later"
+license = "MPL-2.0"
 license-fallback = "MPL-2.0 (automatic legal fallback until PMPL formally recognised)"
 author = "Jonathan D.A. Jewell (hyperpolymath)"
 author-email = "j.d.a.jewell@open.ac.uk"

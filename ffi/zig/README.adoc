@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = Julia-Zig-FFI
 :toc:
 :toclevels: 3
@@ -104,4 +104,4 @@ This library follows the Rhodium Standard Repository guidelines:
 
 == License
 
-PMPL-1.0-or-later
+MPL-2.0

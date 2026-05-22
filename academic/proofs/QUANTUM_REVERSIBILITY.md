@@ -1,6 +1,6 @@
 # Quantum Computing and Reversible Computation Theory for Julia the Viper
 
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 This document provides rigorous theoretical foundations for JtV's v2 reversible computing features, connecting to quantum computing theory, thermodynamics, and reversible circuit models.
 

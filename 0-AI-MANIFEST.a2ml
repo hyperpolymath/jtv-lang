@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Julia the Viper - AI Manifest (Gateway File)
 #
 # THIS FILE MUST BE READ FIRST BY ALL AI AGENTS.
@@ -97,7 +97,7 @@
 3. **SCM files in .machine_readable/ ONLY** - Never create STATE.scm,
    META.scm, etc. in the repository root.
 
-4. **License: PMPL-1.0-or-later** - All hyperpolymath original code.
+4. **License: MPL-2.0** - All hyperpolymath original code.
 
 5. **Author: Jonathan D.A. Jewell** - Single space between "A." and
    "Jewell". Email: j.d.a.jewell@open.ac.uk (packages), noreply (git).
@@ -116,7 +116,7 @@
 - Created: 2026-02-07
 - Updated: 2026-03-14
 - Maintained By: Jonathan D.A. Jewell (hyperpolymath)
-- License: PMPL-1.0-or-later
+- License: MPL-2.0
 - Protocol: https://github.com/hyperpolymath/0-ai-gatekeeper-protocol
 
 ## Taxonomy Index

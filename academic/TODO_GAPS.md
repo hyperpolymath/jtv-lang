@@ -1,6 +1,6 @@
 # Academic Documentation: TODOs and Implementation Gaps
 
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 This document tracks all items marked as TODO in the academic documentation and identifies gaps between the theoretical foundations and the current implementation.
 

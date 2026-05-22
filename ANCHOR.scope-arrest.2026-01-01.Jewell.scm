@@ -1,5 +1,5 @@
 ;; SPDX-FileCopyrightText: 2026 Hyperpolymath
-;; SPDX-License-Identifier: PMPL-1.0-or-later
+;; SPDX-License-Identifier: MPL-2.0
 ;;
 ;; ANCHOR.scope-arrest.2026-01-01.Jewell.scm  (julia-the-viper)
 ;;

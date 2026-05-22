@@ -1,6 +1,6 @@
 # Security Proofs for Julia the Viper: A Formal Analysis
 
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 This document provides rigorous security proofs demonstrating that JtV achieves code injection immunity through grammatical separation. We formalize attack models, prove non-interference properties, and map to established security frameworks.
 
@@ -297,7 +297,7 @@ fn add(a: i64, b: i64) -> Result<i64, OverflowError> {
 }
 ```
 
-*Proof:* By implementation inspection. See `jtv-lang/src/number.rs`. ∎
+*Proof:* By implementation inspection. See `jtzig/src/number.rs`. ∎
 
 ### 6.3 No Arbitrary Memory Access
 
@@ -335,7 +335,7 @@ While Control Language can diverge, the interpreter enforces:
 2. Stack depth limits (MAX_STACK_DEPTH)
 3. Output size limits (MAX_OUTPUT_SIZE)
 
-*Proof:* By implementation. See `jtv-lang/src/interpreter.rs`. ∎
+*Proof:* By implementation. See `jtzig/src/interpreter.rs`. ∎
 
 ### 7.3 Algorithmic Complexity Attacks
 

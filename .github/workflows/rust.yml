@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 name: Rust CI
 
 on:
@@ -27,15 +27,15 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/jtv-lang/target
+            packages/jtzig/target
             tools/cli/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check jtv-lang
+      - name: Check jtzig
         run: cargo check --all-features
-        working-directory: packages/jtv-lang
+        working-directory: packages/jtzig
 
       - name: Check jtv-cli
         run: cargo check --all-features
@@ -57,15 +57,15 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/jtv-lang/target
+            packages/jtzig/target
             tools/cli/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run jtv-lang tests
+      - name: Run jtzig tests
         run: cargo test --all-features
-        working-directory: packages/jtv-lang
+        working-directory: packages/jtzig
 
       - name: Build CLI
         run: cargo build --release
@@ -91,15 +91,15 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/jtv-lang/target
+            packages/jtzig/target
             tools/cli/target
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-clippy-
 
-      - name: Clippy jtv-lang
+      - name: Clippy jtzig
         run: cargo clippy --all-features -- -D warnings
-        working-directory: packages/jtv-lang
+        working-directory: packages/jtzig
 
       - name: Clippy jtv-cli
         run: cargo clippy --all-features -- -D warnings
@@ -116,9 +116,9 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Check formatting jtv-lang
+      - name: Check formatting jtzig
         run: cargo fmt --check
-        working-directory: packages/jtv-lang
+        working-directory: packages/jtzig
 
       - name: Check formatting jtv-cli
         run: cargo fmt --check

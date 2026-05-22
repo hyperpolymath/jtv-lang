@@ -1,6 +1,6 @@
 # TEST-NEEDS.md — julia-the-viper
 
-<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
+<!-- SPDX-License-Identifier: MPL-2.0 -->
 
 ## CRG Grade: B — Updated 2026-04-04
 

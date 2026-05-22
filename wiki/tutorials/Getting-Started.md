@@ -17,7 +17,7 @@ This separation means user input can NEVER become executable code - it's not a r
 
 ```bash
 # Install the JtV CLI
-cargo install jtv-lang
+cargo install jtzig
 
 # Verify installation
 jtv --version

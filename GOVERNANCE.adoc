@@ -494,4 +494,4 @@ This governance model draws inspiration from:
 
 Last updated: 2025-01-22 +
 Version: 1.0 +
-SPDX-License-Identifier: PMPL-1.0-or-later-or-later
+SPDX-License-Identifier: MPL-2.0-or-later

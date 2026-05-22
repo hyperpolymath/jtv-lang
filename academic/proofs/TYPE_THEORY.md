@@ -1,6 +1,6 @@
 # Type Theory of Julia the Viper: A Complete Formalization
 
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 This document provides a rigorous type-theoretic treatment of JtV, including complete typing rules, metatheoretic proofs, and connections to established type systems.
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 module ViperPkg
 
 using HTTP, JSON3, TOML, SHA, Downloads, Tar
@@ -188,7 +188,7 @@ function create_default_manifest(path::String)
             "name" => basename(dirname(abspath(path))),
             "version" => "0.1.0",
             "authors" => ["Unknown"],
-            "license" => "PMPL-1.0-or-later"
+            "license" => "MPL-2.0"
         ),
         "dependencies" => Dict{String,String}()
     )

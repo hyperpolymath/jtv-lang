@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = Julia the Viper — EXPLAINME
 
 == Harvard Architecture Language for Security-Critical Applications
@@ -10,7 +10,7 @@ ____
 
 The core idea is that user-supplied data can never contain control flow because the grammar physically forbids it — not through runtime validation but through separate parse grammars for Control and Data contexts. See link:docs/GRAMMAR_EVOLUTION.md[GRAMMAR_EVOLUTION.md] for the v1/v2 separation rationale and link:docs/QUANTUM_VISION.md[QUANTUM_VISION.md] for the reversible computing extension.
 
-**Caveat:** v1 alpha is partially implemented (parser and interpreter stubs exist); the full Rust `jtv-lang` crate referenced in the README is not yet present. v2 (reversible computing) is specification-only.
+**Caveat:** v1 alpha is partially implemented (parser and interpreter stubs exist); the full Rust `jtzig` crate referenced in the README is not yet present. v2 (reversible computing) is specification-only.
 
 === Evidence
 

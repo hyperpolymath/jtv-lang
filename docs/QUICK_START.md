@@ -14,7 +14,7 @@ This architectural separation provides formal security guarantees that runtime c
 ### Via Cargo (Rust)
 
 ```bash
-cargo install jtv-lang
+cargo install jtzig
 ```
 
 ### Via NPM (WASM)

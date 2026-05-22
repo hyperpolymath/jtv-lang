@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 
 name = "ZigFFI"
 uuid = "12345678-1234-5678-1234-567812345678"

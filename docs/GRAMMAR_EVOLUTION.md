@@ -193,7 +193,7 @@ Must be:
 - Complete
 - Unambiguous
 - Proven Total for Data Language
-- Reference implementation: `packages/jtv-lang/`
+- Reference implementation: `packages/jtzig/`
 
 ### v2 Grammar File
 Location: `shared/grammar/jtv-v2.ebnf`

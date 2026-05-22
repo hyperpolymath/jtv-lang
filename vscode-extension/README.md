@@ -56,7 +56,7 @@ code --install-extension julia-the-viper-0.1.0.vsix
 
 ## License
 
-PMPL-1.0-or-later
+MPL-2.0
 
 ## Author
 

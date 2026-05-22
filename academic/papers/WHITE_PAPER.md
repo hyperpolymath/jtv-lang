@@ -3,7 +3,7 @@
 **Authors:** The JtV Research Team
 **Version:** 1.0 (Draft)
 **Date:** 2025
-**SPDX-License-Identifier: PMPL-1.0-or-later
+**SPDX-License-Identifier: MPL-2.0
 
 ---
 
@@ -558,8 +558,8 @@ See `shared/grammar/jtv.ebnf` for the complete formal grammar.
 
 ## Appendix C: Rust Crate Structure
 
-- `jtv-lang/src/parser.rs`: Pest-based parser
-- `jtv-lang/src/interpreter.rs`: Execution engine
-- `jtv-lang/src/number.rs`: Seven number systems
-- `jtv-lang/src/purity.rs`: Purity analysis
-- `jtv-lang/src/reversible.rs`: Reversible computing (v2)
+- `jtzig/src/parser.rs`: Pest-based parser
+- `jtzig/src/interpreter.rs`: Execution engine
+- `jtzig/src/number.rs`: Seven number systems
+- `jtzig/src/purity.rs`: Purity analysis
+- `jtzig/src/reversible.rs`: Reversible computing (v2)

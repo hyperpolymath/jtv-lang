@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Service Worker for Julia the Viper PWA
 
 const CACHE_NAME = 'jtv-v1';

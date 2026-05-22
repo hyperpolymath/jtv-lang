@@ -47,15 +47,15 @@ We dual-license to:
 
 ```rust
 // To use under MIT:
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // See LICENSE-MIT
 
 // To use under Palimpsest:
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // See LICENSE-PALIMPSEST
 
 // To explicitly dual-license your derivative:
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 ```
 
 ## Contributing
@@ -116,7 +116,7 @@ Documentation in `docs/` is licensed under **CC-BY-4.0**:
 
 ## Standard Library
 
-The standard library (`packages/jtv-lang/stdlib/`) is dual-licensed:
+The standard library (`packages/jtzig/stdlib/`) is dual-licensed:
 
 - Use under MIT for maximum compatibility
 - Use under Palimpsest if you prefer ethical licensing
@@ -150,13 +150,13 @@ For SPDX compliance in your projects:
 
 ```
 # Using MIT only
-SPDX-License-Identifier: PMPL-1.0-or-later-or-later
+SPDX-License-Identifier: MPL-2.0-or-later
 
 # Using Palimpsest only
-SPDX-License-Identifier: PMPL-1.0-or-later-or-later
+SPDX-License-Identifier: MPL-2.0-or-later
 
 # Using either (recommended)
-SPDX-License-Identifier: PMPL-1.0-or-later-or-later
+SPDX-License-Identifier: MPL-2.0-or-later
 ```
 
 ---

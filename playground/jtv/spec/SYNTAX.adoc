@@ -2,7 +2,7 @@
 :toc: macro
 :icons: font
 
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 *Status*: Draft (f0 milestone)
 

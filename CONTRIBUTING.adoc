@@ -110,7 +110,7 @@ just example 01_hello_addition
 ----
 julia-the-viper/
 ├── packages/
-│   ├── jtv-lang/        # Core Rust implementation
+│   ├── jtzig/        # Core Rust implementation
 │   ├── jtv-analyzer/    # TypeScript code analyzer
 │   └── jtv-safe/        # Smart contract compiler (future)
 ├── examples/            # Example programs
@@ -357,7 +357,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 [source]
 ----
-SPDX-License-Identifier: PMPL-1.0-or-later-or-later
+SPDX-License-Identifier: MPL-2.0-or-later
 ----
 
 See link:LICENSE.txt[LICENSE.txt] for details.

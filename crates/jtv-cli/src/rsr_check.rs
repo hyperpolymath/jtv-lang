@@ -247,8 +247,8 @@ impl RsrChecker {
 
         // Check for tests
         let test_paths = vec![
-            "packages/jtv-lang/tests",
-            "packages/jtv-lang/benches",
+            "packages/jtzig/tests",
+            "packages/jtzig/benches",
             "tools/cli/tests",
         ];
 
@@ -263,7 +263,7 @@ impl RsrChecker {
         }
 
         // Check for no unsafe code (scan Rust files)
-        if let Ok(entries) = fs::read_dir("packages/jtv-lang/src") {
+        if let Ok(entries) = fs::read_dir("packages/jtzig/src") {
             let mut has_unsafe = false;
             for entry in entries.flatten() {
                 if let Ok(content) = fs::read_to_string(entry.path()) {
@@ -292,7 +292,7 @@ impl RsrChecker {
         println!("{}", "📡 Offline-First".yellow().bold());
 
         // Check Cargo.toml for network dependencies
-        if let Ok(cargo_toml) = fs::read_to_string("packages/jtv-lang/Cargo.toml") {
+        if let Ok(cargo_toml) = fs::read_to_string("packages/jtzig/Cargo.toml") {
             let network_keywords = vec!["reqwest", "hyper", "tokio", "async"];
             let mut has_network = false;
 

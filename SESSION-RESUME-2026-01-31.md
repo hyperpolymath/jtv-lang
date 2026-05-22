@@ -8,12 +8,12 @@
 - ✅ Added `flake.nix` for Nix reproducible builds
 - ✅ Created `.editorconfig` for code style consistency
 - ✅ Fixed Clippy warning in `rsr_check.rs`
-- ✅ Standardized licenses to PMPL-1.0-or-later
+- ✅ Standardized licenses to MPL-2.0
 - ✅ Fixed author attribution to Jonathan D.A. Jewell
 - ✅ Achieved RSR Gold standard (93%)
 
 **Commits before crash:**
-- `197933d` - chore: standardize licenses to PMPL-1.0-or-later and fix author attribution
+- `197933d` - chore: standardize licenses to MPL-2.0 and fix author attribution
 - `f6c53bb` - feat: achieve RSR Gold standard (93%) with security & build improvements
 - `85f5441` - feat: compiler infrastructure with WASM compilation working
 
@@ -21,7 +21,7 @@
 
 ### 1. Fixed License Inconsistency
 - **Problem:** Workspace `Cargo.toml` still had `GPL-3.0-or-later` license
-- **Fix:** Changed to `PMPL-1.0-or-later` for consistency
+- **Fix:** Changed to `MPL-2.0` for consistency
 - **Commit:** `c9c4c17`
 
 ### 2. Pushed Unpushed Commits
@@ -39,7 +39,7 @@
   - `jtv_core_bg.wasm` (413KB)
   - `jtv_core.js` (10KB)
   - `jtv_core.d.ts` (TypeScript declarations)
-  - `package.json` (with PMPL-1.0-or-later license)
+  - `package.json` (with MPL-2.0 license)
 - Added LICENSE files to `pkg/` directory
 - Fixed wasm-pack license warning
 
@@ -61,7 +61,7 @@ Created complete PWA infrastructure in `web/`:
   - Standalone display mode
 
 - `sw.js` - Service worker with:
-  - SPDX header (PMPL-1.0-or-later)
+  - SPDX header (MPL-2.0)
   - Cache-first strategy
   - Offline support for WASM and HTML
 

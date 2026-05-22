@@ -9,7 +9,7 @@ cache:
   key: "${CI_COMMIT_REF_SLUG}"
   paths:
     - .cargo/
-    - packages/jtv-lang/target/
+    - packages/jtzig/target/
     - tools/cli/target/
 
 stages:
@@ -37,7 +37,7 @@ format-check:
   extends: .rust-template
   stage: check
   script:
-    - cd packages/jtv-lang && cargo fmt -- --check
+    - cd packages/jtzig && cargo fmt -- --check
     - cd ../../tools/cli && cargo fmt -- --check
   allow_failure: false
 
@@ -45,7 +45,7 @@ lint:
   extends: .rust-template
   stage: check
   script:
-    - cd packages/jtv-lang && cargo clippy -- -D warnings
+    - cd packages/jtzig && cargo clippy -- -D warnings
     - cd ../../tools/cli && cargo clippy -- -D warnings
   allow_failure: false
 
@@ -54,7 +54,7 @@ security-audit:
   stage: check
   script:
     - cargo install cargo-audit || true
-    - cd packages/jtv-lang && cargo audit
+    - cd packages/jtzig && cargo audit
     - cd ../../tools/cli && cargo audit
   allow_failure: true
 
@@ -64,36 +64,36 @@ test-parser:
   extends: .rust-template
   stage: test
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo test --lib parser
   artifacts:
     reports:
-      junit: packages/jtv-lang/target/junit.xml
+      junit: packages/jtzig/target/junit.xml
     expire_in: 1 week
 
 test-interpreter:
   extends: .rust-template
   stage: test
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo test --lib interpreter
   artifacts:
     reports:
-      junit: packages/jtv-lang/target/junit.xml
+      junit: packages/jtzig/target/junit.xml
     expire_in: 1 week
 
 test-all:
   extends: .rust-template
   stage: test
   script:
-    - cd packages/jtv-lang && cargo test --all-features
+    - cd packages/jtzig && cargo test --all-features
     - cd ../../tools/cli && cargo test
   coverage: '/^\s*lines:\s*\d+\.\d+\%/'
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: packages/jtv-lang/target/coverage.xml
+        path: packages/jtzig/target/coverage.xml
     expire_in: 1 week
 
 test-analyzer:
@@ -107,7 +107,7 @@ benchmark:
   extends: .rust-template
   stage: test
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo bench --no-run
   only:
     - main
@@ -120,11 +120,11 @@ build-lang:
   extends: .rust-template
   stage: build
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo build --release
   artifacts:
     paths:
-      - packages/jtv-lang/target/release/libjtv_lang.rlib
+      - packages/jtzig/target/release/libjtv_lang.rlib
     expire_in: 1 week
 
 build-cli:
@@ -144,7 +144,7 @@ build-wasm:
   before_script:
     - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - wasm-pack build --target web --out-dir ../../dist/wasm
   artifacts:
     paths:
@@ -158,11 +158,11 @@ build-docs:
   extends: .rust-template
   stage: build
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo doc --no-deps
   artifacts:
     paths:
-      - packages/jtv-lang/target/doc/
+      - packages/jtzig/target/doc/
     expire_in: 1 week
   only:
     - main
@@ -175,7 +175,7 @@ pages:
     - build-docs
   script:
     - mkdir -p public
-    - cp -r packages/jtv-lang/target/doc/* public/
+    - cp -r packages/jtzig/target/doc/* public/
   artifacts:
     paths:
       - public
@@ -240,7 +240,7 @@ deploy-crates-io:
   extends: .rust-template
   stage: deploy
   script:
-    - cd packages/jtv-lang
+    - cd packages/jtzig
     - cargo publish --dry-run
     # Actual publish requires manual approval and API token
   when: manual

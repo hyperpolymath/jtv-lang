@@ -10,7 +10,7 @@
   title = {jtv-playground},
   year = {2025},
   url = {https://github.com/hyperpolymath/jtv-playground},
-  license = {PMPL-1.0-or-later}
+  license = {MPL-2.0}
 }
 ----
 

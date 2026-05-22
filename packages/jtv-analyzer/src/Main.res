@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Julia the Viper - Code Analyzer for Python/JavaScript/Ruby
 // Analyzes legacy code for termination guarantees, purity, and complexity
 

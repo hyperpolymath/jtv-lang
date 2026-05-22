@@ -2,7 +2,7 @@
 :version: 2.0.0-draft
 :date: 2026-04-16
 
-SPDX-License-Identifier: PMPL-1.0-or-later
+SPDX-License-Identifier: MPL-2.0
 Copyright (c) 2026 Jonathan D.A. Jewell
 
 == 1. Effect Lattice
