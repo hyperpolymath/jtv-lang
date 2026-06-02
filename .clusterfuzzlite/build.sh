@@ -7,10 +7,9 @@ SANITIZER="${SANITIZER:-address}"
 if [ "$SANITIZER" = "address" ]; then
   cargo +nightly fuzz build --release
 elif [ "$SANITIZER" = "undefined" ]; then
-  # cargo fuzz defaults to ASan; for UBSan we suppress that and inject UBSan
-  # via RUSTFLAGS so the bad_build_check does not flag a sanitizer mismatch.
-  RUSTFLAGS="-Z sanitizer=undefined" \
-    cargo +nightly fuzz build --sanitizer none --release
+  # Rust has no UBSan equivalent via -Z sanitizer.
+  # Build without any sanitizer so bad_build_check sees no ASan instrumentation.
+  cargo +nightly fuzz build --sanitizer none --release
 else
   cargo +nightly fuzz build --release
 fi
