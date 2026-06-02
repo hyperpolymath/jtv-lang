@@ -1,38 +1,412 @@
 // SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Julia the Viper — EXPLAINME
+:toc: left
+:toclevels: 3
 
-== Harvard Architecture Language for Security-Critical Applications
+A deep-dive reference for the language's core ideas, formal grounding, and design decisions.
 
-[quote, README]
-____
-Julia the Viper is a Harvard Architecture programming language designed to make code injection grammatically impossible. Named after mathematician Julia Robinson (Hilbert's 10th problem) with a playful nod to "adder" (snake + addition), JtV separates computation into two grammatically distinct channels: Control Language (Turing-complete, imperative) and Data Language (Total/provably halting, addition-only).
-____
+---
 
-The core idea is that user-supplied data can never contain control flow because the grammar physically forbids it — not through runtime validation but through separate parse grammars for Control and Data contexts. See link:docs/GRAMMAR_EVOLUTION.md[GRAMMAR_EVOLUTION.md] for the v1/v2 separation rationale and link:docs/QUANTUM_VISION.md[QUANTUM_VISION.md] for the reversible computing extension.
+== 1. The Security Thesis
 
-**Caveat:** v1 alpha is partially implemented (parser and interpreter stubs exist); the full Rust `jtzig` crate referenced in the README is not yet present. v2 (reversible computing) is specification-only.
+Traditional injection defences (input sanitisation, parameterised queries, Content-Security-Policy) share a structural weakness: they protect at the *boundary*, not at the *structure*. An adversary who finds a gap in the boundary wins.
 
-=== Evidence
+JtV's answer is different: *make control constructs grammatically inexpressible in the Data sublanguage*. An attacker who controls the Data Language simply cannot write `while` or `if`, because those tokens do not exist in the Data grammar.
 
-[cols="1,2", options="header"]
+This is not sandboxing. The Data Language parser *rejects* control constructs before any evaluator sees them.
+
+=== Why Not Just Sanitise?
+
+Consider SQL injection:
+
+[source,sql]
+----
+SELECT * FROM users WHERE name = '<user_input>'
+----
+
+If `user_input = "'; DROP TABLE users; --"`, the query engine sees control SQL because the grammar for "user-supplied string" is the *same* as the grammar for SQL itself.
+
+In JtV, user-supplied data enters through the Data Language parser. The Data Language grammar has no `DROP`, no `SELECT`, no `IF`, and no `WHILE`. The injected string is simply invalid Data — a parse error, not an exploit.
+
+---
+
+== 2. Harvard Architecture in JtV
+
+The original Harvard architecture separated program memory (code) from data memory. JtV applies the same principle at the *syntax and semantics level*:
+
+[cols="1,2,2", options="header"]
 |===
-| Path | Proves
+| Property | Data Language | Control Language
 
-| `examples/basic/`, `examples/advanced/`, `examples/contracts/`
-| 17+ example programs demonstrating Control/Data separation exist
+| Loops
+| Not expressible
+| `while`, `for`
 
-| `packages/jtv-analyzer/`
-| Code analyzer component is present (Deno-based)
+| Branching
+| Not expressible
+| `if/else`, `match`
 
-| `fuzz/fuzz_targets/fuzz_parser.rs`
-| Parser fuzzing exists, confirming grammar-level enforcement approach
+| Assignment
+| Not expressible
+| `x = expr`
 
-| `docs/GRAMMAR_EVOLUTION.md`
-| v1 vs v2 grammar separation is formally documented
+| Side effects
+| Forbidden
+| Allowed (I/O, mutation)
 
-| `docs/QUANTUM_VISION.md`
-| Reversible computing / quantum simulation design is documented
+| Termination
+| Guaranteed (total)
+| Not guaranteed
 
-| `packages/jtv-analyzer/abi/`
-| ABI definitions exist for the analyzer layer
+| Entry from user input
+| ✅ Safe
+| ❌ Never from untrusted input
 |===
+
+The grammar enforces this at parse time. The Lean 4 proof `JtvSecurity.lean` (in `jtv_proofs/`) mechanically verifies the separation at the semantic level.
+
+---
+
+== 3. The Data Language
+
+=== 3.1 Syntax Sketch
+
+[source]
+----
+expr ::= literal
+       | variable
+       | expr + expr
+       | -expr
+       | function_call  // only @pure @total functions
+----
+
+That is the complete grammar of expressions in the Data Language. No subtraction token — `a - b` is `a + (-b)`. No multiplication or division — those would break totality guarantees in some cases and are handled via the Control Language or pure functions.
+
+=== 3.2 Why Addition-Only?
+
+. *Universal*: With Control loops, addition is Turing-complete. Without them, it is provably total.
+. *Reversible*: Addition has a natural inverse (subtraction). This enables v2's `reverse` blocks.
+. *Cross-numeric*: Addition is defined on all 7 JtV number systems. A single operator works across Int, Float, Rational, Complex, Hex, Binary, and Symbolic.
+. *Non-destructive*: Addition constructs new values from existing ones. It does not destroy the inputs.
+
+=== 3.3 Totality Proof
+
+The Lean proof `JtvTheorems.lean` contains:
+
+[source,lean]
+----
+-- Every DataExpr evaluation terminates
+theorem eval_terminates (e : DataExpr) (σ : State) : ∃ v, evalDataExpr e σ = v
+----
+
+This is trivially true by structural recursion on the grammar, since DataExpr contains no loops. The proof is included not because it is difficult, but because it is *machine-checked* — no informal argument required.
+
+---
+
+== 4. The Purity Lattice
+
+JtV has three purity levels, ordered from most to least restrictive:
+
+[source]
+----
+Total ≤ Pure ≤ Impure
+----
+
+* `@total` — provably terminating; no IO; must be callable from Data context
+* `@pure` — terminates in practice; no IO; no observable side effects
+* `Impure` — unrestricted; may loop; may have IO
+
+The Lean proof `JtvTypes.lean` verifies `purityLeqTrans` (transitivity of the ordering) and `PurityLeq` (reflexivity and antisymmetry).
+
+**Key rule**: Only `@total` and `@pure` functions are callable from the Data Language. Calling an `Impure` function from a Data expression is a static type error.
+
+---
+
+== 5. The Echo Type System
+
+Echo is a *Phase 2* feature. It is an *effect dimension* — not a value type — that tracks what information is preserved through a computation.
+
+=== 5.1 Three Echo Classes
+
+[cols="1,2,2", options="header"]
+|===
+| Class | Meaning | Example
+
+| `@echo(safe)`
+| Bijective — full round-trip
+| Int → Int, Int → Rational (exact)
+
+| `@echo(neutral)`
+| Lossy, but *residue retained*
+| Float → Int (fractional part available)
+
+| `@echo(breaking)`
+| Total erasure — no lineage recovery
+| Int → Bool (only sign preserved)
+|===
+
+=== 5.2 The Retained-Loss Lineage Principle
+
+Echo is motivated by a simple question: *if information is lost in a computation, where did it go?*
+
+`EchoNeutral` is not merely "some loss happened". It means the *residue* — the discarded information — is structurally retained and available for audit. This is the retained-loss lineage principle:
+
+[source,lean]
+----
+-- The lineage fibre: Echo f y := Σ x, f x = y
+-- "there exists a preimage x such that f(x) = y"
+structure EchoFibre (f : α → β) (y : β) where
+  preimage : α
+  proof : f preimage = y
+----
+
+An `@echo(neutral)` operation carries its fibre — the original value from which the result was derived — so audit trails are possible.
+
+=== 5.3 Annotation Semantics
+
+Annotations are *checked* at boundaries (foreign calls, audited APIs):
+
+[source,jtv]
+----
+@echo(safe)    fn exact_cast(x: Int) -> Rational   -- compiler verifies bijectivity
+@echo(neutral) fn truncate(x: Float) -> Int         -- compiler verifies residue retained
+@echo(breaking) fn to_bool(x: Int) -> Bool          -- compiler verifies this is expected
+----
+
+When absent, the echo class is *inferred* from the operation shape.
+
+=== 5.4 Numeric Conversion Rules
+
+[cols="2,1,2", options="header"]
+|===
+| Conversion | Echo Class | Rationale
+
+| Int → Rational
+| Safe
+| Exact; invertible
+
+| Float → Int (floor/truncate)
+| Neutral
+| Fractional residue available
+
+| Int → Bool (sign test)
+| Breaking
+| All but ±/0 discarded
+|===
+
+---
+
+== 6. v2 Reversibility
+
+Reversibility is a first-class language feature in JtV v2, motivated by:
+
+. *Quantum circuit simulation*: quantum gates are unitary (reversible); reverse blocks model this directly
+. *Landauer's principle*: erasing information dissipates energy; reversible computation can be thermodynamically efficient
+. *Debugging*: program reversal enables causal back-tracing
+
+=== 6.1 The `reversible` Block
+
+[source,jtv]
+----
+reversible {
+    x += delta
+    y += x
+} -> tok           // tok : ReversalToken — linear, use-once
+----
+
+On entry, locals are snapshot-captured. On `reverse tok`, the operations are inverted in reverse order: `y -= x`, then `x -= delta`.
+
+=== 6.2 Token Linearity
+
+`ReversalToken` is linearly typed: exactly one of the following must occur:
+
+* `reverse tok` — undo the block
+* `abandon tok` — explicitly discard (the block's effects are committed permanently)
+
+Failing to use the token, or using it twice, is a static type error.
+
+=== 6.3 Closed Decisions
+
+The v2 reversibility design (5 decisions, see `docs/language/DESIGN-JTV-V2-REVERSIBILITY.md`):
+
+. Snapshot-based rollback (not inverse-function-based)
+. `Send` to external handles inside `reversible { }` requires `irreversible { }` wrapper — irreversibility is explicit
+. `reverse { x += v }` desugars to `x -= v` (auto-generated; no user-visible subtraction token)
+. `ReversalToken` linear use-once typing enforced by the type system
+. Abandoning a token commits the effects permanently (cannot be undone)
+
+---
+
+== 7. Formal Proof Architecture
+
+=== 7.1 Lean 4 Libraries
+
+The `jtv_proofs/` directory contains five Lean 4 libraries under `jtv_proofs/lakefile.lean`. All compile under Lean 4 v4.12.0 with zero `sorry` or `sorryAx`.
+
+[source,lean]
+----
+-- JtvCore.lean: the foundation
+abbrev State := String → Int
+inductive DataExpr where
+  | lit : Int → DataExpr
+  | var : String → DataExpr
+  | add : DataExpr → DataExpr → DataExpr
+  | neg : DataExpr → DataExpr
+----
+
+Key theorems verified:
+
+* **Totality**: `evalDataExpr` terminates by structural recursion (no `termination_by` needed)
+* **Determinism**: `data_step_deterministic` — the Data Language has a unique evaluation result
+* **State independence**: `eval_state_independent` — if no free variables, result is state-independent
+* **No infinite loops**: `no_infinite_dataExpr` — Data expressions cannot loop
+* **Injection impossibility** (`JtvSecurity.lean`): attacker-controlled data cannot inject control flow
+
+=== 7.2 Idris2 ABI Types
+
+`src/abi/Types.idr` uses Idris2's dependent type system to enforce the Data/Control separation as a type-level invariant:
+
+[source,idris]
+----
+-- The GADT index is the separation guarantee
+data Expr : Language -> Type where
+  DLit  : Int -> Expr DataLang
+  DAdd  : Expr DataLang -> Expr DataLang -> Expr DataLang
+  CIf   : Expr DataLang -> Expr ControlLang -> Expr ControlLang -> Expr ControlLang
+
+-- Checkable theorem: all DataLang expressions are not control
+dataIsNeverControl : (e : Expr DataLang) -> isControl e = False
+----
+
+The `%default total` pragma forces Idris2 to verify that all functions terminate. Any hole or non-total pattern is a compile error.
+
+=== 7.3 Proof–Implementation Gap
+
+The proofs verify semantic *models*, not the executable Rust interpreter directly. The gap:
+
+* Lean/Idris proofs model: AST → `evalDataExpr` → `Int`
+* Rust interpreter processes: `pest` parse tree → `Value` enum → side effects
+
+Bridging this gap (extraction or correlation testing) is future work. The proofs are nonetheless valuable: they pin the semantics precisely, making any divergence between model and implementation *detectable*.
+
+---
+
+== 8. Design Decisions Worth Knowing
+
+=== 8.1 Why No Subtraction Token?
+
+Subtraction `a - b` is expressed as `a + (-b)`. This is deliberate:
+
+. Preserves the *addition-only* invariant (critical for certain algebraic properties)
+. v2 reverse blocks need to generate subtraction automatically — if users could write `-` directly, the grammar would be harder to analyse
+. With unary negation, you lose no expressive power
+
+=== 8.2 Why Not Just Use Rust?
+
+JtV does not compete with Rust. It *extends* legacy systems (Python/PHP/JS). The use case is: "I have an existing system that takes user input. I want to make certain paths injection-proof." JtV provides a safe channel for those paths without requiring a complete rewrite.
+
+=== 8.3 PataCL and Compile-Time Decisions
+
+Compile-time decisions (target gating, feature gating, coprocessor declaration liveness) are delegated to PataCL — a sibling language at `/var/mnt/eclipse/repos/patacl/`. JtV's grammar does not grow embedded decision predicates; it references PataCL gates by name (ADR-0006, the "Delta pivot").
+
+This keeps JtV focused on *runtime semantics* and PataCL focused on *compile-time decisions*. Two focused languages, not one bloated one.
+
+=== 8.4 Echo as Effect, Not Value
+
+Echo tracks *what information is preserved*, not *what the value is*. This is intentional: a function returning `Int` has the same *value type* regardless of whether it discards information. Echo sits alongside the type system as a separate dimension.
+
+Value-level `Echo<T>` wrappers (carrying the preimage) are reserved for Phase 4 (see `ALIGNMENT-AFFINESCRIPT.adoc`). Phase 2 is effect-only: annotations, inference, checked boundaries.
+
+---
+
+== 9. How to Read the Proofs
+
+=== 9.1 For Lean 4 Beginners
+
+Start with `jtv_proofs/JtvCore.lean`:
+
+. `State`, `Term`, `Expr`, `DataExpr` — the ASTs
+. `evalTerm`, `evalExpr`, `evalDataExpr` — the evaluators (pure functions, no side effects)
+. The `example` lines at the bottom — sanity checks that compile to `rfl`
+
+Then `JtvTheorems.lean` for the algebraic properties. The proof style is direct: `cases`, `simp`, `omega`, `ring` for arithmetic, `InvImage.wf` for well-foundedness. No `sorry`, no `native_decide`.
+
+=== 9.2 For Idris2 Beginners
+
+`src/abi/Types.idr` is self-contained. The key idiom is the GADT index:
+
+[source,idris]
+----
+data Expr : Language -> Type
+-- Expr DataLang — only Data constructors typecheck here
+-- Expr ControlLang — only Control constructors typecheck here
+----
+
+The type checker enforces separation structurally. `dataIsNeverControl` just records what the type checker already knows.
+
+=== 9.3 What Is Not Yet Proved
+
+* The Rust interpreter is correct with respect to the Lean semantics (extraction gap)
+* `typing_coercion` in `JtvTypes.lean` is weaker than its docstring — it proves existence of a type but not coercion to the target type (follow-up ADR needed)
+* Echo residue availability in `@echo(neutral)` operations (Phase 3)
+
+---
+
+== 10. Evidence Matrix
+
+[cols="2,1,1", options="header"]
+|===
+| Claim | Evidence | Status
+
+| Data Language is injection-proof
+| `JtvSecurity.lean`, Lean 4 proof
+| ✅ Mechanised
+
+| Data Language is total
+| `JtvTheorems.lean`, structural recursion
+| ✅ Mechanised
+
+| Harvard separation is grammatical
+| `src/abi/Types.idr`, GADT index
+| ✅ Mechanised
+
+| Purity ordering is transitive
+| `JtvTypes.lean`, `purityLeqTrans`
+| ✅ Mechanised
+
+| Numeric tower widening is transitive
+| `src/abi/Types.idr`, `widenTrans`
+| ✅ Mechanised
+
+| Echo retained-loss lineage
+| `jtv_proofs/JtvEcho.lean`
+| ✅ Mechanised (Phase 2)
+
+| Rust interpreter matches Lean semantics
+| Not yet proved
+| ⏳ Future work
+|===
+
+---
+
+== 11. Etymology and Context
+
+* **Julia Robinson** (1919–1985): proved Hilbert's 10th problem undecidable (with Davis, Matiyasevich). She worked on recursive functions, Diophantine equations, and decision problems. JtV inherits her rigour.
+* **Viper**: a snake. Adder is also a snake. The Data Language is an adder — it only adds.
+* *"It's basically the same thing as an adder."* — the humble origin story, from the pseudocode file `julia-viper` in the repo root.
+
+The puns are real. The security model is serious.
+
+---
+
+== 12. Further Reading
+
+* `STATUS.adoc` — current implementation and proof status
+* `ROADMAP.adoc` — planned features
+* `docs/language/DESIGN-JTV-V2-REVERSIBILITY.md` — reversibility design (5 closed decisions)
+* `docs/design-decisions/0006-patacl-pivot.adoc` — PataCL pivot ADR
+* `ALIGNMENT-AFFINESCRIPT.adoc` — Echo / AffineScript alignment
+* `spec/jtv_v2_type_system_corrected.adoc` — full type system spec including Echo §7 and §12
+* `verification/PROOF-CAPABILITY-MATRIX.adoc` — what each proof library covers
+* `.machine_readable/6a2/` — machine-readable project state (for agents)

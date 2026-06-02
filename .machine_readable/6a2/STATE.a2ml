@@ -5,20 +5,21 @@
 [metadata]
 project = "julia-the-viper"
 version = "0.0.1"
-last-updated = "2026-04-27"
+last-updated = "2026-06-02"
 status = "active"
-session = "2026-04-27 — WASM extern-coproc bridge complete; all roadmap items done"
+session = "2026-06-02 — Proof repair complete; Echo Phase 2 design; build-truth CI fixes; documentation refresh"
 
 [project-context]
 name = "Julia The Viper"
 purpose = """Harvard-architecture programming language with grammatical separation
 of Control (Turing-complete) and Data (total, addition-only). Universal extender
 for injection-resistant retrofits. v2 adds reversibility via reverse blocks.
+Echo type system (Phase 2): effect dimension tracking retained-loss lineage.
 Post-pivot 2026-04-19: compile-time decisions delegated to PataCL."""
-completion-percentage = 100
+completion-percentage = 72  # core runtime done; proofs compile; verification chain not integrated; coproc impl gated
 
 [position]
-phase = "production-ready"   # design | implementation | testing | maintenance | archived
+phase = "alpha"        # design | implementation | testing | maintenance | archived
 maturity = "experimental"  # experimental | alpha | beta | production | lts
 coproc-sub-phase = "design complete — Phase 1 (grammar / AST / parser) pending PataCL Phase 1"
 
@@ -31,18 +32,33 @@ milestones = [
   "coprocessor support implementation — DONE (Phase 2+4, 2026-04-27)",
   "v2 reversibility C1 Phase 1 — COMPLETE (2026-04-27): execute_inverse added; reverse { x += v } = subtraction; 7 RV tests",
   "v2 reversibility C2 — COMPLETE (2026-04-27): reversible { } -> tok / reverse tok / abandon tok; ReversalToken(u64) opaque ID; token linearity enforced; 5 C2 tests; typechecker + cli sexpr both updated",
-  "WASM extern-coproc bridge — COMPLETE (2026-04-27): list_coproc_decls() on Interpreter + JtvWasm; register_coproc_impl(fn, js_sys::Function) with unsafe Send+Sync wasm32 wrapper; Value<->JsValue helpers; 4 new tests; commit 75be523"
+  "WASM extern-coproc bridge — COMPLETE (2026-04-27): list_coproc_decls() on Interpreter + JtvWasm; register_coproc_impl(fn, js_sys::Function) with unsafe Send+Sync wasm32 wrapper; Value<->JsValue helpers; 4 new tests; commit 75be523",
+  "Echo Phase 2 design — COMPLETE (2026-06-02): retained-loss lineage principle; EchoSafe/Neutral/Breaking; infer+@echo annotations; 3-way numeric conversion; JtvEcho.lean mechanised; ALIGNMENT-AFFINESCRIPT.adoc",
+  "Lean 4 proof repair — COMPLETE (2026-06-02): all 5 libraries compile; zero sorry; JtvCore/Theorems/Operational/Types/Security",
+  "Idris2 ABI repair — COMPLETE (2026-06-02): Types.idr compiles; %default total; CanWiden extended; dataIsNeverControl proved",
+  "Build-truth CI — COMPLETE (2026-06-02): patacl-core path dep removed; proof-regression.yml fixed; coverage/governance/language-policy CI clean",
+  "Documentation refresh — COMPLETE (2026-06-02): README.adoc, EXPLAINME.adoc, STATUS.adoc, 6a2, contractiles updated to highest standards"
 ]
 
 [blockers-and-issues]
-issues = []
+issues = [
+  { id = "gap-001", description = "Verification chain incomplete: proofs validate models but not wired to Rust interpreter", severity = "medium", status = "known" },
+  { id = "gap-002", description = "typing_coercion in JtvTypes.lean weaker than docstring — proves existence not coercion to target type", severity = "low", status = "known", follow-up = "ADR needed" },
+  { id = "gap-003", description = "Coprocessor implementation gated on PataCL Phase 1", severity = "medium", status = "external-dependency" },
+  { id = "gap-004", description = "Reversibility round-trip not guaranteed end-to-end at integration level", severity = "medium", status = "known" }
+]
 
 [critical-next-actions]
-actions = []
+actions = [
+  "PataCL Phase 1 → unblocks JtV coproc implementation Phase 2",
+  "Verification bridge: correlation tests between Lean semantics and Rust interpreter",
+  "Echo Phase 3: residue availability and audit trail implementation",
+  "Reversibility round-trip guarantee: integration-level property test"
+]
 
 [maintenance-status]
-last-run-utc = "2026-04-19T00:00:00Z"
-last-result = "unknown"  # unknown | pass | warn | fail
+last-run-utc = "2026-06-02T00:00:00Z"
+last-result = "pass"  # unknown | pass | warn | fail
 
 [session-history]
 sessions = [
@@ -52,17 +68,25 @@ sessions = [
   { date = "2026-04-27", subject = "PataCL Phases 1-4 complete; JtV Phase 2 landed (extern coproc grammar, CoprocNamespace, phase-boundary error, 12/12 coproc_tests.rs); conformance corpus CC1-CC7 (7/7); jtv-cli ExternCoproc fix" },
   { date = "2026-04-27", subject = "Phase A: Zig FFI + Idris2 ABI lowering (coproc_lower.rs, 6 CL tests); Phase C: PataCL self-hosting (conformance/patacl-self.pata, 8 SH tests in patacl); Phase B: v2 reversibility C1 (execute_inverse added, reverse { } = subtraction, 7 RV tests)" },
   { date = "2026-04-27", subject = "C2 reversibility: reversible { } -> tok / reverse tok / abandon tok; ReversalToken(u64) opaque-ID token store; token linearity; typechecker + cli sexpr arms; 5 C2 tests green; commit a6b9e83" },
-  { date = "2026-04-27", subject = "WASM extern-coproc bridge: list_coproc_decls on Interpreter + JtvWasm; register_coproc_impl wraps js_sys::Function via unsafe Send+Sync; Value<->JsValue helpers; 4 tests; commit 75be523 — all roadmap items complete" }
+  { date = "2026-04-27", subject = "WASM extern-coproc bridge: list_coproc_decls on Interpreter + JtvWasm; register_coproc_impl wraps js_sys::Function via unsafe Send+Sync; Value<->JsValue helpers; 4 tests; commit 75be523 — all roadmap items complete" },
+  { date = "2026-06-02", subject = "Echo Phase 2 design: retained-loss lineage; EchoSafe/Neutral/Breaking; infer+@echo; 3-way numeric; JtvEcho.lean; ALIGNMENT-AFFINESCRIPT.adoc; spec §7/§12" },
+  { date = "2026-06-02", subject = "Build-truth: patacl-core path dep removed from workspace; [features] patacl = [] pure code feature; proof-regression.yml startup failure fixed; Lean 4 all 5 libs compile; Idris2 Types.idr compiles; CI governance/language-policy/deno-lint fixes; documentation refresh" }
 ]
 
 [design-artefact-locations]
 coproc-adrs = "docs/design-decisions/0001-0006-*.adoc"
 coproc-trajectories = ".machine_readable/COPROC-TRAJECTORIES.a2ml"
 v2-reversibility-design = "docs/language/DESIGN-JTV-V2-REVERSIBILITY.md"
+echo-alignment = "ALIGNMENT-AFFINESCRIPT.adoc"
+echo-spec = "spec/jtv_v2_type_system_corrected.adoc"
+echo-lean = "jtv_proofs/JtvEcho.lean"
+lean-proofs = "jtv_proofs/"
+idris2-abi = "src/abi/Types.idr"
 patacl-repo = "/var/mnt/eclipse/repos/patacl/"
 
 [tolerable-envelope]
 # What repo states would still be acceptable without raising a flag:
 # - Coprocessor support remains at design-complete until PataCL Phase 1 lands
-# - v2 reversibility design remains uncommitted-to-impl indefinitely (design artefacts exist)
-# - Playground samples (aspirational fixtures) may lag behind canonical grammar for extended periods
+# - Verification chain gap (proofs not wired to interpreter) is a known limitation
+# - Playground samples (aspirational fixtures) may lag behind canonical grammar
+# - Legacy .res ReScript files in vscode-extension/, web/, packages/ are awaiting AffineScript migration

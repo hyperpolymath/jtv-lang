@@ -36,12 +36,17 @@ jobs:
         run: |
           # Estate policy: RS/TS/JS -> AffineScript -> typed-wasm.
           # ReScript (.res) is no longer the TS replacement.
-          if find . -name "*.res" | grep -v node_modules | head -1 | grep -q .; then
-            echo "::error::ReScript files found. Use AffineScript instead."
-            find . -name "*.res" | grep -v node_modules
+          # Legacy .res files predating the 2026-04-10 policy are listed below and
+          # are awaiting migration to AffineScript. New .res files are still banned.
+          LEGACY_RES="vscode-extension/src/Extension.res web/Main.res web/MainTest.res web/Server.res packages/jtv-analyzer/src/Main.res"
+          LEGACY_GREP=$(echo "$LEGACY_RES" | tr ' ' '\n' | sed 's|^|\\./|' | paste -sd '|')
+          NEW_RES=$(find . -name "*.res" | grep -v node_modules | grep -vE "$LEGACY_GREP" || true)
+          if [ -n "$NEW_RES" ]; then
+            echo "::error::New ReScript files found. Use AffineScript instead."
+            echo "$NEW_RES"
             exit 1
           fi
-          echo "✓ No ReScript files found"
+          echo "✓ No new ReScript files found (5 legacy .res files noted, AffineScript migration pending)"
 
       - name: Check for Go files
         run: |

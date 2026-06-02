@@ -30,9 +30,9 @@
 ; ── End Definitions ──────────────────────────────────────────────
 
 (intent-contractile
-  (version "1.1.0")
+  (version "1.2.0")
   (repo "julia-the-viper")
-  (last-updated "2026-04-19")
+  (last-updated "2026-06-02")
 
   ; === Purpose (what this repo IS) ===
   (purpose
@@ -45,7 +45,10 @@
      via reverse blocks for quantum-simulation and Landauer-efficient computation.
      Post-pivot 2026-04-19: compile-time decisions (target gating, feature gating,
      coprocessor declaration liveness) are DELEGATED to PataCL — a sibling
-     language at /var/mnt/eclipse/repos/patacl/."
+     language at /var/mnt/eclipse/repos/patacl/.
+     Echo type system (Phase 2, 2026-06-02): effect dimension tracking retained-loss
+     lineage; EchoSafe/EchoNeutral/EchoBreaking; @echo annotations at boundaries;
+     mechanised in JtvEcho.lean (Lean 4, zero sorry)."
   )
 
   ; === Anti-Purpose (what this repo is NOT — prevents scope creep) ===

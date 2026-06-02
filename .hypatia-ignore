@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MPL-2.0
+# .hypatia-ignore — per-file Hypatia rule exemptions
+# Syntax: <relative-path>:<rule-id>  (one entry per line; # lines are comments)
+#
+# These files predate the estate policy that moved from ReScript to AffineScript
+# (2026-04-10). They are awaiting migration and must not trigger banned-language
+# failures in the interim. When migration is complete, remove these entries.
+
+packages/jtv-analyzer/src/Main.res:cicd_rules/banned_language_file
+vscode-extension/src/Extension.res:cicd_rules/banned_language_file
+web/Main.res:cicd_rules/banned_language_file
+web/MainTest.res:cicd_rules/banned_language_file
+web/Server.res:cicd_rules/banned_language_file

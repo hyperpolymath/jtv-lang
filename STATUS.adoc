@@ -1,71 +1,175 @@
-= Status
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Julia the Viper — Status
 
-== Overview
+_Version is tracked in `Cargo.toml` and `CHANGELOG.adoc`._
 
-*Version*: 0.1.0  
-*Stage*: Alpha (home context)  
-*Assessment*: C+ (approaching B)
+*Stage*: Alpha (active research)
+*Assessment*: B- (solid core, proofs now compiling, verification chain still incomplete)
 
-Julia the Viper is an experimental language with a partially implemented core,
-supported by a substantial test suite and formal proof work, but with clear
-gaps in completeness, portability, and verification integration.
+Julia the Viper is an experimental language with a fully implemented Rust core,
+a substantial test suite, and formally verified proof artefacts that now compile
+cleanly. The verification chain from proofs to executable is still incomplete.
+
+---
 
 == Implemented Core
 
-- Parser and interpreter for core data/control model
-- Addition-only arithmetic across 7 number systems
-- Enforced purity model (Total < Pure < Impure)
-- Harvard architecture separation (data vs control)
-- Partial reversibility (subset only)
+- Parser and interpreter for core data/control model (`crates/jtv-core`)
+- Addition-only arithmetic across 7 number systems (int, float, rational, complex, hex, binary, symbolic)
+- Enforced purity model (Total ≤ Pure ≤ Impure) with type-level purity lattice
+- Harvard architecture separation (Data vs Control) enforced at grammar level
+- Reversibility C1 + C2: `execute_inverse`, `reversible { } -> tok`, `reverse tok`, `abandon tok`
+- WASM backend (591 LOC; `list_coproc_decls`, `register_coproc_impl` for extern-coproc bridge)
+- LSP server (`crates/jtv-lsp`, tower-lsp integration)
+- Coprocessor extern-coproc grammar, `CoprocNamespace`, `ExternCoprocNotYetLowered` phase boundary
+- `ReversalToken(u64)` opaque-ID linear token store with linearity enforcement
+- Echo type system: Phase 2 design complete (effect dimension, retained-loss lineage, 3-way Safe/Neutral/Breaking)
+
+---
 
 == Evidence
 
-- 339 automated tests across multiple suites
-- Property-based testing covering all number systems
+- 531 automated tests across unit, property, fuzz, contract, and conformance suites
+- Property-based testing covering all 7 number systems
 - Security and boundary tests for Harvard separation
-- Contract tests for invariants (addition-only, purity, reversibility)
-- Fuzz targets for parser safety
+- Contract tests for invariants (addition-only, purity, reversibility, token linearity)
+- Fuzz targets for parser safety (`fuzz/fuzz_targets/fuzz_parser.rs`, `fuzz_main.rs`)
 - Benchmark suites (not yet tracked in CI)
 
-== Formal Work (Partial Integration)
+---
 
-- Lean 4 proofs:
-  - type soundness
-  - operational semantics
-  - algebraic properties
-  - injection resistance (model-level)
-- Idris2 proofs:
-  - ABI/type-level constraints
-  - algebraic structures
+== Formal Proofs
 
-These proofs validate models and components, but are not yet fully connected to
-the executable implementation.
+Proof artefacts are in `jtv_proofs/` (Lean 4) and `src/abi/` (Idris2).
+
+=== Lean 4 (`jtv_proofs/`)
+
+All five libraries compile cleanly under Lean 4 v4.12.0, with zero `sorry` or `sorryAx`:
+
+[cols="1,2,1", options="header"]
+|===
+| Library | Content | Status
+
+| `JtvCore`
+| Semantic domains, evaluation functions, denotational semantics
+| ✅ Compiles
+
+| `JtvTheorems`
+| Totality, determinism, algebraic properties, state independence
+| ✅ Compiles
+
+| `JtvOperational`
+| Small-step and big-step operational semantics; progress and preservation
+| ✅ Compiles
+
+| `JtvTypes`
+| Typing rules, purity lattice, type soundness, `DecidableEq JtvType`
+| ✅ Compiles
+
+| `JtvSecurity`
+| Injection impossibility, sandboxing, Harvard separation guarantees
+| ✅ Compiles
+|===
+
+=== Idris2 ABI (`src/abi/Types.idr`)
+
+Verified under Idris2 0.7.0 with `%default total` enforced:
+
+[cols="1,1", options="header"]
+|===
+| Property | Status
+
+| `JtvTy` type universe (12 type constructors)
+| ✅ Verified
+
+| `Language` / `Expr` Harvard GADT separation
+| ✅ Verified
+
+| `isControl` + `dataIsNeverControl` separation theorem
+| ✅ Verified
+
+| `Purity` ordering + `purityLeqTrans` transitivity proof
+| ✅ Verified
+
+| `CanWiden` numeric tower (13 constructors) + `widenTrans` transitivity
+| ✅ Verified
+|===
+
+=== Echo Type System (`jtv_proofs/JtvEcho.lean`)
+
+Phase 2 Echo mechanisation (Lean 4):
+
+- `EchoClass` inductive: `Safe`, `Neutral`, `Breaking`
+- Retained-loss lineage fibre: `Echo f y := Σ x, f x = y`
+- `EchoSafe` / `EchoNeutral` / `EchoBreaking` predicates
+- `@echo(safe|neutral|breaking)` annotation inference rules
+- 3-way numeric conversion: exact→Safe, lossy+residue→Neutral, lossy-no-residue→Breaking
+
+---
+
+== Design Artefacts
+
+[cols="1,2,1", options="header"]
+|===
+| Area | Reference | Status
+
+| v2 Reversibility (5 decisions)
+| `docs/language/DESIGN-JTV-V2-REVERSIBILITY.md`
+| Design complete; C1+C2 implemented
+
+| Coprocessor / PataCL pivot (ADR-0006)
+| `docs/design-decisions/0006-patacl-pivot.adoc`
+| Design complete; impl pending PataCL Phase 1
+
+| Echo type system
+| `spec/jtv_v2_type_system_corrected.adoc` §7, §12
+| Phase 2 design complete
+
+| AffineScript alignment
+| `ALIGNMENT-AFFINESCRIPT.adoc`
+| Design decisions recorded; implementation pending
+|===
+
+---
 
 == Known Gaps
 
-- Reversibility incomplete (no full round-trip guarantee)
-- Verification chain incomplete (proofs not fully integrated)
-- Conformance gaps (e.g. string and range syntax)
+- Verification chain incomplete: proofs validate models but are not wired to the executable interpreter
+- Reversibility round-trip: no full `(forward ∘ reverse = id)` test at the integration level
+- `typing_coercion` theorem weaker than documented — follow-up ADR needed
+- Coprocessor implementation gated on PataCL Phase 1
 - No mutation testing
-- Limited CI (Linux only)
-- FFI and WASM not fully validated
-- No version compatibility matrix
+- CI limited to Linux
+- FFI (Zig emission) not yet implemented
+- WASM not fully validated end-to-end
+
+---
 
 == Classification
 
 [cols="1,3"]
 |===
-|Area |Status
+| Area | Status
 
-|Core language
-|Implemented (partial)
+| Core language runtime
+| Implemented; 531 tests passing
 
-|Reversibility
-|Partial / experimental
+| Formal proofs (Lean 4)
+| 5 libraries compile; zero sorry
 
-|Verification
-|Partial (model-level proofs, not end-to-end)
+| Formal proofs (Idris2)
+| ABI types verified; total enforcement
 
-|Extensions (quantum, probabilistic, advanced types)
-|Research / not implemented
+| Echo type system
+| Phase 2 design complete; proof mechanised
+
+| Reversibility
+| C1+C2 implemented; round-trip not yet guaranteed end-to-end
+
+| Coprocessor support
+| Design complete; impl blocked on PataCL Phase 1
+
+| Extensions (quantum, probabilistic, advanced types)
+| Research directions — not implemented
 |===

@@ -7,197 +7,312 @@ image:https://img.shields.io/badge/OpenSSF-Best_Practices-green?logo=opensources
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 image:https://api.thegreenwebfoundation.org/greencheckimage/github.com[Green Web,link="https://www.thegreenwebfoundation.org/green-web-check/?url=github.com"]
 
-A research programming language exploring *structured separation of data and control*, and *computation as constrained construction*.
+A Harvard-architecture programming language that makes code injection *grammatically impossible* — not as a runtime check, but as a structural guarantee.
+
+Named after mathematician **Julia Robinson** (Hilbert's 10th problem) with a playful nod to "adder": a snake, and the fundamental operation the language builds everything from.
 
 ---
 
-== Overview
+== The One-Line Idea
 
-Julia the Viper (JtV) is an experimental programming language built around a simple architectural idea:
-
-*separate data and control at the level of syntax and semantics, not just convention.*
-
-The language is structured as two distinct fragments:
-
-* *Data*: restricted, side-effect-free expressions
-* *Control*: general computation (loops, branching, state, I/O)
-
-The goal is not to eliminate all classes of error, but to make certain forms of control/data confusion *structurally unavailable*.
+[quote]
+____
+Separate Data (total, addition-only) from Control (Turing-complete, imperative) at the grammar level. Then code injection becomes an ill-formed sentence, not a runtime error.
+____
 
 ---
 
-== Current Status
+== Why This Matters
 
-JtV is an *active research project*, not a finished or fully verified system.
+Code injection attacks — SQL injection, shell injection, template injection — all share the same root cause: user-controlled *data* reaches a context that interprets it as *code*. Filters, escaping, and sandboxes are defence by convention. They fail.
 
-At present it includes:
+JtV makes the failure mode structurally impossible:
 
-* an implemented Rust-based core
-* a defined (and evolving) grammar
-* a substantial test suite (unit, property, fuzz, contract)
-* partial formalisation (Lean and Idris artifacts)
-* documentation of both implemented features and research directions
+* The *Data Language* grammar cannot express control constructs. No `if`. No loops. No function calls to impure code. Only addition-based construction.
+* The *Control Language* can embed Data expressions but not vice versa.
+* A parser for Data will reject control constructs *before* they reach any evaluator.
 
-It is best understood as:
-
-> a working core language with tests and partial formal grounding, surrounded by a larger set of experimental extensions.
-
-For current details, see:
-
-* `STATUS.adoc`
-* `TEST-NEEDS.md`
-* `ROADMAP.adoc`
+This is security by grammatical impossibility, not security by convention.
 
 ---
 
-== Core Idea
+== Architecture
 
-=== Data Fragment
+=== Harvard Separation
+
+[source]
+----
+                 ┌─────────────────────────────────┐
+User Input ────► │  DATA LANGUAGE                  │
+                 │  (Total, addition-only, halting) │
+                 └──────────────┬──────────────────┘
+                                │ values only
+                 ┌──────────────▼──────────────────┐
+                 │  CONTROL LANGUAGE                │
+                 │  (Turing-complete, imperative)   │
+                 └─────────────────────────────────┘
+----
+
+The arrow is one-way. Data results flow up into Control variables. Control constructs cannot appear inside Data expressions. The grammar enforces this structurally.
+
+=== Data Language
 
 The Data fragment is intentionally restricted:
 
-* no loops or general control flow
-* no side effects
-* limited forms of expression (currently centred on additive construction)
+* No loops or general control flow
+* No side effects or I/O
+* One binary operation: addition (across 7 number systems)
+* Unary negation — subtraction is `a + (-b)`
+* Provably terminating (total by construction)
 
-This fragment is designed to be:
-
-* easier to reason about
-* closer to total or terminating computation
-* structurally separated from execution logic
-
----
-
-=== Control Fragment
+=== Control Language
 
 The Control fragment provides general computation:
 
-* sequencing, branching, iteration
-* state updates and I/O
-* orchestration of program execution
-
-Data expressions can be embedded within Control, but not vice versa.
-
----
-
-== Design Direction
-
-A key direction of the project is:
-
-> *computation via construction from neutral anchors (CNO), rather than primitive destructive operations.*
-
-In this view:
-
-* addition represents construction
-* inversion (where defined) represents *undoing construction*, not primitive subtraction
-* identity depends on how values are constructed, not just their final form
-
-This perspective is still under active development and should be read as part of the research direction rather than a fully stabilised feature set.
+* Assignment, sequencing, branching (`if/else`), iteration (`while`)
+* I/O and state updates
+* Calls to pure data functions
+* Reversible blocks (`reversible { } -> tok`, v2)
 
 ---
 
-== Reversibility (Current vs Planned)
+== Number Systems
 
-Reversibility is an important theme, but its current status is limited.
+JtV supports addition across 7 numeric domains:
 
-=== Currently
+[cols="1,2", options="header"]
+|===
+| Type | Description
 
-* constrained reversible behaviour in restricted fragments
-* property tests exploring round-trip behaviour
+| `Int`
+| Machine integers
 
-=== Not Yet Implemented
+| `Float`
+| IEEE double-precision
 
-* general reversible execution
-* full semantic model of inversion across all constructs
-* quantum or thermodynamic interpretations
+| `Rational`
+| Exact fractions (num-rational)
 
-These belong to *future work*, not current guarantees.
+| `Complex`
+| Complex numbers (num-complex)
 
-See `REVERSIBILITY.adoc` for details.
+| `Hex`
+| Hexadecimal integer representation
 
----
+| `Binary`
+| Binary integer representation
 
-== Scope
+| `Symbolic`
+| Symbolic expressions (unevaluated)
+|===
 
-=== Stable / Defensible Core
-
-* parser and grammar work
-* Rust interpreter core
-* explicit Data vs Control separation
-* multi-type numeric support
-* test infrastructure (property, fuzz, contract)
-* initial proof artifacts
-
----
-
-=== Research / Experimental Areas
-
-The following are *not part of the stable core*:
-
-* dependent or refinement types
-* advanced effect systems
-* probabilistic or quantum extensions
-* full symbolic reasoning
-* complete end-to-end verification chain
-
-They are documented as *research directions*, not current features.
+Widening follows a defined tower: Binary/Hex → Int → Float → Complex, Int → Rational.
 
 ---
 
-== Repository Structure (Overview)
+== Formal Verification
 
-* `crates/` — Rust implementation
-* `shared/grammar/` — grammar artifacts
-* `spec/` — language specifications
-* `jtv_proofs/` — formal proofs (Lean/Idris)
-* `verification/` — verification materials
-* `conformance/`, `fuzz/` — testing infrastructure
-* `docs/`, `academic/` — documentation
+JtV is backed by mechanised proofs:
+
+=== Lean 4 (`jtv_proofs/`)
+
+Five libraries, all compiling cleanly under Lean 4 v4.12.0, zero `sorry`:
+
+* `JtvCore` — denotational semantics; evaluation functions; termination
+* `JtvTheorems` — algebraic properties; state independence; totality
+* `JtvOperational` — small-step + big-step semantics; progress; preservation
+* `JtvTypes` — type system; purity lattice; type soundness
+* `JtvSecurity` — injection impossibility; Harvard separation guarantee; sandboxing
+
+=== Idris2 (`src/abi/Types.idr`)
+
+ABI type verification under `%default total`:
+
+* `Language` / `Expr` GADT enforces Data/Control distinction at the type level
+* `dataIsNeverControl` theorem: every `Expr DataLang` has `isControl e = False`
+* `Purity` ordering with transitivity proof
+* Numeric tower widening (`CanWiden`) with transitivity (`widenTrans`)
+
+=== Echo Type System (`jtv_proofs/JtvEcho.lean`)
+
+Phase 2 mechanisation of the Echo effect dimension:
+
+* Three echo classes: `EchoSafe` (injective), `EchoNeutral` (residue retained), `EchoBreaking` (total erasure)
+* Retained-loss lineage fibre: `Echo f y := Σ x, f x = y`
+* `@echo(safe|neutral|breaking)` annotation semantics
 
 ---
 
-== Development
+== Echo Type System
 
-Common commands:
+Echo is an *effect dimension*, not a value type. It tracks *what information is preserved* through a computation:
+
+* `@echo(safe)` — bijective; full round-trip possible
+* `@echo(neutral)` — lossy, but the residue is *retained* and available for audit
+* `@echo(breaking)` — total erasure; no lineage recovery
+
+Numeric conversions follow the 3-way rule:
+* Exact (e.g. Int→Rational): **Safe**
+* Lossy with residue (e.g. Float→Int, carries truncation residue): **Neutral**
+* Lossy without residue (e.g. Int→Bool, drops all but sign): **Breaking**
+
+See `ALIGNMENT-AFFINESCRIPT.adoc` for the full design rationale.
 
 ---
 
+== v2 Reversibility
+
+JtV v2 adds reversible computation via `reverse` blocks:
+
+[source,jtv]
+----
+reversible {
+    x += value
+} -> tok          // tok : ReversalToken — use-once, linear
+
+reverse tok       // undoes the block: x -= value
+----
+
+* Snapshot-based rollback of local state
+* `ReversalToken` is linearly typed: exactly one of `reverse tok` or `abandon tok`
+* `Send` to external handles inside `reversible { }` requires `irreversible { }` wrapper
+* Enables quantum-circuit simulation and Landauer-efficient computation
+
+---
+
+== Coprocessor Support (PataCL Integration)
+
+Post-pivot 2026-04-19: compile-time decisions are delegated to *PataCL*, a sibling decision language:
+
+[source,jtv]
+----
+extern coproc riscv_ext {
+    gate_name: "jtv:riscv:v-ext"
+}
+----
+
+JtV references PataCL gates by identifier. PataCL evaluates target predicates and returns liveness + family strings. JtV's grammar does not embed predicate syntax (ADR-0006).
+
+Current status: design complete; implementation gated on PataCL Phase 1.
+
+---
+
+== Building
+
+=== Prerequisites
+
+* Rust stable toolchain (`rustup`)
+* `just` task runner (`cargo install just` or system package)
+* Optional: `lean` (for proof verification), `idris2` (for ABI verification)
+
+=== Quick Start
+
+[source,bash]
+----
+# Build the core crate
 just build
+
+# Run the full test suite (531 tests)
 just test
-just doctor
------------
 
-Or via Cargo:
+# Run only jtv-core tests
+cargo test -p jtv-core
 
----
+# Check formal proofs (requires Lean 4)
+cd jtv_proofs && lake build
 
-## cargo test -p jtv-core
+# Check ABI types (requires Idris2)
+cd src/abi && idris2 --check Types.idr
 
-Nix is supported for reproducible builds.
+# Run REPL
+just run
+----
 
----
+=== WASM
 
-== Documentation Policy
-
-AsciiDoc (`.adoc`) is the canonical format.
-
-Markdown files, where present, are transitional or secondary.
-
----
-
-== How to Read This Repository
-
-If you are new:
-
-1. Start with this README
-2. See `STATUS.adoc` and `ROADMAP.adoc`
-3. Explore `spec/` and `shared/grammar/`
-4. Review tests and proof artifacts for grounding
+[source,bash]
+----
+just build-wasm   # requires wasm-pack
+----
 
 ---
 
-== Summary
+== Repository Structure
 
-JtV is best understood as:
+[source]
+----
+julia-the-viper/
+├── crates/
+│   ├── jtv-core/         Rust interpreter + type system + reversibility
+│   ├── jtv-cli/          REPL and command-line interface
+│   ├── jtv-lsp/          LSP server (tower-lsp)
+│   └── jtv-debug/        Debug adapter
+├── jtv_proofs/           Lean 4 formal proofs (5 libraries)
+├── src/abi/              Idris2 ABI type verification
+├── spec/                 Language specifications (EBNF, type system)
+├── docs/                 Design decisions (ADRs), language docs
+├── fuzz/                 Cargo fuzz targets
+├── conformance/          Conformance test corpus
+├── .machine_readable/    Machine-readable project metadata (A2ML)
+└── .github/workflows/    CI pipelines
+----
 
-> a language with a clear architectural idea, an implemented and tested core, partial formalisation, and an active research programme around constrained computation and equivalence-based reasoning.
+---
+
+== CI Status
+
+[cols="2,1", options="header"]
+|===
+| Check | Status
+
+| Lean 4 proof regression
+| ✅ Passing
+
+| Idris2 ABI verification
+| ✅ Passing
+
+| Rust (build, test, clippy, fmt)
+| ✅ Passing
+
+| Governance (language policy, security, linting)
+| ✅ Passing
+
+| Hypatia neurosymbolic scan
+| ✅ Passing
+
+| ClusterFuzzLite (address, undefined sanitizer)
+| ✅ Configured
+|===
+
+---
+
+== Project Philosophy
+
+. *Security is grammar, not convention* — injection impossibility is structural
+. *Show, don't tell* — formal proofs over informal claims
+. *v1 before v2* — master the Data/Control separation before reversibility
+. *Accessibility first* — all tooling supports `--help`, plain-text output, no colour-only signalling
+
+Named after Julia Robinson (1919–1985), who proved that Hilbert's 10th problem is undecidable. The "Viper" is a snake — an adder — fitting for a language whose Data fragment is built entirely from addition.
+
+> *"It's basically the same thing as an adder."*
+
+---
+
+== Further Reading
+
+* `STATUS.adoc` — current implementation status and proof matrix
+* `ROADMAP.adoc` — planned features and research directions
+* `EXPLAINME.adoc` — deep dive into the Harvard architecture and Echo type system
+* `docs/language/DESIGN-JTV-V2-REVERSIBILITY.md` — v2 reversibility design
+* `docs/design-decisions/0006-patacl-pivot.adoc` — coprocessor ADR
+* `ALIGNMENT-AFFINESCRIPT.adoc` — Echo / AffineScript alignment decisions
+* `CONTRIBUTING.adoc` — how to contribute
+* `GOVERNANCE.adoc` — project governance
+
+---
+
+== Licence
+
+link:LICENSE[PMPL-1.0] (Palimpsest Meta Public Licence).
+See `LICENSING.md` for the full rationale and `LICENSE-PALIMPSEST` for fallback terms.

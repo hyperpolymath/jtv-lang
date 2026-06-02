@@ -32,7 +32,7 @@
 ; ── End Definitions ──────────────────────────────────────────────
 
 (must-contractile
-  (version "1.0.0")
+  (version "1.1.0")
   (repo "julia-the-viper")
 
   ; === Universal Invariants (apply to ALL repos) ===
@@ -99,6 +99,19 @@
     (must "@pure functions MUST NOT contain loops or IO (v2 Pure Function enforcement)")
     (must "@total functions MUST be provably terminating")
     (must "Impure functions MUST NOT be callable from @pure contexts (Data context)")
+
+    ; Echo type system (Phase 2 — 2026-06-02)
+    (must "Echo effect class MUST NOT be weakened without justification: Safe > Neutral > Breaking — a function that was Safe MUST NOT be silently reclassified Breaking")
+    (must "@echo(safe) annotations MUST only be applied to operations where bijectivity can be verified by the compiler")
+    (must "Echo is an effect dimension, NOT a value type — Echo<T> value wrappers are reserved for Phase 4 and MUST NOT be introduced in Phase 2")
+    (must "Retained-loss lineage fibre (Sigma x, f x = y) is the authoritative Echo semantics — MUST NOT be replaced with a simpler 'some loss occurred' boolean")
+
+    ; Formal proof invariants (2026-06-02)
+    (must "No sorry / sorryAx / admit / native_decide in any jtv_proofs/*.lean file")
+    (must "No believe_me / assert_total in src/abi/Types.idr")
+    (must "%default total MUST be preserved in src/abi/Types.idr")
+    (must "Lean proof libraries MUST compile under the pinned Lean version in jtv_proofs/lakefile.lean")
+    (must "Formal theorems MUST NOT be weakened, generalised away, or deleted — prefer marking as TODO with a follow-up ADR")
 
     ; Banned primitives (reinforces universal list)
     (must "No Rust .unwrap() → .expect(\"TODO\") anti-pattern — equivalent panic with fake debt marker (per feedback_unwrap_to_expect_antipattern)")

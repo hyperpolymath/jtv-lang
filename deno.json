@@ -1,0 +1,15 @@
+{
+  "lint": {
+    "exclude": [
+      "playground/experiments/_attic/",
+      "examples/integrations/javascript_integration.js",
+      "web/sw.js"
+    ]
+  },
+  "fmt": {
+    "exclude": [
+      "playground/experiments/_attic/",
+      "examples/integrations/javascript_integration.js"
+    ]
+  }
+}

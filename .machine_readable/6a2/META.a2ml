@@ -3,8 +3,8 @@
 #
 # META.a2ml — Julia The Viper meta-level information
 [metadata]
-version = "0.2.0"
-last-updated = "2026-04-19"
+version = "0.3.0"
+last-updated = "2026-06-02"
 
 [project-info]
 license = "MPL-2.0"
@@ -33,7 +33,18 @@ decisions = [
   { id = "coproc-0006", title = "Delta pivot — PataCL as separate DSL", status = "closed",
     path = "docs/design-decisions/0006-patacl-pivot.adoc",
     date = "2026-04-19",
-    supersedes = ["coproc-0002"] }
+    supersedes = ["coproc-0002"] },
+  { id = "echo-phase2", title = "Echo type system Phase 2 — effect dimension, retained-loss lineage", status = "design-complete",
+    path = "ALIGNMENT-AFFINESCRIPT.adoc",
+    date = "2026-06-02",
+    decisions = [
+      "Echo is an effect dimension not a value type (EchoSafe/Neutral/Breaking)",
+      "Retained-loss lineage fibre: Echo f y := Sigma x, f x = y",
+      "Safe-only reversal; Neutral/Breaking rejected for reverse blocks",
+      "Infer + @echo(safe|neutral|breaking) checked annotations at boundaries",
+      "3-way numeric conversion: exact->Safe, lossy+residue->Neutral, lossy-no-residue->Breaking",
+      "JtvEcho.lean authoritative for JtV; Agda<->Lean bridge deferred to Phase 4"
+    ] }
 ]
 
 [design-rationale]
@@ -42,12 +53,16 @@ decisions = [
 # 2. Addition-only Data: provable totality + injection impossibility.
 # 3. Reverse blocks (v2): snapshot-based, linear ReversalToken typing, no new subtract syntax.
 # 4. Coprocessor support delegated to PataCL (2026-04-19 Delta pivot) — JtV grammar stays focused on runtime semantics.
-# 5. First pilot target: RISC-V — X-ext exercises Idris2/Zig/SPARK stack end-to-end.
+# 5. Echo effect dimension (v2 Phase 2): retained-loss lineage tracks information preservation, not value type.
+# 6. Proofs in Lean 4 + Idris2: all 5 Lean libs + Idris2 ABI compile; zero sorry; %default total.
+# 7. First pilot target: RISC-V — X-ext exercises Idris2/Zig/SPARK stack end-to-end.
 
 [development-practices]
-versioning = "SemVer"
+versioning = "SemVer (tracked in Cargo.toml and CHANGELOG.adoc)"
 documentation = "AsciiDoc (human-primary) + A2ML (bot-primary)"
 build-tool = "just"
+test-count = 531
+proof-status = "Lean 4: 5 libs compile zero sorry; Idris2: Types.idr compiles %default total"
 package-manager = "Guix (primary) / Nix (fallback)"
 implementation-language = "Rust; SPARK admissible for safety-critical via Idris2-ABI + Zig-FFI"
 
