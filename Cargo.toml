@@ -9,6 +9,9 @@ members = [
     "crates/jtv-lsp",
     "crates/jtv-debug",
 ]
+exclude = [
+    "fuzz",
+]
 
 [workspace.package]
 version = "0.1.0"
