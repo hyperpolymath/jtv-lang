@@ -4,6 +4,11 @@
 # proof-regression.yml — Verify that formal proofs still compile after code changes.
 # Covers: Lean 4 mechanized proofs (jtv_proofs/) and Idris2 ABI types (src/abi/).
 # Taxonomy category: Proof Regression (PRF)
+#
+# NOTE: existence checks are performed in a post-checkout STEP rather than a
+# job-level `if: hashFiles(...)`. `hashFiles` at job-condition time runs before
+# checkout (empty workspace), which can produce a workflow "startup_failure"
+# run with zero scheduled jobs. Guarding per-step after checkout is reliable.
 name: Proof Regression
 
 on:
@@ -36,19 +41,31 @@ jobs:
   lean4-proofs:
     name: Lean 4 proof verification
     runs-on: ubuntu-latest
-    if: hashFiles('jtv_proofs/lakefile.lean') != ''
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      - name: Detect Lean proof project
+        id: detect
+        run: |
+          if [ -f jtv_proofs/lakefile.lean ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No jtv_proofs/lakefile.lean — skipping Lean verification."
+          fi
+
       - name: Install elan (Lean toolchain manager)
+        if: steps.detect.outputs.present == 'true'
         run: |
           curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
       - name: Cache Lean build
-        uses: actions/cache@v4
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4
         with:
           path: |
             jtv_proofs/.lake
@@ -57,23 +74,37 @@ jobs:
           restore-keys: lean4-
 
       - name: Build Lean proofs
+        if: steps.detect.outputs.present == 'true'
         working-directory: jtv_proofs
         run: |
           lake build
-          echo "## Lean 4 Proof Verification" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "All proofs compiled successfully." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Lean 4 Proof Verification"
+            echo ""
+            echo "All proofs compiled successfully."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   idris2-abi:
     name: Idris2 ABI type verification
     runs-on: ubuntu-latest
-    if: hashFiles('src/abi/Types.idr') != ''
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      - name: Detect Idris2 ABI sources
+        id: detect
+        run: |
+          if [ -f src/abi/Types.idr ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No src/abi/Types.idr — skipping Idris2 verification."
+          fi
+
       - name: Install Idris2
+        if: steps.detect.outputs.present == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y idris2 || {
@@ -83,12 +114,15 @@ jobs:
           }
 
       - name: Check Idris2 ABI types
+        if: steps.detect.outputs.present == 'true'
         run: |
           cd src/abi
           idris2 --check Types.idr || {
             echo "::error::Idris2 ABI type definitions failed to compile"
             exit 1
           }
-          echo "## Idris2 ABI Verification" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "ABI type definitions verified successfully." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Idris2 ABI Verification"
+            echo ""
+            echo "ABI type definitions verified successfully."
+          } >> "$GITHUB_STEP_SUMMARY"
