@@ -70,7 +70,7 @@ induction. Corrected as part of the Phase-1 doc-truthing pass.
 | `string_not_executable` | JtvSecurity | `verified` | User strings are never code (injection impossibility).
 | `strong_normalization` | JtvExtended | `verified` | Data fragment strongly normalizing.
 | `confluence` | JtvExtended | `verified` | Data reduction confluent.
-| `blockEcho_admissible` | JtvEcho | `verified` | Reverse block admissible ⇔ no `Breaking` statement (the checker contract).
+| `blockEcho_admissible` | JtvEcho | `verified` | Reverse block admissible ⇔ every statement `Safe` (Safe-only policy; the checker contract).
 | `injective_fibre_subsingleton` | JtvEcho | `verified` | `EchoSafe` ⇔ injective ⇔ recoverable.
 | `residue_lossy` | JtvEcho | `verified` | Structured loss is genuine and one-way.
 | `parser_correctness` | — | `absent` | Parser produces a valid AST. (PROOF-1, High.)

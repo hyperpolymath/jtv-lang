@@ -127,6 +127,12 @@ Allowed only if:
 - no EchoBreaking statements
 - no loops in V2
 
+Implementation note (2026-06-02): the checker enforces a *stricter, Safe-only*
+policy — every statement must be `EchoSafe`. `EchoNeutral` is permitted by this
+spec in principle (reversal via a retained residue, Bennett-style), but that
+runtime mechanism is unimplemented, so the checker conservatively rejects it.
+See `crates/jtv-core/src/echo.rs` and `jtv_proofs/JtvEcho.lean`.
+
 == 10. Soundness Theorem
 
 Theorem (Safe Fragment Termination):

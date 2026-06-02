@@ -18,9 +18,11 @@
   Lattice order:  `safe ⊑ neutral ⊑ breaking`  (join moves rightward, losing
   guarantees — mirroring the effect lattice `Total ⊑ Pure ⊑ Impure`).
 
-  The headline result for the type checker is `blockEcho_admissible`: a reverse
-  block is admissible iff *no* constituent statement is `breaking`. This is the
-  formal contract enforced by `crates/jtv-core/src/echo.rs`.
+  The headline result for the type checker is `blockEcho_admissible`: under the
+  **Safe-only** reversal policy, a reverse block is admissible iff *every*
+  constituent statement is `safe` (fully reversible). `neutral` (lossy but
+  residue-retaining) and `breaking` are both rejected. This is the formal
+  contract enforced by `crates/jtv-core/src/echo.rs`.
 
   Proofs are deliberately Mathlib-free (Lean core only) and discharge every
   goal by finite case analysis, matching the style of the other JtV proofs.
@@ -103,13 +105,16 @@ theorem le_breaking (a : Echo) : a ≤ Echo.breaking := by
 -- SECTION 2: REVERSE-BLOCK ADMISSIBILITY (the type-checker contract)
 -- ============================================================================
 
-/-- Boolean admissibility: an Echo may appear in a reverse block iff it does
-    not totally erase information (spec v2 §9 forbids `EchoBreaking`). -/
+/-- Boolean admissibility: an Echo may appear in a reverse block iff it is
+    `safe`. This is the **Safe-only** policy: a reverse block must be fully
+    reversible, so lossy `neutral` operations (whose Bennett-style residue
+    reversal is not yet implemented) are rejected alongside `breaking`. Spec v2
+    §9 permits `neutral` in principle; the checker is conservatively stricter. -/
 def Echo.admissible : Echo → Bool
-  | .breaking => false
-  | _         => true
+  | .safe => true
+  | _     => false
 
-theorem admissible_iff (e : Echo) : e.admissible = true ↔ e ≠ Echo.breaking := by
+theorem admissible_iff (e : Echo) : e.admissible = true ↔ e = Echo.safe := by
   cases e <;> simp [Echo.admissible]
 
 /-- **Key compositional law.** The echo of a composite operation `a ⊔ b` is
@@ -142,8 +147,8 @@ def allAdmissible : List Echo → Bool
   | e :: es => e.admissible && allAdmissible es
 
 /-- **Reverse-block soundness.** A block's aggregate echo is admissible iff
-    every statement in it is admissible — i.e. a reverse block is well-typed
-    exactly when it contains no `breaking` (information-destroying) statement.
+    every statement in it is admissible — i.e. (under the Safe-only policy) a
+    reverse block is well-typed exactly when every statement is `safe`.
 
     This is the property `echo::classify_stmts` / the reverse-block gate in
     `crates/jtv-core/src/echo.rs` must implement. -/

@@ -115,13 +115,28 @@ truthing discipline, because a mechanized proof cannot lie.
 * [ ] Wire `JtvEcho` into the `proof-regression.yml` gate (already covered by
   the `lakefile.lean` default target).
 
+==== Design decisions (2026-06-02)
+
+. *Echo is effect-only* — a static dimension alongside `Purity`, not a value
+  type (spec §12). A first-class `Echo<T>` value type is reserved for a later
+  phase.
+. *Safe-only reversal* — reverse blocks accept only `EchoSafe`; `Neutral` and
+  `Breaking` are rejected (see §9 implementation note).
+. *Echo source = infer + `@echo(...)` override* — inferred from operation shape,
+  with an optional annotation mirroring `@pure`/`@total`. Lossy numeric widening
+  (e.g. `Float→Int`) is to carry `Neutral` echo.
+. *Agda↔Lean proof bridge deferred* — `JtvEcho.lean` re-mechanizes the model
+  independently for now; `echo-types` remains the Agda source of truth.
+
 === Phase 2 — Echo Types in the checker (commenced here)
 
 * [x] Implement the Echo effect lattice in `crates/jtv-core/src/echo.rs`
   (`Safe ⊑ Neutral ⊑ Breaking`, join, admissibility) — the executable image of
   `JtvEcho.lean`.
-* [x] Enforce spec §9 in the type checker: a `reverse` block is rejected when
-  its aggregate echo is `Breaking` (`JtvError::EchoViolation`).
+* [x] Enforce reversibility in the type checker (Safe-only policy): a `reverse`
+  block is rejected unless every statement is `EchoSafe` — `Neutral` and
+  `Breaking` both raise `JtvError::EchoViolation`. (Spec §9 permits `Neutral` via
+  residue reversal; deferred until that runtime mechanism exists.)
 * [ ] Propagate echo through Data inference as a second effect dimension
   (alongside `Purity`); surface `@echo(...)` annotations.
 * [ ] Bridge value-level fibres (`echo-types`) to the effect classes for

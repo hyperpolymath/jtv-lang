@@ -409,11 +409,12 @@ impl TypeChecker {
         let aggregate = echo::classify_stmts(body);
         if !aggregate.admissible_in_reverse() {
             return Err(JtvError::EchoViolation(format!(
-                "reverse block has echo {aggregate}: it destroys information \
-                 and cannot be inverted. Reverse blocks may only contain \
-                 {} or {} statements (no total erasure).",
+                "reverse block has echo {aggregate}: it is not fully reversible. \
+                 Reverse blocks may only contain {} statements (bijective +/-); \
+                 lossy ({} / {}) operations are not invertible here.",
                 Echo::Safe,
-                Echo::Neutral
+                Echo::Neutral,
+                Echo::Breaking
             )));
         }
         Ok(())

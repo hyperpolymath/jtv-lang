@@ -52,10 +52,17 @@ impl Echo {
     }
 
     /// Whether this echo may appear inside a reverse block.
-    /// Spec v2 §9: reverse blocks forbid `Breaking` (information-destroying)
-    /// statements. Corresponds to `Echo.admissible` in `JtvEcho.lean`.
+    ///
+    /// Policy: **Safe-only.** A reverse block must be fully reversible, so only
+    /// `EchoSafe` (bijective `+`/`-`) statements are admissible. `EchoNeutral`
+    /// is rejected too: although spec v2 §9 permits it *in principle*
+    /// (reversal via a retained residue, Bennett-style), that runtime mechanism
+    /// is not implemented, so the checker conservatively requires `Safe`.
+    /// `EchoBreaking` is of course always rejected.
+    ///
+    /// Corresponds to `Echo.admissible` in `JtvEcho.lean`.
     pub fn admissible_in_reverse(self) -> bool {
-        self != Echo::Breaking
+        self == Echo::Safe
     }
 }
 
@@ -159,42 +166,34 @@ mod tests {
         assert!(Neutral.leq(Breaking));
         assert!(Safe.leq(Breaking));
         assert!(!Breaking.leq(Safe));
+        // Safe-only reversal policy: only Safe is admissible in a reverse block.
         assert!(Safe.admissible_in_reverse());
-        assert!(Neutral.admissible_in_reverse());
+        assert!(!Neutral.admissible_in_reverse());
         assert!(!Breaking.admissible_in_reverse());
     }
 
     #[test]
     fn add_assign_independent_is_safe() {
         // x += y  (y independent of x)  ->  Safe
-        let stmt = ReversibleStmt::AddAssign(
-            "x".to_string(),
-            DataExpr::Identifier("y".to_string()),
-        );
+        let stmt =
+            ReversibleStmt::AddAssign("x".to_string(), DataExpr::Identifier("y".to_string()));
         assert_eq!(classify_reversible_stmt(&stmt), Echo::Safe);
     }
 
     #[test]
     fn self_reference_is_breaking() {
         // x += x  destroys the original x  ->  Breaking
-        let stmt = ReversibleStmt::AddAssign(
-            "x".to_string(),
-            DataExpr::Identifier("x".to_string()),
-        );
+        let stmt =
+            ReversibleStmt::AddAssign("x".to_string(), DataExpr::Identifier("x".to_string()));
         assert_eq!(classify_reversible_stmt(&stmt), Echo::Breaking);
     }
 
     #[test]
     fn block_breaking_iff_any_breaking() {
         // [Safe, Safe] -> Safe ; one Breaking poisons the block.
-        let safe = ReversibleStmt::AddAssign(
-            "x".to_string(),
-            DataExpr::Number(Number::Int(5)),
-        );
-        let breaking = ReversibleStmt::AddAssign(
-            "y".to_string(),
-            DataExpr::Identifier("y".to_string()),
-        );
+        let safe = ReversibleStmt::AddAssign("x".to_string(), DataExpr::Number(Number::Int(5)));
+        let breaking =
+            ReversibleStmt::AddAssign("y".to_string(), DataExpr::Identifier("y".to_string()));
         assert_eq!(classify_stmts(&[safe.clone()]), Echo::Safe);
         assert_eq!(classify_stmts(&[safe.clone(), breaking]), Echo::Breaking);
     }
