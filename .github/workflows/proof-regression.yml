@@ -82,7 +82,9 @@ jobs:
   idris2-abi:
     name: Idris2 ABI type verification
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Generous: when no distro package exists, idris2-pack bootstraps Idris2
+    # from source against a Chez Scheme backend, which is slow.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -102,14 +104,21 @@ jobs:
         if: steps.detect.outputs.present == 'true'
         run: |
           sudo apt-get update
-          # Prefer the distro package. If unavailable, fall back to idris2-pack,
-          # which requires a Scheme backend and must run NON-interactively
-          # (otherwise it prompts for the Scheme binary and aborts in CI).
+          # Prefer the distro package. If unavailable, bootstrap via idris2-pack.
           if ! sudo apt-get install -y idris2; then
+            # idris2-pack needs a Chez Scheme backend.
             sudo apt-get install -y chezscheme
-            export SCHEME=chezscheme
-            curl -sSf https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash \
-              | SCHEME=chezscheme bash -s -- --yes
+            # Debian/Ubuntu name the Chez binary `chez`; fall back to others.
+            scheme_bin="$(command -v chez || command -v chezscheme || command -v scheme || echo chez)"
+            echo "Using Scheme backend: $scheme_bin"
+            # IMPORTANT: download the installer to a FILE. Running it via
+            # `curl | bash` makes its interactive `read SCHEME` consume the
+            # script's own text as the answer. With a file + the Scheme name on
+            # stdin, the prompt is answered correctly and later reads hit EOF
+            # (taking defaults).
+            curl -sSfL -o /tmp/idris2-pack-install.bash \
+              https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash
+            printf '%s\n' "$scheme_bin" | bash /tmp/idris2-pack-install.bash
             echo "$HOME/.pack/bin" >> "$GITHUB_PATH"
           fi
 
