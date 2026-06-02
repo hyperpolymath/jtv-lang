@@ -63,15 +63,10 @@ jobs:
           curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      - name: Cache Lean build
-        if: steps.detect.outputs.present == 'true'
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4
-        with:
-          path: |
-            jtv_proofs/.lake
-            jtv_proofs/build
-          key: lean4-${{ hashFiles('jtv_proofs/lakefile.lean', 'jtv_proofs/lean-toolchain') }}
-          restore-keys: lean4-
+      # NOTE: no actions/cache step — a pinned cache SHA can be auto-failed by
+      # GitHub when that release is deprecated, and a cold Lean build is fine for
+      # this path-filtered job. Re-add a *current* actions/cache@v4 SHA if build
+      # time becomes a problem.
 
       - name: Build Lean proofs
         if: steps.detect.outputs.present == 'true'
@@ -107,11 +102,16 @@ jobs:
         if: steps.detect.outputs.present == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y idris2 || {
-            # Fallback: install from pack
-            curl -sSf https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash | bash
+          # Prefer the distro package. If unavailable, fall back to idris2-pack,
+          # which requires a Scheme backend and must run NON-interactively
+          # (otherwise it prompts for the Scheme binary and aborts in CI).
+          if ! sudo apt-get install -y idris2; then
+            sudo apt-get install -y chezscheme
+            export SCHEME=chezscheme
+            curl -sSf https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash \
+              | SCHEME=chezscheme bash -s -- --yes
             echo "$HOME/.pack/bin" >> "$GITHUB_PATH"
-          }
+          fi
 
       - name: Check Idris2 ABI types
         if: steps.detect.outputs.present == 'true'
