@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '**/*.rs'
+      - '.clusterfuzzlite/**'
 permissions: read-all
 jobs:
   PR:
