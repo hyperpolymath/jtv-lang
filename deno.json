@@ -8,5 +8,10 @@
     "exclude": [
       "playground/experiments/_attic/"
     ]
+  },
+  "test": {
+    "exclude": [
+      "playground/experiments/_attic/"
+    ]
   }
 }
