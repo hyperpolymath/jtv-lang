@@ -2,6 +2,7 @@
 // Implements static type checking for the 7 number systems and compound types
 
 use crate::ast::*;
+use crate::echo::{self, Echo};
 use crate::error::{JtvError, Result};
 use std::collections::HashMap;
 
@@ -371,6 +372,7 @@ impl TypeChecker {
                 for stmt in &block.body {
                     self.check_reversible_stmt(stmt)?;
                 }
+                self.check_echo_admissible(&block.body)?;
                 Ok(())
             }
             ControlStmt::ReversibleBlock(rb) => {
@@ -397,6 +399,25 @@ impl TypeChecker {
                 Ok(())
             }
         }
+    }
+
+    /// Enforce the Echo admissibility rule for a reverse block (spec v2 §9):
+    /// a reverse block is well-typed iff no constituent statement is
+    /// `EchoBreaking` (information-destroying). This is the type-checker
+    /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`.
+    fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
+        let aggregate = echo::classify_stmts(body);
+        if !aggregate.admissible_in_reverse() {
+            return Err(JtvError::EchoViolation(format!(
+                "reverse block has echo {aggregate}: it is not fully reversible. \
+                 Reverse blocks may only contain {} statements (bijective +/-); \
+                 lossy ({} / {}) operations are not invertible here.",
+                Echo::Safe,
+                Echo::Neutral,
+                Echo::Breaking
+            )));
+        }
+        Ok(())
     }
 
     fn check_reversible_stmt(&mut self, stmt: &ReversibleStmt) -> Result<()> {
@@ -603,6 +624,38 @@ mod tests {
         let program = parse_program(code).unwrap();
         let mut checker = TypeChecker::new();
         assert!(checker.check_program(&program).is_ok());
+    }
+
+    #[test]
+    fn test_reverse_block_rejects_breaking_echo() {
+        // A reverse block whose statement destroys information (self-reference,
+        // EchoBreaking) must be rejected by the type checker (spec v2 §9).
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        let block = ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+        };
+        let stmt = ControlStmt::ReverseBlock(block);
+        let result = checker.check_control_stmt(&stmt);
+        assert!(matches!(result, Err(JtvError::EchoViolation(_))));
+    }
+
+    #[test]
+    fn test_reverse_block_accepts_safe_echo() {
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        checker.env.set_var("x".to_string(), Type::Int);
+        let block = ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Int(5)),
+            )],
+        };
+        let stmt = ControlStmt::ReverseBlock(block);
+        assert!(checker.check_control_stmt(&stmt).is_ok());
     }
 
     #[test]

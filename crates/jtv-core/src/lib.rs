@@ -14,6 +14,7 @@
 pub mod ast;
 pub mod coproc;
 pub mod coproc_lower;
+pub mod echo;
 pub mod error;
 pub mod formatter;
 pub mod interpreter;

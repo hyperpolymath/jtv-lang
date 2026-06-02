@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Julia the Viper → AffineScript Alignment Plan
+:toc:
+:toclevels: 3
+:revdate: 2026-06-02
+
+Bring *Julia the Viper* (JtV) from its current position to the same level of
+*maturity and governance discipline* that `hyperpolymath/affinescript` has
+reached — *starting with proofs*. This document is the master plan; it is
+deliberately conservative and honest, in the spirit of `ROADMAP.adoc`.
+
+== 1. What "AffineScript's position" means
+
+AffineScript is an alpha-stage but disciplined language project. Its distinctive
+strength is not (only) the compiler — it is the *governance model* that keeps
+claims honest:
+
+[cols="1,3"]
+|===
+| Asset | Description
+
+| Compiler pipeline
+| `face syntax → core AST → type / effect / ownership checks → backend`
+  (OCaml; sedlex + Menhir; WASM / typed-wasm backends).
+
+| `docs/CAPABILITY-MATRIX.adoc`
+| The *single authoritative source* of feature status, using a precise
+  six-term vocabulary: `enforced`, `works`, `partial`, `declared-but-unwired`,
+  `parse-only`, `absent`.
+
+| Doc-truthing
+| `tools/check-doc-truthing.sh` mechanically blocks over-claims in docs against
+  the compiler-as-oracle test gate.
+
+| `docs/TECH-DEBT.adoc`
+| A coordination ledger with domain prefixes (DOC / CORE / STDLIB / INT / SAT).
+
+| Honest posture
+| Self-describes as alpha; its one known base-language soundness gap is tracked
+  as an issue (CORE-01 / #177), not hidden.
+
+| Verification locus
+| Verification lives at the *typed-wasm target layer*. AffineScript does **not**
+  use a proof assistant.
+|===
+
+== 2. Where JtV is today (honest snapshot, 2026-06-02)
+
+[cols="1,3"]
+|===
+| Area | Reality
+
+| Mechanized proofs
+| *Ahead of AffineScript.* `jtv_proofs/` has 7 Lean 4 libraries (~2,300 LOC)
+  with *zero* `sorry` / `admit` / `axiom`, plus an Idris2 ABI (`src/abi/`) and a
+  `proof-regression.yml` CI gate. This is JtV's strongest asset.
+
+| Paper proofs
+| `academic/proofs/` — 7 documents (type theory, security, algebra, quantum,
+  etc.).
+
+| Rust core
+| `crates/{jtv-core,jtv-cli,jtv-lsp,jtv-debug}`. *Does not currently compile*
+  (see TECH-DEBT below): `ast.rs::ControlStmt` lacks the `ReversibleBlock` /
+  `ReverseToken` / `AbandonToken` variants that `interpreter.rs`,
+  `typechecker.rs`, and `jtv-cli` already match on; and the workspace has an
+  unvendored sibling path-dependency `patacl-core` (`../patacl`).
+
+| Conformance
+| `conformance/{valid,invalid,coproc}` exists; not yet a compiler-as-oracle
+  gate.
+
+| Spec
+| `spec/` has `grammar.ebnf`, a v2 type system (`jtv_v2_type_system_corrected.adoc`)
+  that *declares* an Echo system (§8–9, §12) but the checker implements none of it.
+
+| Governance / truthing
+| *The main gap.* `STATUS.md` claims "100% Complete – Production Ready" while
+  `ROADMAP.adoc` honestly says "Phase 0 Alpha", and `academic/TODO_GAPS.md`
+  claims Lean proofs still use `sorry` when they do not. Docs contradict reality
+  in *both* directions.
+|===
+
+== 3. Gap analysis
+
+The proofs are not the weak point — *governance and build-truth* are. To reach
+AffineScript's position JtV must:
+
+. *G1 — Authoritative status.* Adopt a single capability matrix with a precise
+  status vocabulary; reconcile `STATUS.md` ⇄ `ROADMAP.adoc` ⇄ `TODO_GAPS.md`.
+. *G2 — Doc-truthing.* A mechanical check that docs cannot over-claim past the
+  test/proof gates.
+. *G3 — Build truth.* The Rust core must actually compile, and CI must prove it.
+. *G4 — Conformance-as-oracle.* Promote `conformance/` to a gate.
+. *G5 — Verification locus.* Keep JtV's proof-assistant advantage *and* add the
+  target-layer (WASM) verification story AffineScript has.
+
+== 4. Phased roadmap (starts with proofs)
+
+=== Phase 1 — Proofs & proof-governance (THIS effort)
+
+Rationale: proofs are JtV's strongest asset and the right place to establish the
+truthing discipline, because a mechanized proof cannot lie.
+
+* [x] Inventory every Lean theorem and its status (see
+  `verification/PROOF-CAPABILITY-MATRIX.adoc`).
+* [x] Adopt the AffineScript status vocabulary, specialised for proofs
+  (`verified` / `partial` / `stated-unproven` / `absent`).
+* [x] Doc-truthing pass on the proof layer: correct the stale `sorry` claims in
+  `academic/TODO_GAPS.md` (the proofs are `sorry`-free).
+* [x] *Echo Types alignment (proofs first):* formalise JtV's Echo system in
+  `jtv_proofs/JtvEcho.lean`, aligned with the `echo-types` Agda library and
+  `EchoTypes.jl`. This is the formal contract for the type checker.
+* [ ] Wire `JtvEcho` into the `proof-regression.yml` gate (already covered by
+  the `lakefile.lean` default target).
+
+==== Design decisions (2026-06-02)
+
+Echo's semantic object is *retained-loss lineage* — proof-relevant provenance of
+collapsed/weakened/sampled/projected/degraded information. It is **not** a
+generic wrapper, a generic Σ-type, or a decorative effect.
+
+. *Echo is effect-only (value type later)* — for grammar v2, Echo is an effect
+  *classification dimension* alongside `Purity`, not a first-class runtime
+  residue type. The AST/grammar shape is reserved so a value-level `Echo<T>`
+  (carrying the residue) can be added later *without redesign*.
+. *Safe-only reversal* — reverse blocks accept only `EchoSafe`; `Neutral` and
+  `Breaking` are rejected (see §9 implementation note). This is stricter than the
+  earlier spec but matches current interpreter reality. Later, `EchoNeutral` may
+  be admitted *only* with an explicit carried Bennett residue / residue inversion.
+. *Echo source = infer + `@echo` annotations* — inferred from operation shape by
+  default, with `@echo(safe|neutral|breaking)` accepted as *checked*
+  declarations/overrides. Not infer-only (boundaries, foreign calls, and audited
+  APIs need declarations) and not annotation-everywhere. [Phase-2: wire echo
+  through `infer_data_expr` + parse `@echo`.]
+. *Numeric conversions carry echo* (revises spec §12 "independent of echo"):
+  exact/injective representation-preserving ⇒ `EchoSafe`; lossy but
+  residue-retained ⇒ `EchoNeutral`; lossy without usable residue ⇒ `EchoBreaking`.
+  `Float→Int` is `Neutral` or `Breaking` per residue retention. The *value* type
+  is still unaffected — echo is a separate dimension.
+. *Formal layer: independent Lean for Phase 2* — `JtvEcho.lean` is authoritative
+  for JtV implementation semantics now; `echo-types` Agda remains the conceptual
+  source/reference. The Agda↔Lean bridge is deferred to Phase 4; grammar v2 is
+  *not* blocked on a cross-prover bridge.
+
+=== Phase 2 — Echo Types in the checker (commenced here)
+
+* [x] Implement the Echo effect lattice in `crates/jtv-core/src/echo.rs`
+  (`Safe ⊑ Neutral ⊑ Breaking`, join, admissibility) — the executable image of
+  `JtvEcho.lean`.
+* [x] Enforce reversibility in the type checker (Safe-only policy): a `reverse`
+  block is rejected unless every statement is `EchoSafe` — `Neutral` and
+  `Breaking` both raise `JtvError::EchoViolation`. (Spec §9 permits `Neutral` via
+  residue reversal; deferred until that runtime mechanism exists.)
+* [ ] Propagate echo through Data inference as a second effect dimension
+  (alongside `Purity`); surface `@echo(...)` annotations.
+* [ ] Bridge value-level fibres (`echo-types`) to the effect classes for
+  function calls.
+
+=== Phase 3 — Build truth & governance parity
+
+* [ ] *G3:* repair the `ast.rs ⇄ interpreter/typechecker/cli` drift so
+  `jtv-core` compiles; vendor or feature-gate `patacl-core`; make
+  `rust-ci.yml` prove the build.
+* [ ] *G1/G2:* create `docs/CAPABILITY-MATRIX.adoc` for the whole project and a
+  `hooks/check-doc-truthing.sh`; reconcile `STATUS.md`.
+* [ ] *G4:* promote `conformance/` to a compiler-as-oracle gate.
+
+=== Phase 4 — Backend / verification locus
+
+* [ ] *G5:* document and test the WASM target-layer verification story to match
+  AffineScript's typed-wasm contract, while retaining the Lean/Idris assets.
+
+== 5. Echo Types — why this workstream sits in Phase 1
+
+The `echo-types` library (`hyperpolymath/echo-types`, Agda) formalises
+*structured loss / non-total erasure*: the echo of `f` at `y` is the fibre
+`Echo f y := Σ x, f x ≡ y` — irreversible computation that nonetheless *retains
+proof-relevant witnesses* of what was lost. `EchoTypes.jl` is its finite,
+executable companion.
+
+This maps exactly onto JtV's already-declared (but unimplemented) Echo system:
+
+[cols="1,1,2"]
+|===
+| JtV Echo | echo-types | Meaning
+
+| `EchoSafe`     | injective `f` (singleton fibre) | no loss; reversible (`+`↔`-`)
+| `EchoNeutral`  | non-injective, residue retained | structured loss; not invertible
+| `EchoBreaking` | total erasure                   | information destroyed
+|===
+
+Because the construct is *itself proof-defined*, the faithful way to "make the
+type checker accommodate it" is proofs-first: state the lattice and the
+reverse-block contract in Lean (`JtvEcho.lean`), then implement that exact
+contract in Rust (`echo.rs`). Both are delivered in this effort.
+
+== 6. Out of scope here
+
+Full echo propagation through inference, the project-wide capability matrix, the
+Rust build repair, and the WASM verification locus are *named and sequenced*
+above but deferred to their phases to keep this change reviewable.

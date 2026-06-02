@@ -89,7 +89,26 @@ Note: termination is per-input, not bounded.
 @impure:
 - unrestricted
 
+Echo annotations (orthogonal to purity):
+
+@echo(safe|neutral|breaking):
+- checked declaration/override of an operation's loss class
+- inferred from operation shape when absent
+- required at boundaries, foreign calls, and audited APIs (not inferred there)
+
 == 8. Echo System
+
+The Echo system tracks *structured loss (non-total erasure)*. Its canonical
+formal model is the `echo-types` Agda library (`hyperpolymath/echo-types`),
+where the echo of `f` at `y` is the fibre `Echo f y := Σ x, f x ≡ y`; the finite
+executable companion is `EchoTypes.jl`. JtV's three classes correspond to:
+
+* `EchoSafe`     — injective `f` (singleton fibre): no loss, reversible.
+* `EchoNeutral`  — non-injective, residue retained: structured loss.
+* `EchoBreaking` — total erasure: information destroyed.
+
+Mechanized model: `jtv_proofs/JtvEcho.lean` (`verified`).
+Implementation: `crates/jtv-core/src/echo.rs` (lattice + reverse-block gate).
 
 Echo ::= EchoSafe | EchoNeutral | EchoBreaking
 
@@ -114,6 +133,12 @@ Allowed only if:
 - all statements invertible
 - no EchoBreaking statements
 - no loops in V2
+
+Implementation note (2026-06-02): the checker enforces a *stricter, Safe-only*
+policy — every statement must be `EchoSafe`. `EchoNeutral` is permitted by this
+spec in principle (reversal via a retained residue, Bennett-style), but that
+runtime mechanism is unimplemented, so the checker conservatively rejects it.
+See `crates/jtv-core/src/echo.rs` and `jtv_proofs/JtvEcho.lean`.
 
 == 10. Soundness Theorem
 
@@ -152,6 +177,11 @@ Future:
 - Data totality holds
 - Safe fragment termination holds
 - Halting boundary is syntactic
-- Echo does not affect value typing
-- Widening may be lossy and is independent of echo
+- Echo does not affect value typing (Echo is a separate effect dimension)
+- Numeric conversions carry echo (revises "widening independent of echo"):
+  * exact / injective representation-preserving conversion ⇒ EchoSafe
+  * lossy but residue-retained conversion ⇒ EchoNeutral
+  * lossy without usable residue ⇒ EchoBreaking
+  (e.g. Float→Int is EchoNeutral or EchoBreaking per residue retention.)
+  The conversion still never changes the *value* type — echo is separate.
 

@@ -29,9 +29,13 @@ This document tracks all items marked as TODO in the academic documentation and 
 | PROOF-2 | Interpreter correctness partial | High | 🔶 Partial |
 | PROOF-3 | WASM compilation not verified | Medium | ❌ Not Started |
 | PROOF-4 | End-to-end verification chain incomplete | High | 🔶 Partial |
-| PROOF-5 | Some Lean proofs use `sorry` | High | 🔶 Partial |
+| ~~PROOF-5~~ | ~~Some Lean proofs use `sorry`~~ — **RESOLVED 2026-06-02**: `grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ 0. The proof layer is `sorry`-free. | — | ✅ Done |
 
 **Impact:** While core theorems are proven, full verification chain is incomplete.
+
+> **Doc-truthing note (2026-06-02):** This section previously overstated proof
+> incompleteness. The authoritative, continuously-checked status now lives in
+> [`verification/PROOF-CAPABILITY-MATRIX.adoc`](../verification/PROOF-CAPABILITY-MATRIX.adoc).
 
 ### 1.3 Security
 
@@ -123,21 +127,19 @@ Line ~460: TODO: Uncertainty quantification
 
 ## 3. Lean Proof Gaps
 
-### 3.1 Proofs Using `sorry`
+### 3.1 Proofs Using `sorry` — RESOLVED (2026-06-02)
 
-The following proofs in `jtv_proofs/` use `sorry` and need completion:
+**No proof in `jtv_proofs/` uses `sorry`, `admit`, or an added `axiom`.** The
+claims previously listed here are stale:
 
-```lean
--- JtvOperational.lean:307
-theorem data_terminates (e : DataExpr) (σ : State) :
-    ∃ (n : Int), DataStepStar ⟨e, σ⟩ ⟨DataExpr.lit n, σ⟩ := by
-  -- ... cases use sorry for step composition
+* `data_terminates` (now `JtvOperational.lean:~341`) is a *complete* structural
+  induction over `DataExpr` (lit / var / add / neg), discharged via
+  `dataStepStar_trans` and the `dataStepStar_*` congruence lemmas. No `sorry`.
+* The Control-divergence fact is shown by the fully-proved
+  `infinite_loop_steps`, not a `sorry`-d example.
 
--- JtvOperational.lean:362
-example (σ : State) :
-    ∃ σ', σ' ≠ σ ∧ CtrlStep ... := by
-  -- Uses sorry for σ "x" ≠ 42 case
-```
+Verification: `grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ all zero.
+See `verification/PROOF-CAPABILITY-MATRIX.adoc` for the authoritative inventory.
 
 ### 3.2 Missing Theorems
 

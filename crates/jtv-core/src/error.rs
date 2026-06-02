@@ -17,6 +17,9 @@ pub enum JtvError {
     #[error("Purity violation: {0}")]
     PurityViolation(String),
 
+    #[error("Echo violation: {0}")]
+    EchoViolation(String),
+
     #[error("Totality violation: {0}")]
     TotalityViolation(String),
 

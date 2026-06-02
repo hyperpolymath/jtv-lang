@@ -29,7 +29,12 @@ lean_lib JtvSecurity where
   -- Security properties: injection impossibility, sandboxing
   roots := #[`JtvSecurity]
 
+lean_lib JtvEcho where
+  -- Echo Types: structured-loss lattice + fibre correspondence
+  -- (aligns with the echo-types Agda library / EchoTypes.jl)
+  roots := #[`JtvEcho]
+
 -- Build all proofs
 @[default_target]
 lean_lib JtvAll where
-  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity]
+  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho]

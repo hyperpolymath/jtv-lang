@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= JtV Proof Capability Matrix
+:toc:
+:revdate: 2026-06-02
+
+*Authoritative status of JtV's formal proofs.* Modelled on AffineScript's
+`docs/CAPABILITY-MATRIX.adoc` discipline: this file overrides prose claims
+elsewhere. If another document disagrees with this matrix, this matrix is right
+and the other document is a bug.
+
+== Status vocabulary (proof-specialised)
+
+[cols="1,4"]
+|===
+| Term | Meaning
+
+| `verified`
+| Mechanized in Lean 4 and compiles under `lake build` with *no* `sorry`,
+  `admit`, or added `axiom`.
+
+| `partial`
+| Mechanized for the core cases; documented gaps remain (e.g. only the Data
+  fragment, not full Control).
+
+| `stated-unproven`
+| Stated in a paper proof (`academic/proofs/`) but *not* mechanized.
+
+| `absent`
+| Claimed somewhere but neither mechanized nor written down rigorously.
+|===
+
+== Mechanization invariant (checked, 2026-06-02)
+
+`grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ *0* across all seven (now
+eight) libraries. The proof layer is `sorry`-free. The `proof-regression.yml`
+workflow runs `lake build` on every change to `jtv_proofs/**`.
+
+NOTE: `academic/TODO_GAPS.md` previously listed PROOF-5 ("Some Lean proofs use
+`sorry`") and a `data_terminates` `sorry` at `JtvOperational.lean:307`. *Both are
+stale* — `data_terminates` (now at line ~341) is a complete structural
+induction. Corrected as part of the Phase-1 doc-truthing pass.
+
+== Lean libraries
+
+[cols="1,1,3"]
+|===
+| Library | Status | Notes
+
+| `JtvCore` | `verified` | Semantic domains, `evalDataExpr`, AST, substitution, free vars.
+| `JtvTheorems` | `verified` | Totality + determinism for Term / Expr / DataExpr.
+| `JtvOperational` | `verified` | Small/big-step equivalence, progress, `data_terminates`, `data_is_pure`; Control non-termination shown by example.
+| `JtvTypes` | `verified` | Typing/purity rules, algebraic cancellation, semantic equivalence congruences.
+| `JtvSecurity` | `verified` | Injection impossibility, no Control→Data flow, OWASP mitigation, sandboxing.
+| `JtvExtended` | `verified` | Strong normalization, confluence, non-interference, reversibility composition.
+| `JtvEcho` | `verified` | *New.* Echo lattice + reverse-block admissibility + fibre correspondence with `echo-types`.
+|===
+
+== Key theorems
+
+[cols="2,1,1,2"]
+|===
+| Theorem | Library | Status | Property
+
+| `dataExpr_totality` | JtvTheorems | `verified` | Every Data expression evaluates (Totality).
+| `dataExpr_determinism` | JtvTheorems | `verified` | Data evaluation is a function.
+| `data_terminates` | JtvOperational | `verified` | Data reduction reaches a literal.
+| `data_is_pure` | JtvOperational | `verified` | Data steps preserve state (Harvard invariant).
+| `no_control_to_data_flow` | JtvSecurity | `verified` | Control cannot flow into Data.
+| `string_not_executable` | JtvSecurity | `verified` | User strings are never code (injection impossibility).
+| `strong_normalization` | JtvExtended | `verified` | Data fragment strongly normalizing.
+| `confluence` | JtvExtended | `verified` | Data reduction confluent.
+| `blockEcho_admissible` | JtvEcho | `verified` | Reverse block admissible ⇔ every statement `Safe` (Safe-only policy; the checker contract).
+| `injective_fibre_subsingleton` | JtvEcho | `verified` | `EchoSafe` ⇔ injective ⇔ recoverable.
+| `residue_lossy` | JtvEcho | `verified` | Structured loss is genuine and one-way.
+| `parser_correctness` | — | `absent` | Parser produces a valid AST. (PROOF-1, High.)
+| `interpreter_correctness` | — | `partial` | Interpreter matches denotational semantics. (PROOF-2.)
+| `wasm_compilation_correctness` | — | `absent` | WASM output matches semantics. (PROOF-3, Medium.)
+|===
+
+== Echo Types ↔ implementation correspondence
+
+[cols="2,2"]
+|===
+| `jtv_proofs/JtvEcho.lean` | `crates/jtv-core/src/echo.rs`
+
+| `Echo.join` (absorbing `breaking`, unit `safe`) | `Echo::join`
+| `Echo.admissible` | `Echo::admissible_in_reverse`
+| `Echo.le` (`a ⊔ b = b`) | `Echo::leq`
+| `blockEcho` / `blockEcho_admissible` | `classify_stmts` + reverse-block gate
+| `Fibre f y := { x // f x = y }` | (value-level; effect classes implemented)
+|===
+
+The Rust gate (`TypeChecker::check_echo_admissible`) raises
+`JtvError::EchoViolation` exactly when `blockEcho_admissible` returns `false`.
+
+*Authority:* `JtvEcho.lean` is authoritative for JtV implementation semantics;
+the `echo-types` Agda library is the conceptual source/reference. The Agda↔Lean
+bridge is deferred to Phase 4 — grammar v2 is not blocked on a cross-prover bridge.
+
+== Outstanding proof work (sequenced in ALIGNMENT-AFFINESCRIPT.adoc)
+
+* PROOF-1 `parser_correctness` (High) — `absent`.
+* PROOF-2 `interpreter_correctness` (High) — `partial`.
+* PROOF-3 `wasm_compilation_correctness` (Medium) — `absent`.
+* Echo: bridge value-level fibre classification to function-call echo (Phase 2).
