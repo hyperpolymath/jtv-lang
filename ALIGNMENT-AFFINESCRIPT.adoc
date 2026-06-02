@@ -117,16 +117,19 @@ truthing discipline, because a mechanized proof cannot lie.
 
 ==== Design decisions (2026-06-02)
 
-. *Echo is effect-only* — a static dimension alongside `Purity`, not a value
-  type (spec §12). A first-class `Echo<T>` value type is reserved for a later
-  phase.
+. *Echo is effect-only (value type later)* — a static dimension alongside
+  `Purity`, not a value type (spec §12). A first-class `Echo<T>` value type is
+  deferred; the AST/`Type` are to be designed so it can be added *without
+  rework*.
 . *Safe-only reversal* — reverse blocks accept only `EchoSafe`; `Neutral` and
   `Breaking` are rejected (see §9 implementation note).
-. *Echo source = infer + `@echo(...)` override* — inferred from operation shape,
-  with an optional annotation mirroring `@pure`/`@total`. Lossy numeric widening
-  (e.g. `Float→Int`) is to carry `Neutral` echo.
-. *Agda↔Lean proof bridge deferred* — `JtvEcho.lean` re-mechanizes the model
-  independently for now; `echo-types` remains the Agda source of truth.
+. *Echo source = inference only (no annotation)* — echo is inferred from
+  operation shape; there is no `@echo` annotation. *Lossy numeric widening*
+  (e.g. `Float→Int`) carries `EchoNeutral`, which revises spec §12's "widening
+  independent of echo" (the value type is still unaffected — echo is a separate
+  dimension). [Phase-2 implementation: wire echo through `infer_data_expr`.]
+. *Agda↔Lean proof bridge: independent* — `JtvEcho.lean` re-mechanizes the
+  model; `echo-types` remains the sibling Agda source of truth, cited not linked.
 
 === Phase 2 — Echo Types in the checker (commenced here)
 

@@ -170,6 +170,8 @@ Future:
 - Data totality holds
 - Safe fragment termination holds
 - Halting boundary is syntactic
-- Echo does not affect value typing
-- Widening may be lossy and is independent of echo
+- Echo does not affect value typing (Echo is a separate effect dimension)
+- Lossy widening (e.g. Float→Int) raises echo to EchoNeutral; lossless widening
+  stays EchoSafe. (Revises the earlier "widening independent of echo": widening
+  may raise the echo dimension, though it still never changes the value type.)
 
