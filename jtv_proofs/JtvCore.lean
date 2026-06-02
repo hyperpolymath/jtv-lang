@@ -79,7 +79,9 @@ def evalDataExpr (e : DataExpr) (σ : State) : Int :=
   | DataExpr.var x => σ x
   | DataExpr.add e₁ e₂ => evalDataExpr e₁ σ + evalDataExpr e₂ σ
   | DataExpr.neg e => -(evalDataExpr e σ)
-termination_by e.size
+-- structural recursion on direct subterms; no `termination_by` needed (an
+-- explicit well-founded measure here would require a `decreasing_by` proof and
+-- leaves `evalDataExpr` stuck, breaking definitional `rfl` reductions below).
 
 notation:max "⟦" e "⟧ᴰ(" σ ")" => evalDataExpr e σ
 
