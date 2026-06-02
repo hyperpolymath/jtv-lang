@@ -46,20 +46,35 @@ data Expr : Language -> Type where
   CSeq     : Expr ControlLang -> Expr ControlLang -> Expr ControlLang
   CSkip    : Expr ControlLang
 
--- | Proof: Data expressions cannot contain control flow
--- This is enforced by the type index: Expr DataLang cannot construct
--- CAssign, CIf, CWhile, CPrint — the constructors don't type-check.
+-- | Harvard separation, stated honestly. The GADT index already makes
+-- `CWhile … : Expr DataLang` ill-typed, so the separation is enforced at
+-- construction time. We expose that guarantee as an explicit, checkable
+-- theorem: every Data-language expression's head is a non-control construct.
+-- (The previous `Expr DataLang -> Void` was false — `DLit` etc. are perfectly
+-- valid Data expressions, so they are not `impossible` cases.)
 public export
-dataCannotLoop : Expr DataLang -> Void
-dataCannotLoop (DLit _) impossible
-dataCannotLoop (DFloat _) impossible
-dataCannotLoop (DVar _) impossible
-dataCannotLoop (DAdd _ _) impossible
-dataCannotLoop (DNeg _) impossible
-dataCannotLoop (DList _) impossible
--- This function has no valid inputs — proving the property vacuously.
--- The real proof is that CWhile : Expr ControlLang, which cannot be
--- passed where Expr DataLang is expected.
+isControl : Expr l -> Bool
+isControl (DLit _)      = False
+isControl (DFloat _)    = False
+isControl (DVar _)      = False
+isControl (DAdd _ _)    = False
+isControl (DNeg _)      = False
+isControl (DList _)     = False
+isControl (CAssign _ _) = True
+isControl (CIf _ _ _)   = True
+isControl (CWhile _ _)  = True
+isControl (CPrint _)    = True
+isControl (CSeq _ _)    = True
+isControl CSkip         = True
+
+public export
+dataIsNeverControl : (e : Expr DataLang) -> isControl e = False
+dataIsNeverControl (DLit _)   = Refl
+dataIsNeverControl (DFloat _) = Refl
+dataIsNeverControl (DVar _)   = Refl
+dataIsNeverControl (DAdd _ _) = Refl
+dataIsNeverControl (DNeg _)   = Refl
+dataIsNeverControl (DList _)  = Refl
 
 -- | Purity levels (ordered)
 public export
@@ -101,6 +116,14 @@ data CanWiden : JtvTy -> JtvTy -> Type where
   FloatToComplex : CanWiden TyFloat TyComplex
   HexToInt      : CanWiden TyHex TyInt
   BinaryToInt   : CanWiden TyBinary TyInt
+  -- Hex and Binary are integer representations, so they widen wherever Int
+  -- does. These make `CanWiden` genuinely transitive (see `widenTrans`).
+  HexToFloat       : CanWiden TyHex TyFloat
+  HexToRational    : CanWiden TyHex TyRational
+  HexToComplex     : CanWiden TyHex TyComplex
+  BinaryToFloat    : CanWiden TyBinary TyFloat
+  BinaryToRational : CanWiden TyBinary TyRational
+  BinaryToComplex  : CanWiden TyBinary TyComplex
   SameType      : CanWiden t t
 
 -- | Widening is transitive
@@ -109,13 +132,14 @@ widenTrans : CanWiden a b -> CanWiden b c -> CanWiden a c
 widenTrans SameType w = w
 widenTrans w SameType = w
 widenTrans IntToFloat FloatToComplex = IntToComplex
-widenTrans HexToInt IntToFloat = ?hexToFloat
-widenTrans HexToInt IntToRational = ?hexToRational
-widenTrans HexToInt IntToComplex = ?hexToComplex
-widenTrans BinaryToInt IntToFloat = ?binaryToFloat
-widenTrans BinaryToInt IntToRational = ?binaryToRational
-widenTrans BinaryToInt IntToComplex = ?binaryToComplex
-widenTrans _ _ = ?widenTransOther
+widenTrans HexToInt IntToFloat = HexToFloat
+widenTrans HexToInt IntToRational = HexToRational
+widenTrans HexToInt IntToComplex = HexToComplex
+widenTrans HexToFloat FloatToComplex = HexToComplex
+widenTrans BinaryToInt IntToFloat = BinaryToFloat
+widenTrans BinaryToInt IntToRational = BinaryToRational
+widenTrans BinaryToInt IntToComplex = BinaryToComplex
+widenTrans BinaryToFloat FloatToComplex = BinaryToComplex
 
 -- | Data expressions are addition-only (no subtraction operator)
 -- This is structurally enforced: DAdd is the only binary operator
