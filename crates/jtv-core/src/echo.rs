@@ -201,7 +201,7 @@ mod tests {
         let safe = ReversibleStmt::AddAssign("x".to_string(), DataExpr::Number(Number::Int(5)));
         let breaking =
             ReversibleStmt::AddAssign("y".to_string(), DataExpr::Identifier("y".to_string()));
-        assert_eq!(classify_stmts(&[safe.clone()]), Echo::Safe);
+        assert_eq!(classify_stmts(std::slice::from_ref(&safe)), Echo::Safe);
         assert_eq!(classify_stmts(&[safe.clone(), breaking]), Echo::Breaking);
     }
 }

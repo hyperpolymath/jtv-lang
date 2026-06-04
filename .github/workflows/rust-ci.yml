@@ -3,7 +3,14 @@
 #
 # rust-ci.yml — Cargo build, test, clippy, and fmt for Rust projects.
 # Cross-platform matrix: Linux, macOS, Windows.
-# Only runs if Cargo.toml exists in the repo root.
+#
+# NOTE: do NOT gate these jobs with `if: hashFiles('Cargo.toml') != ''`.
+# `hashFiles()` is not valid in a job-level `if:` — GitHub rejects the whole
+# workflow at validation time (startup failure: "Unrecognized function:
+# 'hashFiles'", zero jobs scheduled), which silently disabled Rust CI here.
+# This repo is unconditionally a Cargo workspace, so no guard is needed. (Same
+# lesson is recorded in proof-regression.yml, which guards in a post-checkout
+# step instead.)
 name: Rust CI
 
 on:
@@ -19,7 +26,7 @@ jobs:
   check:
     name: Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    if: hashFiles('Cargo.toml') != ''
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -49,8 +56,8 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     needs: check
-    if: hashFiles('Cargo.toml') != ''
     strategy:
       fail-fast: false
       matrix:

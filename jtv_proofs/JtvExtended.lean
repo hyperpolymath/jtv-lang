@@ -44,8 +44,8 @@ theorem add_right_cancel (a b c : DataExpr) (σ : State)
 theorem neg_add_distrib (a b : DataExpr) (σ : State) :
     evalDataExpr (DataExpr.neg (DataExpr.add a b)) σ =
     evalDataExpr (DataExpr.add (DataExpr.neg a) (DataExpr.neg b)) σ := by
-  simp [evalDataExpr]
-  ring
+  simp only [evalDataExpr]
+  omega
 
 /--
   **Theorem (Subtraction via Addition)**:
@@ -54,7 +54,8 @@ theorem neg_add_distrib (a b : DataExpr) (σ : State) :
 theorem sub_eq_add_neg (a b : DataExpr) (σ : State) :
     evalDataExpr a σ - evalDataExpr b σ =
     evalDataExpr (DataExpr.add a (DataExpr.neg b)) σ := by
-  simp [evalDataExpr]
+  simp only [evalDataExpr]
+  omega
 
 -- ============================================================================
 -- SECTION 2: EXPRESSION SIZE AND COMPLEXITY
@@ -83,12 +84,13 @@ theorem subexpr_size_lt (e₁ e₂ : DataExpr) :
 
 theorem neg_subexpr_size_lt (e : DataExpr) :
     e.size < (DataExpr.neg e).size := by
-  simp [DataExpr.size]
+  simp only [DataExpr.size]
   omega
 
-/--
+/-
   **Theorem (Evaluation Steps Bounded by Size)**:
   The number of evaluation steps is O(size(e)).
+  (Meta-theorem about the operational semantics; not formalized here.)
 -/
 -- This is a meta-theorem about the operational semantics
 
@@ -171,10 +173,13 @@ theorem semEquiv_neg_cong (e₁ e₂ : DataExpr) (h : e₁ ≃ e₂) :
   **Theorem (Dead Code Elimination)**:
   Replacing a subexpression with an equivalent one preserves semantics.
 -/
+-- Stated with explicit `semanticEquiv` rather than the `≃` notation: in this
+-- higher-order position (a congruence hypothesis `hctx`) the infix notation's
+-- precedence interacts badly with the `→`, so we spell it out.
 theorem dead_code_elim (context : DataExpr → DataExpr) (e e' : DataExpr)
-    (h : e ≃ e')
-    (hctx : ∀ a b, a ≃ b → context a ≃ context b) :
-    context e ≃ context e' :=
+    (h : semanticEquiv e e')
+    (hctx : ∀ (a b : DataExpr), semanticEquiv a b → semanticEquiv (context a) (context b)) :
+    semanticEquiv (context e) (context e') :=
   hctx e e' h
 
 /--
@@ -199,7 +204,8 @@ theorem simplify_zero_add (e : DataExpr) :
 theorem simplify_add_neg_self (e : DataExpr) :
     DataExpr.add e (DataExpr.neg e) ≃ DataExpr.zero := by
   intro σ
-  simp [evalDataExpr, DataExpr.zero]
+  simp only [evalDataExpr, DataExpr.zero]
+  omega
 
 /--
   **Theorem (Algebraic Simplification: -(-x) = x)**:
@@ -220,9 +226,10 @@ theorem simplify_neg_neg (e : DataExpr) :
 def dependsOn (e : DataExpr) (x : String) : Prop :=
   x ∈ e.freeVars
 
-/--
+/-
   **Theorem (Dependency Transitivity)**:
   If a term depends on x and x depends on y, the expression depends on y.
+  (Requires tracking through state transformations; not formalized here.)
 -/
 -- This requires tracking through state transformations
 
@@ -264,9 +271,10 @@ theorem rev_totality (op : RevOp) (σ : State) :
 -- SECTION 8: TYPE THEORY METATHEOREMS
 -- ============================================================================
 
-/--
+/-
   **Theorem (Type Preservation for Reduction)**:
   If Γ ⊢ e : τ and e → e', then Γ ⊢ e' : τ.
+  (See JtvTypes.lean for the typing rules; not re-derived here.)
 -/
 -- See JtvTypes.lean for the typing rules
 
@@ -312,12 +320,17 @@ theorem control_data_noninterference (e : DataExpr) (s : ControlStmt) (σ : Stat
   4. Access external resources
 -/
 structure DataSandbox where
-  noStateMod : ∀ e σ, (evalDataExpr e σ; σ) = σ
+  -- Evaluating a Data expression returns a value while leaving the state
+  -- untouched: pairing the result with the input state, the state component
+  -- is exactly the input state (Data evaluation is a read-only function).
+  noStateMod : ∀ (e : DataExpr) (σ : State), (evalDataExpr e σ, σ).2 = σ
   noIO : True  -- No I/O constructs in DataExpr
   terminates : ∀ e σ, ∃ v, evalDataExpr e σ = v
   noExternal : True  -- No external access constructs
 
-theorem data_is_sandboxed : DataSandbox := {
+-- `DataSandbox` is a record of (proof) properties — a `Type`, not a `Prop` —
+-- so this evidence bundle is a `def`, not a `theorem`.
+def data_is_sandboxed : DataSandbox := {
   noStateMod := fun _ _ => rfl,
   noIO := trivial,
   terminates := dataExpr_totality,
@@ -336,9 +349,10 @@ theorem eval_functorial (e₁ e₂ : DataExpr) (σ : State) :
     evalDataExpr (DataExpr.add e₁ e₂) σ =
     evalDataExpr e₁ σ + evalDataExpr e₂ σ := rfl
 
-/--
+/-
   **Theorem (Natural Transformation)**:
   State transformation is natural with respect to evaluation.
+  (For closed expressions, evaluation is independent of state; not formalized here.)
 -/
 -- For closed expressions, evaluation is independent of state
 
@@ -358,19 +372,18 @@ instance : DecidableEq DataExpr := inferInstance
 -/
 def groundEquivDecidable (e₁ e₂ : DataExpr)
     (h₁ : e₁.freeVars = []) (h₂ : e₂.freeVars = []) :
-    Decidable (e₁ ≃ e₂) := by
-  -- Ground terms have constant values
-  have v₁ := evalDataExpr e₁ State.empty
-  have v₂ := evalDataExpr e₂ State.empty
-  exact decidable_of_iff (v₁ = v₂) (by
+    Decidable (e₁ ≃ e₂) :=
+  -- Ground terms have a single value (their evaluation in any state, here the
+  -- empty state). For closed expressions, semantic equivalence reduces to
+  -- equality of those values — and `Int` equality is decidable.
+  decidable_of_iff (evalDataExpr e₁ State.empty = evalDataExpr e₂ State.empty) (by
     constructor
     · intro h σ
       have eq₁ := closed_context_independent e₁ σ State.empty h₁
       have eq₂ := closed_context_independent e₂ σ State.empty h₂
-      simp [eq₁, eq₂, h]
+      rw [eq₁, eq₂]; exact h
     · intro h
-      exact h State.empty
-  )
+      exact h State.empty)
 
 -- ============================================================================
 -- SECTION 12: SUMMARY OF VERIFIED PROPERTIES

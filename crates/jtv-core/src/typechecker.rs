@@ -369,13 +369,27 @@ impl TypeChecker {
                 Ok(())
             }
             ControlStmt::ReverseBlock(block) => {
+                // Echo admissibility is a *structural* property of the block
+                // (does any statement destroy information, e.g. `x += x`?),
+                // independent of the variables' type bindings — so gate on it
+                // FIRST, then type-check the individual statements. Doing it the
+                // other way round let an unbound/ill-typed variable mask the
+                // Echo violation behind a type error.
+                self.check_echo_admissible(&block.body)?;
                 for stmt in &block.body {
                     self.check_reversible_stmt(stmt)?;
                 }
-                self.check_echo_admissible(&block.body)?;
                 Ok(())
             }
             ControlStmt::ReversibleBlock(rb) => {
+                // The forward pass records a reversal log that a later
+                // `reverse tok` inverts, so the body must satisfy the SAME Echo
+                // admissibility rule as a `reverse` block — otherwise the
+                // recorded log cannot be soundly inverted. Checked structurally
+                // and FIRST (like `ReverseBlock`); previously this arm skipped
+                // the Echo gate entirely, leaving the `reversible` form
+                // un-checked.
+                self.check_echo_admissible(&rb.body)?;
                 for stmt in &rb.body {
                     self.check_reversible_stmt(stmt)?;
                 }
@@ -401,10 +415,14 @@ impl TypeChecker {
         }
     }
 
-    /// Enforce the Echo admissibility rule for a reverse block (spec v2 §9):
-    /// a reverse block is well-typed iff no constituent statement is
-    /// `EchoBreaking` (information-destroying). This is the type-checker
-    /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`.
+    /// Enforce the Echo admissibility rule for a `reverse` / `reversible`
+    /// block (spec v2 §9) under the **Safe-only** reversal policy: the block is
+    /// well-typed iff its aggregate echo is `EchoSafe` — i.e. every statement
+    /// is bijective (`+`/`-` with no self-reference). `EchoNeutral` (structured,
+    /// residue-retaining loss) and `EchoBreaking` (total erasure) are both
+    /// rejected, since neither is invertible by the implemented runtime. This
+    /// is the type-checker realisation of `blockEcho_admissible` in
+    /// `jtv_proofs/JtvEcho.lean`.
     fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
         let aggregate = echo::classify_stmts(body);
         if !aggregate.admissible_in_reverse() {
@@ -655,6 +673,42 @@ mod tests {
             )],
         };
         let stmt = ControlStmt::ReverseBlock(block);
+        assert!(checker.check_control_stmt(&stmt).is_ok());
+    }
+
+    #[test]
+    fn test_reversible_block_rejects_breaking_echo() {
+        // A `reversible { … } -> tok` block records a reversal log; if any
+        // statement is information-destroying (EchoBreaking) the log cannot be
+        // inverted, so the type checker must reject it under the SAME Echo gate
+        // as a plain `reverse` block (spec v2 §9).
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        let block = ReversibleBlockStmt {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+            token_binding: Some("tok".to_string()),
+        };
+        let stmt = ControlStmt::ReversibleBlock(block);
+        let result = checker.check_control_stmt(&stmt);
+        assert!(matches!(result, Err(JtvError::EchoViolation(_))));
+    }
+
+    #[test]
+    fn test_reversible_block_accepts_safe_echo() {
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        checker.env.set_var("x".to_string(), Type::Int);
+        let block = ReversibleBlockStmt {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Int(5)),
+            )],
+            token_binding: Some("tok".to_string()),
+        };
+        let stmt = ControlStmt::ReversibleBlock(block);
         assert!(checker.check_control_stmt(&stmt).is_ok());
     }
 

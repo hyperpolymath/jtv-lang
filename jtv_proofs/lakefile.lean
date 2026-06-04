@@ -34,7 +34,14 @@ lean_lib JtvEcho where
   -- (aligns with the echo-types Agda library / EchoTypes.jl)
   roots := #[`JtvEcho]
 
+lean_lib JtvExtended where
+  -- Extended metatheory: algebraic cancellation/distribution, expression
+  -- size/complexity, semantic-equivalence congruences, optimization
+  -- correctness, decidability, reversibility composition, and the Data
+  -- sandboxing bundle. Imports every other library (the apex module).
+  roots := #[`JtvExtended]
+
 -- Build all proofs
 @[default_target]
 lean_lib JtvAll where
-  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho]
+  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho, `JtvExtended]

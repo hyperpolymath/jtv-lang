@@ -17,6 +17,13 @@
 *.v text eol=lf
 *.zig text eol=lf
 
+# Julia-the-Viper source + conformance corpus. These are parsed byte-exactly by
+# the test suite, so pin LF: the cross-platform CI matrix must read identical
+# bytes on a Windows checkout (otherwise CRLF would change parser/whitespace
+# behaviour and fail conformance tests only on Windows).
+*.jtv text eol=lf
+*.pata text eol=lf
+
 # Configuration
 *.toml text eol=lf
 *.json text eol=lf

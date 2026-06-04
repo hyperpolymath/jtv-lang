@@ -229,7 +229,11 @@ theorem residue_lossy :
     hence `safe` — the value-level justification for `reverse { x += v }`. -/
 theorem neg_injective : Injective (fun n : Int => -n) := by
   intro a b h
-  have : - -a = - -b := by rw [h]
-  simpa using this
+  -- `h : (fun n => -n) a = (fun n => -n) b`; the lambda applications are
+  -- definitionally `-a` / `-b`, so re-state `h` in beta-reduced form (the
+  -- defeq coercion does the beta step `rw` could not see) and finish with
+  -- linear integer reasoning.
+  have h' : -a = -b := h
+  omega
 
 end Jtv.Echo

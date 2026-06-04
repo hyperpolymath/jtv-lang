@@ -87,12 +87,17 @@ induction. Corrected as part of the Phase-1 doc-truthing pass.
 | `Echo.join` (absorbing `breaking`, unit `safe`) | `Echo::join`
 | `Echo.admissible` | `Echo::admissible_in_reverse`
 | `Echo.le` (`a ⊔ b = b`) | `Echo::leq`
-| `blockEcho` / `blockEcho_admissible` | `classify_stmts` + reverse-block gate
+| `blockEcho` / `blockEcho_admissible` | `classify_stmts` + reverse/reversible-block gate
 | `Fibre f y := { x // f x = y }` | (value-level; effect classes implemented)
 |===
 
 The Rust gate (`TypeChecker::check_echo_admissible`) raises
 `JtvError::EchoViolation` exactly when `blockEcho_admissible` returns `false`.
+It runs on *both* reversibility forms — `reverse { … }` (`ReverseBlock`) and
+`reversible { … } -> tok` (`ReversibleBlock`) — and is checked *structurally*
+and *before* the per-statement type inference, so a structurally
+irreversible block (e.g. the self-referential `x += x`) is reported as an
+Echo violation regardless of the variables' type bindings.
 
 *Authority:* `JtvEcho.lean` is authoritative for JtV implementation semantics;
 the `echo-types` Agda library is the conceptual source/reference. The Agda↔Lean
