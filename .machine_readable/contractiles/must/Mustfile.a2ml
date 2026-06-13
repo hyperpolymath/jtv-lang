@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+# Mustfile — Physical-state invariants for julia-the-viper. Hard requirements.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+# Migrated 2026-06-13 from .machine_readable/MUST.contractile (content preserved).
+
+@abstract:
+What MUST be true about julia-the-viper. Violating a MUST is always a bug;
+K9 validators + CI gate every PR. The Harvard thesis + addition-only +
+proof invariants are load-bearing.
+@end
+
+## Language policy
+### no-banned-languages
+- description: no new TypeScript / Python / Go files; no npm/bun/yarn/pnpm deps (Deno only)
+- severity: critical
+### spdx-headers
+- description: SPDX-License-Identifier header on every source file; LICENSE unmodified
+- severity: critical
+
+## Proof integrity (load-bearing)
+### lean-no-escape-hatches
+- description: no sorry / sorryAx / admit / native_decide in any jtv_proofs/*.lean
+- run: ! grep -rEn 'sorry|sorryAx|admit|native_decide' jtv_proofs/*.lean
+- severity: critical
+### lean-no-vacuity
+- description: no True-typed "believeme" theorems (PR #27 NO-VACUITY invariant)
+- run: ! grep -rEn ':[[:space:]]*True[[:space:]]*:=' jtv_proofs/*.lean
+- severity: critical
+### idris-abi-total
+- description: %default total preserved in src/abi/Types.idr; no believe_me / assert_total
+- severity: critical
+### proofs-not-weakened
+- description: formal theorems MUST NOT be weakened, generalised away, or deleted (prefer TODO + ADR)
+- severity: high
+
+## Harvard thesis (load-bearing — ADR-0007)
+### data-no-control
+- description: Data expressions MUST NOT contain Control constructs (injection-impossibility depends on it)
+- severity: critical
+### addition-only
+- description: Data Language MUST remain addition-only; subtraction is reverse addition, never a primitive/explicit subtract token (ADR-0007 D1/D2)
+- severity: critical
+### reverse-linearity
+- description: reverse/abandon token linear-use-once typing preserved; reverse blocks snapshot-capture locals (v2 Decisions 1,4)
+- severity: critical
+### echo-not-weakened
+- description: Echo class MUST NOT be silently weakened (Safe > Neutral > Breaking); Echo is an effect dimension, not a value type (Phase 2)
+- severity: high
+
+## PataCL boundary (ADR-0006)
+### extern-coproc-by-name
+- description: extern coproc references a PataCL gate by identifier; JtV grammar MUST NOT grow target()/requires/family predicates
+- severity: high
+
+## Structure / CI
+### machine-readable-preserved
+- description: .machine_readable/ + 0-AI-MANIFEST.a2ml preserved; no SCM files loose in repo root
+- severity: critical
+### actions-sha-pinned
+- description: every GitHub Action pinned to a 40-char commit SHA
+- run: ! grep -rEn 'uses:[[:space:]]+[^@]+@(v?[0-9.]+|main|master)([[:space:]]|$)' .github/workflows/
+- severity: critical
+### no-hashfiles-in-job-if
+- description: no job-level `if: hashFiles(...)` (invalid; causes workflow startup failure — see PR #26)
+- run: ! grep -rnE '^[[:space:]]+if:[[:space:]]*hashFiles' .github/workflows/
+- severity: critical

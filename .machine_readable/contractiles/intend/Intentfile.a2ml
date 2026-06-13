@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MPL-2.0
+# Intentfile — Purpose, anti-purpose, and roadmap intents for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+# Migrated 2026-06-13 from .machine_readable/INTENT.contractile (content preserved).
+# (intend absorbs the deprecated `lust` wishes schema, 2026-04-18.)
+
+@abstract:
+JtV is a Harvard-architecture language separating Control (Turing-complete)
+from Data (total, addition-only) to make code injection grammatically
+impossible — a universal extender for injection-resistant retrofits. v2 adds
+reverse-addition reversibility with Echo loss-lineage.
+@end
+
+## Purpose
+### is
+- description: grammatically injection-proof, addition-only, total Data + Turing Control; universal AOLD extender; v2 reverse-addition + Echo lineage; compile-time decisions delegated to PataCL (ADR-0006)
+
+## Anti-purpose (prevents scope creep)
+### is-not
+- description: NOT general-purpose; NOT ergonomic at the expense of the Harvard thesis; does NOT embed a compile-time decision language (that is PataCL); Data is NOT Turing-complete (would break totality); does NOT replace Rust/Zig/Ada
+
+## Architectural invariants (must not be reversed)
+### invariants
+- description: Harvard separation; addition-only Data (reverse addition, no subtract token); totality; injection-impossibility by grammar; v2 reverse blocks (snapshot + linear token); PataCL delegation; Idris2 ABI; Zig FFI emission
+
+## Roadmap intents (wishes)
+### intents
+- governance-hardening: in_progress
+- number-system-semantics: declared   # ADR-0007 D6 (algebra → Echo tier)
+- v2-c-token-residue-reversal: declared   # ADR-0007 D5 Neutral tier
+- echo-as-function-effect-b: deferred
+
+## Ask before touching
+### sensitive
+- description: spec/ grammar + LANGUAGE_SPECIFICATION; crates/jtv-core/src/grammar.pest; docs/design-decisions/*.adoc (ADR-0006, ADR-0007); jtv_proofs/*; .machine_readable/6a2/*.a2ml (update all six together)

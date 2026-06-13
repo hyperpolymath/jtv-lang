@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MPL-2.0
+# Bustfile — Adversarial / injection-stress contract for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+# New 2026-06-13. bust = active "safe-hacking" attempts (outrageous-attack catchment),
+# the natural home for JtV's killer property: injection must be grammatically rejected.
+
+@abstract:
+Adversarial probes that MUST fail to breach the Harvard boundary. These are
+attempted attacks, not invariants — the security tests that make
+"injection is grammatically impossible" falsifiable.
+@end
+
+## Injection attempts (must be rejected)
+### control-in-data
+- description: attempt to embed a Control construct inside a Data expression — parser MUST reject
+- expect: grammatical rejection
+- severity: critical
+### string-as-code
+- description: attempt to evaluate a user string as a ControlStmt — no such grammar path exists
+- expect: rejection (no eval/exec constructor)
+- severity: critical
+### explicit-subtract-token
+- description: attempt to use an explicit subtraction operator in user Data syntax — MUST not parse (ADR-0007 D2)
+- expect: parse error
+- severity: high
+### reverse-token-reuse
+- description: attempt to consume a reverse/abandon token twice — linear typing MUST reject
+- expect: type error
+- severity: high

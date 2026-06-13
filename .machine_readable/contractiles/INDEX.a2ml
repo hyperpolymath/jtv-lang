@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+# INDEX.a2ml — contractile family index for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+---
+schema = "hyperpolymath.contractiles/1"
+repo = "hyperpolymath/julia-the-viper"
+layout = "contractiles/{family}/ trident: {Verb}file.a2ml + {verb}.ncl + {verb}.k9.ncl + {verb}.manifest.a2ml; shared _base.ncl"
+migrated = "2026-06-13 from top-level .machine_readable/*.contractile (content preserved)"
+
+[[families]]
+verb = "must"   ; authority = "blocking"   ; declaration = "must/Mustfile.a2ml"
+[[families]]
+verb = "trust"  ; authority = "blocking"   ; declaration = "trust/Trustfile.a2ml"
+[[families]]
+verb = "adjust" ; authority = "gating"     ; declaration = "adjust/Adjustfile.a2ml"
+[[families]]
+verb = "bust"   ; authority = "advisory"   ; declaration = "bust/Bustfile.a2ml"
+[[families]]
+verb = "dust"   ; authority = "advisory"   ; declaration = "dust/Dustfile.a2ml"
+[[families]]
+verb = "intend" ; authority = "non-gating" ; declaration = "intend/Intentfile.a2ml"
+
+[note]
+top-level = ".machine_readable/{MUST,TRUST,INTENT,ADJUST}.contractile retained as human-readable companions (standards keeps both forms)."

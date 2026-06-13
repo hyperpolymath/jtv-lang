@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+# dust.manifest.a2ml — trident coherence manifest (dust verb) for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+---
+trident_version = "1.0.0"
+verb = "dust"
+semantics = "deprecation — advisory"
+cardinality = "one per repo"
+
+[[files]]
+role = "declaration"
+path = "Dustfile.a2ml"
+notes = "Dustfile declaration (content). Migrated/created 2026-06-13."
+
+[[files]]
+role = "runner"
+path = "dust.ncl"
+notes = "Verb runner; imports ../_base.ncl (framework, from hyperpolymath/standards)."
+
+[[files]]
+role = "k9_component"
+path = "dust.k9.ncl"
+notes = "K9 self-validation component (framework, from hyperpolymath/standards)."
+
+[cross_refs]
+runner_paired_xfile = "Dustfile.a2ml"
+
+[signed_by]
+user = "Jonathan D.A. Jewell"
+date = "2026-06-13"
+context = "julia-the-viper contractile migration to the standards contractiles/{family}/ trident layout; content preserved from the prior top-level .machine_readable/DUST.contractile where one existed (must/trust/intend/adjust), dust/bust created."
