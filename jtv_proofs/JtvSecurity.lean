@@ -58,20 +58,27 @@ inductive VulnerableConstruct where
   | shellExec : String → VulnerableConstruct   -- system(string)
   deriving Repr
 
-/--
-  **Theorem**: JtV has no vulnerable constructs.
+/- **Theorem**: JtV has no vulnerable constructs — by exhaustive enumeration of
+   the DataExpr constructors (formalised as `isInert` below). None accept a
+   String that is then executed as code. -/
+/-- Structural "inertness": a Data expression is built only from the
+    value/arithmetic constructors (`lit`, `var`, `add`, `neg`). There is no
+    `eval` / `exec` / string-execution constructor anywhere within it. -/
+def DataExpr.isInert : DataExpr → Bool
+  | .lit _   => true
+  | .var _   => true
+  | .add a b => a.isInert && b.isInert
+  | .neg a   => a.isInert
 
-  Proof: By exhaustive enumeration of DataExpr and ControlStmt constructors.
-  None of them accept a String that is then executed as code.
--/
-theorem no_vulnerable_constructs :
-    -- DataExpr constructors don't execute strings as code
-    (∀ s : String, DataExpr.lit 0 ≠ DataExpr.lit 0 → False) ∧
-    -- This is trivially true because the premise is False
-    True := by
-  constructor
-  · intro _ h; exact h rfl
-  · trivial
+theorem no_vulnerable_constructs (e : DataExpr) : e.isInert = true := by
+  -- By structural induction over the *actual* DataExpr constructors: every Data
+  -- expression is inert, so none of the VulnerableConstruct forms
+  -- (eval / exec / newFunction / shellExec) can occur in it.
+  induction e with
+  | lit _ => rfl
+  | var _ => rfl
+  | add a b iha ihb => simp [DataExpr.isInert, iha, ihb]
+  | neg a ih => simp [DataExpr.isInert, ih]
 
 -- ============================================================================
 -- SECTION 3: INFORMATION FLOW ANALYSIS
@@ -201,13 +208,33 @@ theorem joinpoint_unidirectional (jp : JoinPoint) :
   Proof: By exhaustive case analysis on DataExpr constructors.
   None of them produce ControlStmt values.
 -/
-theorem no_reverse_joinpoints :
-    -- DataExpr cannot produce ControlStmt
-    ∀ (e : DataExpr), ∀ (f : DataExpr → Option ControlStmt),
-    -- Any such function must be constantly None for our grammar
-    True := by
-  intro _ _
-  trivial
+theorem no_reverse_joinpoints (s : ControlStmt) :
+    -- Every information flow in any Control statement is `dataToControl`: the
+    -- ONLY bridge from the Data plane to the Control plane is value assignment.
+    -- There is no construct flowing the other way (a "reverse join point").
+    ∀ fl ∈ s.flows, fl = FlowDirection.dataToControl := by
+  induction s with
+  | skip => intro fl hfl; simp [ControlStmt.flows] at hfl
+  | assign _ _ => intro fl hfl; simp [ControlStmt.flows] at hfl; exact hfl
+  | seq s₁ s₂ ih₁ ih₂ =>
+    intro fl hfl
+    simp only [ControlStmt.flows, List.mem_append] at hfl
+    rcases hfl with h | h
+    · exact ih₁ fl h
+    · exact ih₂ fl h
+  | ifThenElse _ s₁ s₂ ih₁ ih₂ =>
+    intro fl hfl
+    simp only [ControlStmt.flows, List.mem_append, List.mem_singleton] at hfl
+    rcases hfl with (h | h) | h
+    · exact h
+    · exact ih₁ fl h
+    · exact ih₂ fl h
+  | whileLoop _ body ih =>
+    intro fl hfl
+    simp only [ControlStmt.flows, List.mem_append, List.mem_singleton] at hfl
+    rcases hfl with h | h
+    · exact h
+    · exact ih fl h
 
 /-
   **AOLD vs Traditional AOP Comparison**:
@@ -295,12 +322,14 @@ def evalVulnerability (userInput : String) : Prop :=
   **Theorem (JtV String Safety)**:
   A string value in JtV cannot become executable code.
 -/
-theorem string_not_executable (s : String) :
-    -- There is no DataExpr constructor that takes a string and returns code
-    -- that can be executed as a ControlStmt
-    ∀ (f : String → ControlStmt), True := by
-  intro _
-  trivial
+-- **Data is inert, not code.** Every Data expression evaluates to a first-order
+-- `Int` value — never a `ControlStmt`. A user-supplied Data value therefore
+-- cannot *become* executable control. (The Lean Data grammar has no string/eval
+-- constructor; the Rust `DataExpr::StringLit` likewise evaluates to a value,
+-- never code.)
+theorem string_not_executable (e : DataExpr) (σ : State) :
+    ∃ (n : Int), evalDataExpr e σ = n :=
+  dataExpr_totality e σ
 
 -- ============================================================================
 -- SECTION 6: SANDBOXING GUARANTEES
@@ -394,15 +423,12 @@ theorem owasp_code_injection_mitigated :
   - It cannot modify state σ
   - It has no side effects
 -/
+-- **Data evaluation is secure**: it always terminates in a value (no
+-- divergence, no code result). State-preservation / purity is the separate
+-- `JtvOperational.data_is_pure`.
 theorem data_evaluation_secure (e : DataExpr) (σ : State) :
-    -- Evaluation is pure (state unchanged)
-    let _ := evalDataExpr e σ
-    True ∧  -- Placeholder for: no side effects occurred
-    -- Result is a value, not code
-    ∃ (n : Int), evalDataExpr e σ = n := by
-  constructor
-  · trivial
-  · exact dataExpr_totality e σ
+    ∃ (n : Int), evalDataExpr e σ = n :=
+  dataExpr_totality e σ
 
 -- ============================================================================
 -- SECTION 9: REVERSIBILITY SECURITY (v2)

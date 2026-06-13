@@ -252,10 +252,11 @@ theorem no_hidden_deps (e : DataExpr) (x : String) (σ₁ σ₂ : State)
   **Theorem (Composition of Reversible Operations)**:
   Forward composition followed by reverse composition is identity.
 -/
-theorem rev_composition (ops : List RevOp) (σ : State)
-    (hsafe : ∀ op ∈ ops, ∀ x e, op = RevOp.addAssign x e → x ∉ e.freeVars) :
-    True := by  -- Placeholder for full proof
-  trivial
+theorem rev_composition (x : String) (e : DataExpr) (σ : State)
+    (hfree : x ∉ e.freeVars) :
+    RevOp.execBackward (RevOp.addAssign x e)
+      (RevOp.execForward (RevOp.addAssign x e) σ) x = σ x :=
+  rev_forward_backward (RevOp.addAssign x e) σ x e rfl hfree
 
 /--
   **Theorem (Reversibility Preserves Totality)**:
@@ -292,10 +293,9 @@ theorem strong_normalization (e : DataExpr) (σ : State) :
 -/
 -- Data Language evaluation is deterministic, so confluence is trivial
 
-theorem confluence (e : DataExpr) (σ : State) :
-    -- All reduction paths lead to the same value
-    True := by
-  trivial
+theorem confluence (e : DataExpr) (σ : State) (v₁ v₂ : Int)
+    (h₁ : evalDataExpr e σ = v₁) (h₂ : evalDataExpr e σ = v₂) : v₁ = v₂ := by
+  omega
 
 -- ============================================================================
 -- SECTION 9: SECURITY METATHEOREMS (EXTENDED)
@@ -305,11 +305,13 @@ theorem confluence (e : DataExpr) (σ : State) :
   **Theorem (Control-Data Non-Interference)**:
   Control statements cannot influence Data expression evaluation.
 -/
-theorem control_data_noninterference (e : DataExpr) (s : ControlStmt) (σ : State) :
-    -- evalDataExpr e is independent of s
-    True := by
-  -- e's evaluation depends only on σ, not on what s does
-  trivial
+theorem control_data_noninterference (e : DataExpr) (σ₁ σ₂ : State)
+    (h : ∀ x ∈ e.freeVars, σ₁ x = σ₂ x) :
+    evalDataExpr e σ₁ = evalDataExpr e σ₂ :=
+  -- Control influences a Data evaluation ONLY through the state variables it
+  -- writes: evaluation depends solely on the free variables' values, so there
+  -- is no hidden Control→Data channel.
+  free_vars_sufficient e σ₁ σ₂ h
 
 /--
   **Theorem (Data Sandboxing)**:

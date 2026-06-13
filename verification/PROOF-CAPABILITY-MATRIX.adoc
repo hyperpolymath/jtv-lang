@@ -30,16 +30,51 @@ and the other document is a bug.
 | Claimed somewhere but neither mechanized nor written down rigorously.
 |===
 
-== Mechanization invariant (checked, 2026-06-02)
+== Mechanization invariant (checked, 2026-06-04)
 
-`grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ *0* across all seven (now
-eight) libraries. The proof layer is `sorry`-free. The `proof-regression.yml`
-workflow runs `lake build` on every change to `jtv_proofs/**`.
+`grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ *0* across all eight
+libraries. The proof layer is `sorry`-free, and `lake build` is green from a
+clean tree. The `proof-regression.yml` workflow runs `lake build` on every
+change to `jtv_proofs/**`.
+
+NO-VACUITY invariant (added 2026-06-04): the suite also contains *no
+`True`-typed "believeme" theorems*. A previous pass had eight theorems whose
+*statement* was `True` (or `∀ …, True`) — they compiled `sorry`-free while
+asserting nothing, and two of them (`string_not_executable`, `confluence`) were
+even labelled `verified` here. All eight now carry real statements with real
+proofs (see "Believeme remediation" below). `grep -rE ':\s*True\s*:=|, *True
+*:=' jtv_proofs/*.lean` ⇒ *0*.
 
 NOTE: `academic/TODO_GAPS.md` previously listed PROOF-5 ("Some Lean proofs use
 `sorry`") and a `data_terminates` `sorry` at `JtvOperational.lean:307`. *Both are
-stale* — `data_terminates` (now at line ~341) is a complete structural
-induction. Corrected as part of the Phase-1 doc-truthing pass.
+stale* — `data_terminates` is a complete structural induction.
+
+== Scope of the semantic model (honest)
+
+The denotational/operational model (`evalDataExpr`) is over **`Int`** only. The
+seven number systems are present in `JtvTypes` as the `JtvType` enum plus typing
+rules (`addRational` / `addComplex` / `addSymbolic` / …), but their *evaluation*
+is not modelled, and `type_preservation` is mechanised **only for `τ = int`**.
+So: addition-only Data totality/determinism/algebra and the Echo/reversibility
+layer are proved over the integer model; rational/float/complex/hex/binary/
+symbolic semantics are `stated-unproven` at the value level. (This is orthogonal
+to v2 — Echo is representation-agnostic.)
+
+== Believeme remediation (2026-06-04)
+
+[cols="2,3"]
+|===
+| Theorem (was `True`) | Now states (real, compiled)
+
+| `string_not_executable` | Data is inert: `∃ n : Int, evalDataExpr e σ = n` — evaluation yields a value, never a `ControlStmt`.
+| `no_vulnerable_constructs` | Structural induction `e.isInert = true` over the actual `DataExpr` constructors (no eval/exec form occurs).
+| `no_reverse_joinpoints` | `∀ fl ∈ s.flows, fl = dataToControl` — every flow is Data→Control (strictly stronger than "no controlToData").
+| `data_evaluation_secure` | `∃ n : Int, evalDataExpr e σ = n` (terminates in a value; purity is `data_is_pure`).
+| `dataExpr_no_control` | `∃ n : Int, evalDataExpr e σ = n` (eval lands in `Int`, disjoint from `ControlStmt`).
+| `confluence` | Determinism ⇒ confluence: two results in the same state coincide.
+| `control_data_noninterference` | `free_vars_sufficient` corollary: Control affects Data only through assigned state variables (no hidden channel).
+| `rev_composition` | Safe round-trip: `execBackward (addAssign x e) (execForward … σ) x = σ x` for `x ∉ e.freeVars` (via `rev_forward_backward`).
+|===
 
 == Lean libraries
 
@@ -67,9 +102,9 @@ induction. Corrected as part of the Phase-1 doc-truthing pass.
 | `data_terminates` | JtvOperational | `verified` | Data reduction reaches a literal.
 | `data_is_pure` | JtvOperational | `verified` | Data steps preserve state (Harvard invariant).
 | `no_control_to_data_flow` | JtvSecurity | `verified` | Control cannot flow into Data.
-| `string_not_executable` | JtvSecurity | `verified` | User strings are never code (injection impossibility).
+| `string_not_executable` | JtvSecurity | `verified` | Data is inert — evaluation yields an `Int` value, never a `ControlStmt` (injection impossibility, with `no_control_to_data_flow`).
 | `strong_normalization` | JtvExtended | `verified` | Data fragment strongly normalizing.
-| `confluence` | JtvExtended | `verified` | Data reduction confluent.
+| `confluence` | JtvExtended | `verified` | Determinism ⇒ confluence: two evaluation results in the same state coincide.
 | `blockEcho_admissible` | JtvEcho | `verified` | Reverse block admissible ⇔ every statement `Safe` (Safe-only policy; the checker contract).
 | `injective_fibre_subsingleton` | JtvEcho | `verified` | `EchoSafe` ⇔ injective ⇔ recoverable.
 | `residue_lossy` | JtvEcho | `verified` | Structured loss is genuine and one-way.

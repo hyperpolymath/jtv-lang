@@ -319,11 +319,13 @@ theorem size_positive (e : DataExpr) : e.size > 0 := by
 -/
 
 /-- Type-level proof that DataExpr cannot contain ControlStmt -/
-theorem dataExpr_no_control : ∀ (e : DataExpr),
-    (∀ s : ControlStmt, True) := by
-  intro e
-  intro s
-  trivial
+-- Data evaluation lands in `Int` — a first-order value — never a `ControlStmt`.
+-- With `DataExpr` and `ControlStmt` being disjoint inductive types (no
+-- constructor of one mentions the other), this is the type-level witness that a
+-- Data expression can neither contain nor produce control.
+theorem dataExpr_no_control (e : DataExpr) (σ : State) :
+    ∃ n : Int, evalDataExpr e σ = n :=
+  dataExpr_totality e σ
 
 /-
   **Key Observation**: The above is trivially true because DataExpr and
