@@ -92,6 +92,21 @@ jobs:
         with:
           path: '.'
           strict: 'false'
+          # Default ignores + the standards contractile trident dir. The
+          # contractiles' *.k9.ncl are Nickel k9-COMPONENTS (no K9! magic /
+          # hunt-signature, by design — see hyperpolymath/standards), not
+          # K9!-magic service files, so they are out of scope for this
+          # service-file validator. (paths-ignore REPLACES the action default,
+          # so the default entries are reproduced here.)
+          paths-ignore: |
+            vendor/
+            vendored/
+            verified-container-spec/
+            .audittraining/
+            integration/fixtures/
+            test/fixtures/
+            tests/fixtures/
+            .machine_readable/contractiles/
 
       - name: Write summary
         run: |
