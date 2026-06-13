@@ -11,3 +11,10 @@ vscode-extension/src/Extension.res:cicd_rules/banned_language_file
 web/Main.res:cicd_rules/banned_language_file
 web/MainTest.res:cicd_rules/banned_language_file
 web/Server.res:cicd_rules/banned_language_file
+
+# Frozen archive (playground/experiments/_attic/, see its FROZEN.md): retired
+# demo experiments kept for design lineage, not shipped code. The ArangoDB demo
+# uses a placeholder DB password ("rootpassword"), not a real credential — this
+# is a false-positive that re-fires on every scan. (Disposition keep-frozen vs
+# delete is a checkpoint decision; until then, exempt the false-positive.)
+playground/experiments/_attic/database-demos/arangodb-demo/queries.js:code_safety/js_hardcoded_secret
