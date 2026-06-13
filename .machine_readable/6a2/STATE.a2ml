@@ -5,9 +5,9 @@
 [metadata]
 project = "julia-the-viper"
 version = "0.0.1"
-last-updated = "2026-06-02"
+last-updated = "2026-06-13"
 status = "active"
-session = "2026-06-02 — Proof repair complete; Echo Phase 2 design; build-truth CI fixes; documentation refresh"
+session = "2026-06-13 — PR #26 (Lean repair + Echo as structural type-system gate + root-cause Rust-CI fix) and PR #27 (de-vacuation of 8 True-typed believeme theorems) merged; ADR-0007 records the addition-only mandate + Echo reversibility tiering; governance-hardening + number-system-semantics + v2 (c) bridge queued"
 
 [project-context]
 name = "Julia The Viper"
@@ -37,7 +37,11 @@ milestones = [
   "Lean 4 proof repair — COMPLETE (2026-06-02): all 5 libraries compile; zero sorry; JtvCore/Theorems/Operational/Types/Security",
   "Idris2 ABI repair — COMPLETE (2026-06-02): Types.idr compiles; %default total; CanWiden extended; dataIsNeverControl proved",
   "Build-truth CI — COMPLETE (2026-06-02): patacl-core path dep removed; proof-regression.yml fixed; coverage/governance/language-policy CI clean",
-  "Documentation refresh — COMPLETE (2026-06-02): README.adoc, EXPLAINME.adoc, STATUS.adoc, 6a2, contractiles updated to highest standards"
+  "Documentation refresh — COMPLETE (2026-06-02): README.adoc, EXPLAINME.adoc, STATUS.adoc, 6a2, contractiles updated to highest standards",
+  "Lean suite repair + Echo structural type-system gate — COMPLETE (PR #26): JtvEcho.neg_injective fixed; orphan JtvExtended wired into lakefile (8 libs build); Echo admissibility gates BOTH reverse{} and reversible{}->tok, checked structurally and before type inference; fixed a pre-existing failing reverse-block echo test",
+  "Root-cause Rust CI fix — COMPLETE (PR #26): rust-ci.yml + coverage.yml startup-failed since ~2026-05-27 (hashFiles() invalid in a job-level if:); un-gated → Rust build/fmt/clippy/test (3-OS matrix) + coverage now actually run; cleared a hidden clippy lint; pinned coverage upload-artifact; added timeout-minutes across workflows; pinned *.jtv/*.pata to eol=lf",
+  "Proof honesty: believeme de-vacuation — COMPLETE (PR #27): 8 True-typed vacuous theorems (incl. string_not_executable, confluence) replaced with real compiled statements; NO-VACUITY invariant + Int-only semantic-scope recorded in PROOF-CAPABILITY-MATRIX.adoc; 0 sorry/admit/axiom AND 0 True-typed theorems",
+  "ADR-0007 addition-only mandate + Echo reversibility tiering — COMPLETE (2026-06-13): addition-only absolute; reverse-addition (not 2s-complement/not primitive); Harvard-in-von-Neumann AOLD insertability; shortest-path-to-equality + Echo lineage + cross-system routing; group/cancellative/idempotent → Safe/Neutral/Breaking tiering"
 ]
 
 [blockers-and-issues]
@@ -45,15 +49,18 @@ issues = [
   { id = "gap-001", description = "Verification chain incomplete: proofs validate models but not wired to Rust interpreter", severity = "medium", status = "known" },
   { id = "gap-002", description = "typing_coercion in JtvTypes.lean weaker than docstring — proves existence not coercion to target type", severity = "low", status = "known", follow-up = "ADR needed" },
   { id = "gap-003", description = "Coprocessor implementation gated on PataCL Phase 1", severity = "medium", status = "external-dependency" },
-  { id = "gap-004", description = "Reversibility round-trip not guaranteed end-to-end at integration level", severity = "medium", status = "known" }
+  { id = "gap-004", description = "Reversibility round-trip not guaranteed end-to-end at integration level", severity = "medium", status = "known" },
+  { id = "gap-005", description = "Semantic model is Int-only: the 7 number systems are typed but stated-unproven at the value level; type_preservation mechanised only for τ=int (see ADR-0007 D6 + PROOF-CAPABILITY-MATRIX.adoc)", severity = "medium", status = "known", follow-up = "number-system-semantics work" }
 ]
 
 [critical-next-actions]
 actions = [
-  "PataCL Phase 1 → unblocks JtV coproc implementation Phase 2",
+  "Governance hardening (branch claude/jtv-governance-hardening): pin governance-reusable@main → SHA (consistent with sibling standards reusables); add secret-scanner.yml wrapper (standards reusable exists at 524523c); add 'actions' language to codeql.yml; harden proof-regression download-then-run; NOTE the reusable-call-job missing-timeout Hypatia findings are false-positives (timeout-minutes is invalid on reusable-call jobs)",
+  "Number-system semantics (ADR-0007 D6): value model for the 7 systems + per-system additive-algebra → Echo-tier classification; keep addition-only (×/÷ generated, not primitive); lift type_preservation beyond τ=int",
+  "v2 (c) token/residue neutral-reversal bridge (ADR-0007 D5 Neutral tier): JtvEcho admissibleWithResidue + Neutral-recoverable-given-token theorem; typechecker reversible{}->tok admits Neutral; runtime residue in reversible.rs (or documented conservative scope)",
+  "Echo as first-class function effect ('(b)') — after (c) stabilises",
   "Verification bridge: correlation tests between Lean semantics and Rust interpreter",
-  "Echo Phase 3: residue availability and audit trail implementation",
-  "Reversibility round-trip guarantee: integration-level property test"
+  "PataCL Phase 1 → unblocks JtV coproc implementation Phase 2"
 ]
 
 [maintenance-status]
@@ -70,11 +77,16 @@ sessions = [
   { date = "2026-04-27", subject = "C2 reversibility: reversible { } -> tok / reverse tok / abandon tok; ReversalToken(u64) opaque-ID token store; token linearity; typechecker + cli sexpr arms; 5 C2 tests green; commit a6b9e83" },
   { date = "2026-04-27", subject = "WASM extern-coproc bridge: list_coproc_decls on Interpreter + JtvWasm; register_coproc_impl wraps js_sys::Function via unsafe Send+Sync; Value<->JsValue helpers; 4 tests; commit 75be523 — all roadmap items complete" },
   { date = "2026-06-02", subject = "Echo Phase 2 design: retained-loss lineage; EchoSafe/Neutral/Breaking; infer+@echo; 3-way numeric; JtvEcho.lean; ALIGNMENT-AFFINESCRIPT.adoc; spec §7/§12" },
-  { date = "2026-06-02", subject = "Build-truth: patacl-core path dep removed from workspace; [features] patacl = [] pure code feature; proof-regression.yml startup failure fixed; Lean 4 all 5 libs compile; Idris2 Types.idr compiles; CI governance/language-policy/deno-lint fixes; documentation refresh" }
+  { date = "2026-06-02", subject = "Build-truth: patacl-core path dep removed from workspace; [features] patacl = [] pure code feature; proof-regression.yml startup failure fixed; Lean 4 all 5 libs compile; Idris2 Types.idr compiles; CI governance/language-policy/deno-lint fixes; documentation refresh" },
+  { date = "2026-06-13", subject = "PR #26 merged: Lean suite repaired (JtvEcho.neg_injective; orphan JtvExtended wired in → 8 libs); Echo a structural type-system gate over BOTH reverse{} and reversible{}->tok (checked first, before type inference); fixed pre-existing failing reverse-block echo test; root-cause Rust-CI revival (rust-ci/coverage hashFiles-in-job-if startup failure since ~05-27); clippy lint cleared; workflow pins+timeouts; *.jtv/*.pata eol=lf" },
+  { date = "2026-06-13", subject = "PR #27 merged: de-vacuated 8 True-typed believeme theorems (string_not_executable, confluence, no_vulnerable_constructs, no_reverse_joinpoints, dataExpr_no_control, data_evaluation_secure, control_data_noninterference, rev_composition) into real compiled statements; NO-VACUITY + Int-only-scope recorded in capability matrix" },
+  { date = "2026-06-13", subject = "ADR-0007: addition-only mandate (absolute; ×/÷ generated, not primitive); subtraction = reverse addition (not 2s-complement/not primitive); Harvard-in-von-Neumann AOLD insertability; shortest-path-to-equality + Echo lineage + cross-system routing; additive-algebra → reversibility-tier (group→Safe / cancellative→Neutral / idempotent→Breaking; Echo's own join is idempotent)" }
 ]
 
 [design-artefact-locations]
 coproc-adrs = "docs/design-decisions/0001-0006-*.adoc"
+addition-only-mandate-adr = "docs/design-decisions/0007-addition-only-mandate-and-reversibility-tiering.adoc"
+proof-capability-matrix = "verification/PROOF-CAPABILITY-MATRIX.adoc"
 coproc-trajectories = ".machine_readable/COPROC-TRAJECTORIES.a2ml"
 v2-reversibility-design = "docs/language/DESIGN-JTV-V2-REVERSIBILITY.md"
 echo-alignment = "ALIGNMENT-AFFINESCRIPT.adoc"
