@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+# must.manifest.a2ml — trident coherence manifest (must verb) for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+---
+trident_version = "1.0.0"
+verb = "must"
+semantics = "invariant assertion — release-blocking"
+cardinality = "one per repo"
+
+[[files]]
+role = "declaration"
+path = "Mustfile.a2ml"
+notes = "Mustfile declaration (content). Migrated/created 2026-06-13."
+
+[[files]]
+role = "runner"
+path = "must.ncl"
+notes = "Verb runner; imports ../_base.ncl (framework, from hyperpolymath/standards)."
+
+[[files]]
+role = "k9_component"
+path = "must.k9.ncl"
+notes = "K9 self-validation component (framework, from hyperpolymath/standards)."
+
+[cross_refs]
+runner_paired_xfile = "Mustfile.a2ml"
+
+[signed_by]
+user = "Jonathan D.A. Jewell"
+date = "2026-06-13"
+context = "julia-the-viper contractile migration to the standards contractiles/{family}/ trident layout; content preserved from the prior top-level .machine_readable/MUST.contractile where one existed (must/trust/intend/adjust), dust/bust created."

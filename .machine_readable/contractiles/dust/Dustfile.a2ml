@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MPL-2.0
+# Dustfile — Deprecation & recovery semantics for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+# New 2026-06-13 (jtv referenced DUST in prose but had no Dustfile).
+
+@abstract:
+What is deprecated/retired and how it is wound down. DUST is advisory
+(continue-with-warnings); a feature's MUST invariants stay active until it is
+fully removed.
+@end
+
+## Retired
+### embedded-decision-sublanguage
+- status: removed
+- description: the in-grammar Decision sublanguage (ADR-0002) — superseded by PataCL (ADR-0006, Delta pivot 2026-04-19)
+### top-level-contractile-layout
+- status: deprecated
+- description: top-level .machine_readable/*.contractile — superseded by contractiles/{family}/ trident layout (this migration, 2026-06-13); top-level kept for human reference per standards

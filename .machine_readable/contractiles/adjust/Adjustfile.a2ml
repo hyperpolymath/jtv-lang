@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+# Adjustfile — Accessibility & adaptation invariants for julia-the-viper.
+# Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+# Migrated 2026-06-13 from .machine_readable/ADJUST.contractile (content preserved).
+# All ADJUST invariants are implicitly MUST invariants (tracked separately for visibility).
+
+@abstract:
+Accessibility is a first-class concern (INTENT anti-purpose: "NOT only for
+able-bodied users with modern hardware"). These adaptation invariants keep
+docs, diagnostics, and the playground usable across abilities and hardware.
+@end
+
+## Accessibility
+### docs-screen-reader
+- description: docs (AsciiDoc/Markdown) remain screen-reader navigable (headings, alt text, no ASCII-art-only meaning)
+- severity: high
+### diagnostics-not-colour-only
+- description: compiler/CI diagnostics never rely on colour alone to convey meaning
+- severity: high
+### playground-keyboard
+- description: the playground (Router Visualization) is keyboard-navigable and not motion-essential
+- severity: high
+### low-resource
+- description: core toolchain runs without GPU / large-RAM assumptions
+- severity: medium
