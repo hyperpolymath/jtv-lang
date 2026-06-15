@@ -1,17 +1,11 @@
 {
   "lint": {
-    "exclude": [
-      "playground/experiments/_attic/"
-    ]
+    "exclude": []
   },
   "fmt": {
-    "exclude": [
-      "playground/experiments/_attic/"
-    ]
+    "exclude": []
   },
   "test": {
-    "exclude": [
-      "playground/experiments/_attic/"
-    ]
+    "exclude": []
   }
 }

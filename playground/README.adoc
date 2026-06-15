@@ -55,7 +55,6 @@ jtv-playground/
 │   ├── tests/corpus/       # Test corpus (valid/invalid)
 │   ├── repl/               # REPL prototype
 │   └── tools/              # Development tools
-├── experiments/_attic/     # Legacy experiments (frozen)
 ├── .machine_read/          # Control plane files
 ├── Justfile                # Command interface
 └── Mustfile                # Mandatory checks
@@ -75,8 +74,8 @@ Per `.machine_read/ANCHOR.scope-arrest.2026-01-01.scm`:
 
 === Legacy (Frozen)
 
-* All non-JTV experiments are in `experiments/_attic/`
-* No new features or expansion permitted
+* Non-JTV experiments have been removed (formerly quarantined in `experiments/_attic/`)
+* No new non-JTV experiments or expansion permitted
 
 === Forbidden
 
