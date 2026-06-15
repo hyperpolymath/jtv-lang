@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+-->
+
 # Reversible Computing in JtV
 
 JtV v2 introduces **reversible computing** through `reverse` blocks, enabling quantum algorithm simulation and thermodynamically efficient computation.

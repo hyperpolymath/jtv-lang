@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# CODEOWNERS — code review assignments for GitHub.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: sole maintainer for all files
+* @hyperpolymath
+
+# Security-sensitive paths
+SECURITY.md @hyperpolymath
+.github/ @hyperpolymath
+.github/workflows/ @hyperpolymath
+.machine_readable/ @hyperpolymath
+
+# License files
+LICENSE @hyperpolymath
+LICENSES/ @hyperpolymath
+
+# Governance & documentation
+README* @hyperpolymath
+CONTRIBUTING* @hyperpolymath
+CODE_OF_CONDUCT* @hyperpolymath
+GOVERNANCE* @hyperpolymath
+MAINTAINERS* @hyperpolymath
+CHANGELOG* @hyperpolymath
+ROADMAP* @hyperpolymath
+
+# Build & CI (estate-wave: contractiles live under .machine_readable/)
+.machine_readable/contractiles/ @hyperpolymath
+Justfile @hyperpolymath
+*.sh @hyperpolymath
+
+# Formal proofs & verification (high-assurance)
+jtv_proofs/ @hyperpolymath
+verification/ @hyperpolymath

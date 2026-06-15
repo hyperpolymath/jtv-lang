@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+-->
+
 # JtV Standard Library Overview
 
 The JtV standard library provides essential functions and types organized into modules.

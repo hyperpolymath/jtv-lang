@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+-->
+
 # Number Systems
 
 JtV supports **7 number systems** with automatic type coercion and exact arithmetic where possible.

@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+-->
+
 # Property-Based Testing in JtV
 
 JtV supports property-based testing inspired by tools like QuickCheck, Hypothesis, and **Echidna** (smart contract fuzzer). Instead of writing individual test cases, you specify properties that should always hold.

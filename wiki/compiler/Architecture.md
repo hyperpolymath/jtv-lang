@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: MPL-2.0
+Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+-->
+
 # JtV Compiler Architecture
 
 The JtV compiler transforms source code into executable form while enforcing the Harvard Architecture guarantees.
