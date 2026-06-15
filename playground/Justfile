@@ -93,22 +93,6 @@ clean:
     @echo "Clean complete"
 
 # ==============================================================================
-# LEGACY (QUARANTINED - per ANCHOR scope policy)
-# ==============================================================================
-
-# Run legacy algorithm demos (frozen, no expansion)
-_legacy-algorithms:
-    @echo "WARNING: Legacy code (frozen per ANCHOR scope policy)"
-    @echo ""
-    @cd experiments/_attic/algorithms && python3 sorting.py 2>/dev/null || echo "(algorithms not available)"
-
-# List legacy experiments (frozen)
-_legacy-list:
-    @echo "Legacy Experiments (frozen in _attic/):"
-    @echo ""
-    @find experiments/_attic -maxdepth 2 -name "README.md" -exec dirname {} \; 2>/dev/null || echo "  (none)"
-
-# ==============================================================================
 # REPOSITORY MANAGEMENT
 # ==============================================================================
 
@@ -150,8 +134,8 @@ scope:
     @echo "  - Conformance tests and corpora"
     @echo ""
     @echo "LEGACY QUARANTINE:"
-    @echo "  - All non-JTV experiments in experiments/_attic/"
-    @echo "  - No expansion allowed"
+    @echo "  - Non-JTV experiments removed (formerly in experiments/_attic/)"
+    @echo "  - No new non-JTV experiments allowed"
     @echo ""
     @echo "FORBIDDEN:"
     @echo "  - General polyglot experiments"

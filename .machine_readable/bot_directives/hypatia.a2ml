@@ -4,7 +4,7 @@
 
 [metadata]
 repo = "julia-the-viper"
-last-updated = "2026-06-14"
+last-updated = "2026-06-15"
 owner = "hyperpolymath"
 
 [scanner]
@@ -16,13 +16,14 @@ workflow = ".github/workflows/hypatia-scan.yml"
 # ============================================================
 
 [[accepted-findings]]
-rule = "code_safety/js_hardcoded_secret"
-path = "playground/experiments/_attic/database-demos/arangodb-demo/queries.js"
+rule = "code_safety/unsafe_block"
+path = "crates/jtv-cli/src/rsr_check.rs"
 status = "verified-false-positive"
 reason = """
-Placeholder DB password ("rootpassword") in the FROZEN demo archive
-(playground/experiments/_attic/, see its FROZEN.md) — not a real
-credential and not shipped code. Exempted in .hypatia-ignore.
+rsr_check.rs IS the RSR compliance checker; its `unsafe` matches are string
+literals in its own detector (it scans other files for the literal `unsafe {`),
+not real unsafe blocks. No unsafe code exists in this file. Exempted in
+.hypatia-ignore.
 """
 
 [[accepted-findings]]
