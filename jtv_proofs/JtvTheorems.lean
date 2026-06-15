@@ -375,6 +375,53 @@ theorem rev_forward_backward (op : RevOp) (σ : State) (x : String) (e : DataExp
     exact hfree
   simp [h]
 
+/-- Execute a reversible operation backward using a *retained token* — the value
+    of the overwritten variable saved *before* the forward step. This is the
+    Bennett-style residue reversal: rather than recomputing the inverse from `e`
+    (which fails when `x` is self-referential, `x ∈ e.freeVars`), restore the
+    variable directly from the saved token. -/
+def RevOp.execBackwardWithToken (op : RevOp) (σ : State) (tok : Int) : State :=
+  match op with
+  | addAssign x _ => σ[x ↦ tok]
+  | subAssign x _ => σ[x ↦ tok]
+
+/--
+  **Theorem (Neutral reversibility — recoverable given its token).** For an
+  `x += e` operation, restoring `x` from the token `σ x` (its value saved before
+  the forward step) recovers the original state at *every* variable —
+  **unconditionally**, even when `x ∈ e.freeVars` (the self-referential case
+  that defeats `rev_forward_backward`). This is the formal contract of the v2
+  `reversible { } -> tok` form: a `neutral` (lossy) op stays reversible when its
+  loss lineage (the token) is retained — ADR-0007 D5/D6, the `neutral` tier
+  (cancellative-monoid reverse-given-residue). The effect-level companion is
+  `Jtv.Echo.blockEcho_admissibleWithResidue`.
+-/
+theorem rev_forward_backward_with_token
+    (op : RevOp) (σ : State) (x : String) (e : DataExpr)
+    (hop : op = RevOp.addAssign x e) (y : String) :
+    RevOp.execBackwardWithToken op (RevOp.execForward op σ) (σ x) y = σ y := by
+  subst hop
+  simp only [RevOp.execForward, RevOp.execBackwardWithToken, State.update]
+  by_cases h : y = x
+  · subst h; simp
+  · simp [h]
+
+/--
+  **Why the token is necessary.** In the self-referential case `x += x`
+  (`e = var x`, so `x ∈ e.freeVars`), the naive `execBackward` does *not* recover
+  the original value: concretely at `σ x = 1` it yields `0 ≠ 1`. This is exactly
+  the `neutral` (lossy) case that the Safe-only `execBackward` /
+  `rev_forward_backward` cannot handle and that the token form above repairs.
+-/
+theorem rev_backward_naive_fails_self_ref :
+    ∃ (σ : State) (x : String) (e : DataExpr),
+      x ∈ e.freeVars ∧
+      RevOp.execBackward (RevOp.addAssign x e)
+        (RevOp.execForward (RevOp.addAssign x e) σ) x ≠ σ x := by
+  refine ⟨(fun _ => 1), "x", DataExpr.var "x", ?_, ?_⟩
+  · simp [DataExpr.freeVars]
+  · simp [RevOp.execForward, RevOp.execBackward, State.update, evalDataExpr]
+
 -- ============================================================================
 -- SECTION 10: ADDITIONAL PROPERTIES
 -- ============================================================================

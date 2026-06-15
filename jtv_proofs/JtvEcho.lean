@@ -28,6 +28,12 @@
   residue-retaining) and `breaking` are both rejected. This is the formal
   contract enforced by `crates/jtv-core/src/echo.rs`.
 
+  The companion result `blockEcho_admissibleWithResidue` (Section 2b) formalises
+  the v2 `reversible { } -> tok` policy: `neutral` is *also* admissible there,
+  because its loss lineage is retained as a token (Bennett-style); only
+  `breaking` is rejected. The operational justification is
+  `rev_forward_backward_with_token` in `JtvTheorems`.
+
   Proofs are deliberately Mathlib-free (Lean core only) and discharge every
   goal by finite case analysis, matching the style of the other JtV proofs.
 -/
@@ -136,6 +142,43 @@ theorem admissible_downward_closed (a b : Echo) :
     simp_all [LE.le, Echo.le, Echo.join, Echo.admissible]
 
 -- ============================================================================
+-- SECTION 2b: RESIDUE-RETAINING ADMISSIBILITY (the reversible{}->tok contract)
+-- ============================================================================
+
+/-- Boolean admissibility under the **residue-retaining** (Bennett) policy: an
+    Echo may appear in a `reversible { } -> tok` block iff it is not `breaking`.
+    Unlike `admissible` (Safe-only), this admits `neutral`: a lossy op is
+    reversible when its loss lineage (the retained token / residue) is kept. The
+    operational justification is `rev_forward_backward_with_token` in
+    `JtvTheorems`. `breaking` (total erasure) is still rejected — no token can
+    recover destroyed lineage. (ADR-0007 D5/D6; spec v2 §9.) -/
+def Echo.admissibleWithResidue : Echo → Bool
+  | .breaking => false
+  | _         => true
+
+theorem admissibleWithResidue_iff (e : Echo) :
+    e.admissibleWithResidue = true ↔ e ≠ Echo.breaking := by
+  cases e <;> simp [Echo.admissibleWithResidue]
+
+/-- The Safe-only policy is strictly stronger: anything admissible under
+    `reverse { }` is admissible under `reversible { } -> tok`. -/
+theorem admissible_implies_admissibleWithResidue (e : Echo) :
+    e.admissible = true → e.admissibleWithResidue = true := by
+  cases e <;> simp [Echo.admissible, Echo.admissibleWithResidue]
+
+/-- `neutral` is exactly the capability the token form adds: rejected by
+    Safe-only, accepted with a retained residue. -/
+theorem neutral_residue_only :
+    Echo.neutral.admissible = false ∧ Echo.neutral.admissibleWithResidue = true :=
+  ⟨rfl, rfl⟩
+
+/-- Compositional law for the residue policy (mirrors `join_admissible`). -/
+theorem join_admissibleWithResidue (a b : Echo) :
+    (a ⊔ b).admissibleWithResidue
+      = (a.admissibleWithResidue && b.admissibleWithResidue) := by
+  cases a <;> cases b <;> rfl
+
+-- ============================================================================
 -- SECTION 3: REVERSE BLOCKS AS LISTS OF ECHOES
 -- ============================================================================
 
@@ -172,6 +215,39 @@ theorem breaking_blocks_reversal (pre post : List Echo) :
   | nil => rfl
   | cons e pre ih =>
       show (e.admissible && allAdmissible (pre ++ Echo.breaking :: post)) = false
+      rw [ih]; exact Bool.and_false _
+
+-- ----------------------------------------------------------------------------
+-- Residue-policy block soundness (companion to the Safe-only results above,
+-- placed here because it consumes `blockEcho` from this section).
+-- ----------------------------------------------------------------------------
+
+/-- Block-level "all admissible with residue" (residue/Bennett policy). -/
+def allAdmissibleWithResidue : List Echo → Bool
+  | []      => true
+  | e :: es => e.admissibleWithResidue && allAdmissibleWithResidue es
+
+/-- **Residue-block soundness.** A `reversible { } -> tok` block is well-typed
+    iff every statement is non-`breaking` — the contract `echo.rs` enforces for
+    the token-carrying reversal form. -/
+theorem blockEcho_admissibleWithResidue (es : List Echo) :
+    (blockEcho es).admissibleWithResidue = allAdmissibleWithResidue es := by
+  induction es with
+  | nil => rfl
+  | cons e es ih =>
+      show (e ⊔ blockEcho es).admissibleWithResidue
+            = (e.admissibleWithResidue && allAdmissibleWithResidue es)
+      rw [join_admissibleWithResidue, ih]
+
+/-- Even with residue retention, a single `breaking` op blocks reversal. -/
+theorem breaking_blocks_residual_reversal (pre post : List Echo) :
+    (blockEcho (pre ++ Echo.breaking :: post)).admissibleWithResidue = false := by
+  rw [blockEcho_admissibleWithResidue]
+  induction pre with
+  | nil => rfl
+  | cons e pre ih =>
+      show (e.admissibleWithResidue
+            && allAdmissibleWithResidue (pre ++ Echo.breaking :: post)) = false
       rw [ih]; exact Bool.and_false _
 
 -- ============================================================================
