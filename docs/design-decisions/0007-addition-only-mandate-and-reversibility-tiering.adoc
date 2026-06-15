@@ -177,13 +177,21 @@ basis for the v2 `(c)` Neutral bridge and the number-system → tier map.
   semantics layer must (a) give each system a value model, (b) classify
   each by its additive algebra → Echo tier per D6, and (c) keep
   addition-only (D1) — `×`/`÷` generated, not primitive.
-. *v2 "(c)" bridge.* Implements the Neutral tier of D5: `reverse { }`
-  stays Safe-only; `reversible { } -> tok` admits Neutral via the
-  retained log/token (Bennett). Lean: extend `JtvEcho` with
-  `admissibleWithResidue` + a "Neutral recoverable given its token"
-  theorem mirroring `rev_forward_backward`. Runtime: `reversible.rs`
-  must record/invert residue for Neutral, or the gate stays
-  conservative with the scope documented.
+. *v2 "(c)" bridge (LANDED 2026-06-15).* Implements the Neutral tier of
+  D5: `reverse { }` stays Safe-only; `reversible { } -> tok` admits
+  Neutral via the retained log/token (Bennett). Lean: `JtvEcho`
+  `admissibleWithResidue` + `blockEcho_admissibleWithResidue`, and
+  `JtvTheorems` `execBackwardWithToken` /
+  `rev_forward_backward_with_token` (full-state recovery, unconditional —
+  even self-referential `x += x`) + `rev_backward_naive_fails_self_ref`
+  (proves the token is *necessary*). Runtime/typechecker: `echo.rs`
+  reclassifies self-reference `Breaking → Neutral` (token-recoverable, not
+  erasure; `Breaking` is now reserved for future non-group / idempotent
+  systems per D6); `typechecker.rs` gates `reversible { } -> tok` on
+  `check_echo_admissible_with_residue` (the token unlocks Neutral;
+  tokenless `reversible { }` and `reverse { }` stay Safe-only);
+  `reversible.rs` `RecordedOp::Snapshot` records and restores the residue.
+  `lake build` + `cargo test` + clippy `-D warnings` all green.
 . *Revisit `DataExpr.neg`* per the D2 note.
 . *Identity preserved.* D1–D3 confirm v2/Echo do **not** erode JtV:
   injection-impossibility rests on `no_control_to_data_flow` + disjoint
