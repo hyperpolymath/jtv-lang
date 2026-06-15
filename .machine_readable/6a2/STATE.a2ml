@@ -5,9 +5,9 @@
 [metadata]
 project = "julia-the-viper"
 version = "0.0.1"
-last-updated = "2026-06-13"
+last-updated = "2026-06-15"
 status = "active"
-session = "2026-06-13 — PR #26 (Lean repair + Echo as structural type-system gate + root-cause Rust-CI fix) and PR #27 (de-vacuation of 8 True-typed believeme theorems) merged; ADR-0007 records the addition-only mandate + Echo reversibility tiering; governance-hardening + number-system-semantics + v2 (c) bridge queued"
+session = "2026-06-15 — bookkeeping/tidying consolidation: lake build green (8 libs, 0 sorry/admit/axiom, 0 vacuity, 0 lint warnings); 4 stray branches resolved (2 stale-merged deleted + codeql weekly->monthly cron folded + estate-standardization salvaged: CODEOWNERS + 17 wiki SPDX headers); ADR-0007 gains the graded-comonad/tropical-grade characterization note; PMPL-1.0 vs MPL-2.0 header discrepancy flagged for governance decision (gap-006); number-system-semantics + v2 (c) bridge remain queued"
 
 [project-context]
 name = "Julia The Viper"
@@ -50,7 +50,8 @@ issues = [
   { id = "gap-002", description = "typing_coercion in JtvTypes.lean weaker than docstring — proves existence not coercion to target type", severity = "low", status = "known", follow-up = "ADR needed" },
   { id = "gap-003", description = "Coprocessor implementation gated on PataCL Phase 1", severity = "medium", status = "external-dependency" },
   { id = "gap-004", description = "Reversibility round-trip not guaranteed end-to-end at integration level", severity = "medium", status = "known" },
-  { id = "gap-005", description = "Semantic model is Int-only: the 7 number systems are typed but stated-unproven at the value level; type_preservation mechanised only for τ=int (see ADR-0007 D6 + PROOF-CAPABILITY-MATRIX.adoc)", severity = "medium", status = "known", follow-up = "number-system-semantics work" }
+  { id = "gap-005", description = "Semantic model is Int-only: the 7 number systems are typed but stated-unproven at the value level; type_preservation mechanised only for τ=int (see ADR-0007 D6 + PROOF-CAPABILITY-MATRIX.adoc)", severity = "medium", status = "known", follow-up = "number-system-semantics work" },
+  { id = "gap-006", description = "License-identifier discrepancy: 8 files (codeql.yml, scorecard.yml, language-policy.yml, README.adoc, PALIMPSEST.adoc, playground/README.adoc, playground/PALIMPSEST.adoc, playground/jtv/README.adoc) carry SPDX-License-Identifier: PMPL-1.0, not an SPDX-recognised identifier; ADR-0007 + spec + 6a2 + new governance/wiki files use MPL-2.0 (PMPL noted only as aspirational). estate standard (absolute-zero) is MPL-2.0-only with PMPL-1.0 -> MPL-2.0. Needs governance decision: normalise to MPL-2.0, or formally keep/adopt PMPL via PALIMPSEST.adoc.", severity = "medium", status = "flagged", follow-up = "user governance decision" }
 ]
 
 [critical-next-actions]
@@ -64,7 +65,7 @@ actions = [
 ]
 
 [maintenance-status]
-last-run-utc = "2026-06-02T00:00:00Z"
+last-run-utc = "2026-06-15T00:00:00Z"
 last-result = "pass"  # unknown | pass | warn | fail
 
 [session-history]
@@ -80,7 +81,8 @@ sessions = [
   { date = "2026-06-02", subject = "Build-truth: patacl-core path dep removed from workspace; [features] patacl = [] pure code feature; proof-regression.yml startup failure fixed; Lean 4 all 5 libs compile; Idris2 Types.idr compiles; CI governance/language-policy/deno-lint fixes; documentation refresh" },
   { date = "2026-06-13", subject = "PR #26 merged: Lean suite repaired (JtvEcho.neg_injective; orphan JtvExtended wired in → 8 libs); Echo a structural type-system gate over BOTH reverse{} and reversible{}->tok (checked first, before type inference); fixed pre-existing failing reverse-block echo test; root-cause Rust-CI revival (rust-ci/coverage hashFiles-in-job-if startup failure since ~05-27); clippy lint cleared; workflow pins+timeouts; *.jtv/*.pata eol=lf" },
   { date = "2026-06-13", subject = "PR #27 merged: de-vacuated 8 True-typed believeme theorems (string_not_executable, confluence, no_vulnerable_constructs, no_reverse_joinpoints, dataExpr_no_control, data_evaluation_secure, control_data_noninterference, rev_composition) into real compiled statements; NO-VACUITY + Int-only-scope recorded in capability matrix" },
-  { date = "2026-06-13", subject = "ADR-0007: addition-only mandate (absolute; ×/÷ generated, not primitive); subtraction = reverse addition (not 2s-complement/not primitive); Harvard-in-von-Neumann AOLD insertability; shortest-path-to-equality + Echo lineage + cross-system routing; additive-algebra → reversibility-tier (group→Safe / cancellative→Neutral / idempotent→Breaking; Echo's own join is idempotent)" }
+  { date = "2026-06-13", subject = "ADR-0007: addition-only mandate (absolute; ×/÷ generated, not primitive); subtraction = reverse addition (not 2s-complement/not primitive); Harvard-in-von-Neumann AOLD insertability; shortest-path-to-equality + Echo lineage + cross-system routing; additive-algebra → reversibility-tier (group→Safe / cancellative→Neutral / idempotent→Breaking; Echo's own join is idempotent)" },
+  { date = "2026-06-15", subject = "Bookkeeping/tidying consolidation: confirmed lake build green (8 libs); cleared all Lean unused-variable lint warnings (_-prefix); resolved 4 stray remote branches (deleted 2 stale-merged changelog/tech-debt whose content is already on main; folded codeql weekly->monthly cron; salvaged CODEOWNERS + 17 wiki SPDX headers from estate-standardization-20260607, dropped its superseded pre-repair Lean drafts + old contractiles); ADR-0007 graded-comonad/tropical-grade characterization note; flagged PMPL-1.0 vs MPL-2.0 discrepancy (gap-006)" }
 ]
 
 [design-artefact-locations]

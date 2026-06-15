@@ -141,6 +141,33 @@ semirings, lattices). In such systems the D5 ladder is *forced*: Safe
 is impossible, so one must keep a residue (Neutral) or accept Breaking.
 ====
 
+=== Theoretical characterization (note for continuity): Echo is a graded comonad with a tropical grade
+
+Recording the characterization that situates the D1–D6 tiering in
+type-theoretic terms, so later work can build on it directly:
+
+* *Echo is a graded comonad of structured loss.* The grade is the
+  reversibility tier `{Safe ⊑ Neutral ⊑ Breaking}`; `extract` forgets the
+  retained lineage and `duplicate` splits it, and grades compose by the
+  lattice join. This is precisely the object the companion `echo-types`
+  development formalises and pins on its establishment track (a
+  *characterised graded comonad of structured loss* — coeffect /
+  quantitative-lineage, explicitly not the linear/dependent judgmental
+  ladder).
+* *The grade is a tropical (idempotent, min-plus-style) modality.* Join
+  is idempotent (the D6 self-reference NOTE), so loss composition takes
+  the worst tier and admits no inverse — which is exactly why `Breaking`
+  is one-way and why a `Neutral` reverse needs a retained residue (D5).
+* *Operational reading.* JtV's reversibility tiering (D5/D6) is the
+  operational face of that graded comonad: the grade attached to a
+  computation is the best reversal tier still attainable, and Echo is the
+  bookkeeping of that grade across number-system hops (D4).
+
+This is a characterisation, not a new JtV obligation: JtV does **not**
+re-mechanise the graded-comonad laws — those are proved in `echo-types`
+(its Pillar B is complete). JtV consumes the result as the conceptual
+basis for the v2 `(c)` Neutral bridge and the number-system → tier map.
+
 == Consequences
 
 . *Number-system semantics work (next-but-one priority).* The Lean model
