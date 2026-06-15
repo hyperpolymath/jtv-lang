@@ -429,10 +429,10 @@ inductive TypedValue : Int → JtvType → Prop where
   If Γ ⊢ e : τ and e evaluates to v, then v has type τ.
 -/
 theorem type_preservation (Γ : TypeEnv) (e : DataExpr) (τ : JtvType) (σ : State)
-    (h : DataTyping Γ e τ) :
+    (_h : DataTyping Γ e τ) :
     -- For integer types, the result is an integer
     τ = JtvType.int → TypedValue (evalDataExpr e σ) JtvType.int := by
-  intro hτ
+  intro _hτ
   exact TypedValue.int (evalDataExpr e σ)
 
 /--
@@ -440,7 +440,7 @@ theorem type_preservation (Γ : TypeEnv) (e : DataExpr) (τ : JtvType) (σ : Sta
   If Γ ⊢ e : τ, then either e is a value or e can step.
 -/
 theorem typed_progress (Γ : TypeEnv) (e : DataExpr) (τ : JtvType)
-    (h : DataTyping Γ e τ) :
+    (_h : DataTyping Γ e τ) :
     e.isValue = true ∨ ∃ e', DataStep ⟨e, State.empty⟩ ⟨e', State.empty⟩ := by
   exact data_progress e State.empty
 

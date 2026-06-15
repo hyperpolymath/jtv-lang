@@ -160,7 +160,7 @@ theorem bigstep_denotational_equiv (e : DataExpr) (σ : State) (n : Int) :
   constructor
   · intro h
     induction h with
-    | lit n' σ' => simp [evalDataExpr]
+    | lit n' _σ' => simp [evalDataExpr]
     | var x σ' => simp [evalDataExpr]
     | add e₁ e₂ σ' n₁ n₂ _ _ ih₁ ih₂ =>
       simp [evalDataExpr, ih₁, ih₂]

@@ -238,7 +238,7 @@ def dependsOn (e : DataExpr) (x : String) : Prop :=
   The only dependencies are through free variables.
 -/
 theorem no_hidden_deps (e : DataExpr) (x : String) (σ₁ σ₂ : State)
-    (hx : x ∉ e.freeVars)
+    (_hx : x ∉ e.freeVars)
     (heq : ∀ y ∈ e.freeVars, σ₁ y = σ₂ y) :
     evalDataExpr e σ₁ = evalDataExpr e σ₂ := by
   apply free_vars_sufficient

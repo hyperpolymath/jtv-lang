@@ -44,8 +44,8 @@ theorem expr_totality (e : Expr) (σ : State) : ∃ (n : Int), evalExpr e σ = n
     obtain ⟨n, h⟩ := term_totality t σ
     exact ⟨n, h⟩
   | add t₁ t₂ =>
-    obtain ⟨n₁, _⟩ := term_totality t₁ σ
-    obtain ⟨n₂, _⟩ := term_totality t₂ σ
+    obtain ⟨_n₁, _⟩ := term_totality t₁ σ
+    obtain ⟨_n₂, _⟩ := term_totality t₂ σ
     exact ⟨evalTerm t₁ σ + evalTerm t₂ σ, rfl⟩
 
 /--
@@ -60,11 +60,11 @@ theorem dataExpr_totality (e : DataExpr) (σ : State) : ∃ (n : Int), evalDataE
   | lit n => exact ⟨n, rfl⟩
   | var x => exact ⟨σ x, rfl⟩
   | add e₁ e₂ ih₁ ih₂ =>
-    obtain ⟨n₁, _⟩ := ih₁
-    obtain ⟨n₂, _⟩ := ih₂
+    obtain ⟨_n₁, _⟩ := ih₁
+    obtain ⟨_n₂, _⟩ := ih₂
     exact ⟨evalDataExpr e₁ σ + evalDataExpr e₂ σ, rfl⟩
   | neg e ih =>
-    obtain ⟨n, _⟩ := ih
+    obtain ⟨_n, _⟩ := ih
     exact ⟨-(evalDataExpr e σ), rfl⟩
 
 -- ============================================================================

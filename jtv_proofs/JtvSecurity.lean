@@ -313,7 +313,7 @@ theorem aold_complete :
 -/
 
 /-- Model of eval() vulnerability in traditional languages -/
-def evalVulnerability (userInput : String) : Prop :=
+def evalVulnerability (_userInput : String) : Prop :=
   -- In vulnerable languages, any string can become code
   -- This is NOT possible in JtV
   True
