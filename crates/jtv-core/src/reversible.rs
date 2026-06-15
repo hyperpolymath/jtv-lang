@@ -19,6 +19,12 @@ pub enum RecordedOp {
         then_ops: Vec<RecordedOp>,
         else_ops: Vec<RecordedOp>,
     },
+    /// Residue/token (Bennett) record: the value of `target` that a
+    /// self-referential (Neutral) step overwrote, saved *before* the step. The
+    /// naive `-value` inverse is wrong for self-reference, so this is reversed
+    /// by restoring `old_value`. Runtime counterpart of `execBackwardWithToken`
+    /// in `jtv_proofs/JtvTheorems.lean` (the v2 "(c)" Neutral bridge).
+    Snapshot { target: String, old_value: Value },
 }
 
 impl RecordedOp {
@@ -41,6 +47,13 @@ impl RecordedOp {
                 condition_was_true: *condition_was_true,
                 then_ops: then_ops.iter().rev().map(|op| op.inverse()).collect(),
                 else_ops: else_ops.iter().rev().map(|op| op.inverse()).collect(),
+            },
+            // A snapshot's inverse is the snapshot itself: applying it restores
+            // the saved residue (`old_value`), which is exactly the undo of the
+            // step that overwrote `target`.
+            RecordedOp::Snapshot { target, old_value } => RecordedOp::Snapshot {
+                target: target.clone(),
+                old_value: old_value.clone(),
             },
         }
     }
@@ -218,11 +231,22 @@ impl ReversibleInterpreter {
                 let current = self.get_variable(target)?;
                 let new_value = current.add(&value)?;
 
-                // Record the operation
-                self.trace.record(RecordedOp::AddAssign {
-                    target: target.clone(),
-                    value: value.clone(),
-                });
+                // Record the operation. Self-reference (`x += x`) is the Neutral
+                // tier: the naive `-value` inverse is wrong, so snapshot the
+                // overwritten value (the residue/token) and invert by restoring
+                // it (Bennett). Independent targets are Safe: record the added
+                // value and invert by subtraction.
+                if expr_contains_var(expr, target) {
+                    self.trace.record(RecordedOp::Snapshot {
+                        target: target.clone(),
+                        old_value: current,
+                    });
+                } else {
+                    self.trace.record(RecordedOp::AddAssign {
+                        target: target.clone(),
+                        value: value.clone(),
+                    });
+                }
 
                 self.variables.insert(target.clone(), new_value);
                 Ok(())
@@ -233,11 +257,19 @@ impl ReversibleInterpreter {
                 let neg_value = value.negate()?;
                 let new_value = current.add(&neg_value)?;
 
-                // Record the operation
-                self.trace.record(RecordedOp::SubAssign {
-                    target: target.clone(),
-                    value: value.clone(),
-                });
+                // See AddAssign: self-reference snapshots the residue (Neutral);
+                // independent targets record the value and invert by addition.
+                if expr_contains_var(expr, target) {
+                    self.trace.record(RecordedOp::Snapshot {
+                        target: target.clone(),
+                        old_value: current,
+                    });
+                } else {
+                    self.trace.record(RecordedOp::SubAssign {
+                        target: target.clone(),
+                        value: value.clone(),
+                    });
+                }
 
                 self.variables.insert(target.clone(), new_value);
                 Ok(())
@@ -327,6 +359,12 @@ impl ReversibleInterpreter {
                 for nested_op in ops {
                     self.apply_operation(nested_op)?;
                 }
+                Ok(())
+            }
+            // Restore the saved residue — the Bennett undo of a self-referential
+            // (Neutral) overwrite.
+            RecordedOp::Snapshot { target, old_value } => {
+                self.variables.insert(target.clone(), old_value.clone());
                 Ok(())
             }
         }
@@ -593,5 +631,30 @@ mod tests {
 
         // State should be identical to original
         assert_eq!(interp.get_state(), &original_state);
+    }
+
+    #[test]
+    fn test_neutral_self_reference_recovered_via_residue() {
+        // The v2 "(c)" Neutral bridge at runtime: `x += x` is lossy under the
+        // naive `-` inverse, but the recorded residue (a snapshot of the old x)
+        // restores it exactly — forward then reverse = identity.
+        let mut interp = ReversibleInterpreter::new();
+        interp.set("x".to_string(), Value::Int(5));
+
+        let block = ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+        };
+
+        // Forward `x += x`  ->  x = 10, snapshotting old x = 5.
+        interp.execute_forward(&block).unwrap();
+        assert_eq!(interp.get("x"), Some(&Value::Int(10)));
+
+        // Reverse via the recorded residue restores the original x = 5
+        // (the naive `x -= x` inverse would wrongly yield 0).
+        interp.execute_reverse().unwrap();
+        assert_eq!(interp.get("x"), Some(&Value::Int(5)));
     }
 }

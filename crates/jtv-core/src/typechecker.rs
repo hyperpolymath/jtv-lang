@@ -383,13 +383,22 @@ impl TypeChecker {
             }
             ControlStmt::ReversibleBlock(rb) => {
                 // The forward pass records a reversal log that a later
-                // `reverse tok` inverts, so the body must satisfy the SAME Echo
-                // admissibility rule as a `reverse` block — otherwise the
-                // recorded log cannot be soundly inverted. Checked structurally
-                // and FIRST (like `ReverseBlock`); previously this arm skipped
-                // the Echo gate entirely, leaving the `reversible` form
-                // un-checked.
-                self.check_echo_admissible(&rb.body)?;
+                // `reverse tok` inverts. Echo admissibility is checked
+                // structurally and FIRST (like `ReverseBlock`). The policy
+                // depends on whether a residue token is retained:
+                //   * `reversible { } -> tok` (token bound): the residue policy
+                //     — `EchoNeutral` (structured loss) IS admissible because a
+                //     later `reverse tok` recovers it from the saved residue
+                //     (Bennett); only `EchoBreaking` is rejected. This is the
+                //     v2 "(c)" Neutral bridge.
+                //   * `reversible { }` (no token): no residue is available to
+                //     invert from, so it falls back to the Safe-only policy,
+                //     exactly like a plain `reverse` block.
+                if rb.token_binding.is_some() {
+                    self.check_echo_admissible_with_residue(&rb.body)?;
+                } else {
+                    self.check_echo_admissible(&rb.body)?;
+                }
                 for stmt in &rb.body {
                     self.check_reversible_stmt(stmt)?;
                 }
@@ -415,14 +424,15 @@ impl TypeChecker {
         }
     }
 
-    /// Enforce the Echo admissibility rule for a `reverse` / `reversible`
-    /// block (spec v2 §9) under the **Safe-only** reversal policy: the block is
-    /// well-typed iff its aggregate echo is `EchoSafe` — i.e. every statement
-    /// is bijective (`+`/`-` with no self-reference). `EchoNeutral` (structured,
-    /// residue-retaining loss) and `EchoBreaking` (total erasure) are both
-    /// rejected, since neither is invertible by the implemented runtime. This
-    /// is the type-checker realisation of `blockEcho_admissible` in
-    /// `jtv_proofs/JtvEcho.lean`.
+    /// Enforce the Echo admissibility rule for a plain `reverse { }` block (and
+    /// a tokenless `reversible { }`) (spec v2 §9) under the **Safe-only**
+    /// reversal policy: the block is well-typed iff its aggregate echo is
+    /// `EchoSafe` — i.e. every statement is bijective (`+`/`-` with no
+    /// self-reference). `EchoNeutral` (structured, residue-retaining loss) and
+    /// `EchoBreaking` (total erasure) are both rejected, since neither is
+    /// invertible without a retained token. This is the type-checker
+    /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`; the
+    /// residue (token) policy is `check_echo_admissible_with_residue`.
     fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
         let aggregate = echo::classify_stmts(body);
         if !aggregate.admissible_in_reverse() {
@@ -430,6 +440,30 @@ impl TypeChecker {
                 "reverse block has echo {aggregate}: it is not fully reversible. \
                  Reverse blocks may only contain {} statements (bijective +/-); \
                  lossy ({} / {}) operations are not invertible here.",
+                Echo::Safe,
+                Echo::Neutral,
+                Echo::Breaking
+            )));
+        }
+        Ok(())
+    }
+
+    /// Enforce the Echo admissibility rule for a `reversible { } -> tok` block
+    /// (spec v2 §9) under the **residue-retaining** (Bennett) policy: the block
+    /// is well-typed iff its aggregate echo is not `EchoBreaking` — i.e. every
+    /// statement is either bijective (`EchoSafe`) or structured-loss
+    /// (`EchoNeutral`) whose residue the bound token retains for a later
+    /// `reverse tok`. Only `EchoBreaking` (total erasure) is rejected. This is
+    /// the type-checker realisation of `blockEcho_admissibleWithResidue` in
+    /// `jtv_proofs/JtvEcho.lean` (the v2 "(c)" Neutral bridge).
+    fn check_echo_admissible_with_residue(&self, body: &[ReversibleStmt]) -> Result<()> {
+        let aggregate = echo::classify_stmts(body);
+        if !aggregate.admissible_with_residue() {
+            return Err(JtvError::EchoViolation(format!(
+                "reversible block has echo {aggregate}: it destroys information. \
+                 A `reversible {{ }} -> tok` block may contain {} and {} statements \
+                 (the token retains the residue to invert them), but not {} \
+                 (total erasure), which no token can recover.",
                 Echo::Safe,
                 Echo::Neutral,
                 Echo::Breaking
@@ -645,9 +679,11 @@ mod tests {
     }
 
     #[test]
-    fn test_reverse_block_rejects_breaking_echo() {
-        // A reverse block whose statement destroys information (self-reference,
-        // EchoBreaking) must be rejected by the type checker (spec v2 §9).
+    fn test_reverse_block_rejects_self_reference() {
+        // A plain `reverse { }` block is Safe-only: a self-referential statement
+        // (EchoNeutral, `x += x`) is rejected because, without a token, its
+        // residue is not available to invert from. With a token the
+        // `reversible { } -> tok` form admits it — see the residue tests below.
         use crate::ast::*;
         let mut checker = TypeChecker::new();
         let block = ReverseBlock {
@@ -677,13 +713,15 @@ mod tests {
     }
 
     #[test]
-    fn test_reversible_block_rejects_breaking_echo() {
-        // A `reversible { … } -> tok` block records a reversal log; if any
-        // statement is information-destroying (EchoBreaking) the log cannot be
-        // inverted, so the type checker must reject it under the SAME Echo gate
-        // as a plain `reverse` block (spec v2 §9).
+    fn test_reversible_block_with_token_admits_self_reference() {
+        // A `reversible { x += x } -> tok` block retains a residue (token) for
+        // the self-referential (EchoNeutral) statement, so a later `reverse tok`
+        // inverts it (Bennett). Under the residue policy it is ADMITTED — only
+        // EchoBreaking (total erasure) is rejected. The v2 "(c)" Neutral bridge;
+        // contrast `test_reverse_block_rejects_self_reference` (no token).
         use crate::ast::*;
         let mut checker = TypeChecker::new();
+        checker.env.set_var("x".to_string(), Type::Int);
         let block = ReversibleBlockStmt {
             body: vec![ReversibleStmt::AddAssign(
                 "x".to_string(),
@@ -692,8 +730,7 @@ mod tests {
             token_binding: Some("tok".to_string()),
         };
         let stmt = ControlStmt::ReversibleBlock(block);
-        let result = checker.check_control_stmt(&stmt);
-        assert!(matches!(result, Err(JtvError::EchoViolation(_))));
+        assert!(checker.check_control_stmt(&stmt).is_ok());
     }
 
     #[test]
@@ -710,6 +747,26 @@ mod tests {
         };
         let stmt = ControlStmt::ReversibleBlock(block);
         assert!(checker.check_control_stmt(&stmt).is_ok());
+    }
+
+    #[test]
+    fn test_reversible_block_without_token_rejects_self_reference() {
+        // Without a bound token there is no retained residue to invert from, so
+        // a tokenless `reversible { x += x }` falls back to the Safe-only policy
+        // and the self-referential (EchoNeutral) statement is rejected — the
+        // token is exactly what unlocks the Neutral tier.
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        let block = ReversibleBlockStmt {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+            token_binding: None,
+        };
+        let stmt = ControlStmt::ReversibleBlock(block);
+        let result = checker.check_control_stmt(&stmt);
+        assert!(matches!(result, Err(JtvError::EchoViolation(_))));
     }
 
     #[test]

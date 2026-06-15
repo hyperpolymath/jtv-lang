@@ -58,18 +58,33 @@ impl Echo {
         self.join(other) == other
     }
 
-    /// Whether this echo may appear inside a reverse block.
+    /// Whether this echo may appear inside a plain `reverse { }` block.
     ///
-    /// Policy: **Safe-only.** A reverse block must be fully reversible, so only
-    /// `EchoSafe` (bijective `+`/`-`) statements are admissible. `EchoNeutral`
-    /// is rejected too: although spec v2 §9 permits it *in principle*
-    /// (reversal via a retained residue, Bennett-style), that runtime mechanism
-    /// is not implemented, so the checker conservatively requires `Safe`.
-    /// `EchoBreaking` is of course always rejected.
+    /// Policy: **Safe-only.** A `reverse { }` block inverts immediately with no
+    /// retained residue, so only `EchoSafe` (bijective `+`/`-`) statements are
+    /// admissible. `EchoNeutral` is rejected here because, without a token, its
+    /// loss lineage is not available to invert from; `EchoBreaking` is of
+    /// course always rejected.
     ///
     /// Corresponds to `Echo.admissible` in `JtvEcho.lean`.
     pub fn admissible_in_reverse(self) -> bool {
         self == Echo::Safe
+    }
+
+    /// Whether this echo may appear inside a `reversible { } -> tok` block —
+    /// the **residue-retaining** (Bennett) policy.
+    ///
+    /// A `reversible { } -> tok` form records a reversal log and binds a token,
+    /// so a later `reverse tok` can invert `EchoNeutral` (structured-loss)
+    /// statements by restoring their retained residue — not just `EchoSafe`
+    /// ones. `EchoBreaking` (total erasure) is still rejected: no token can
+    /// recover destroyed lineage.
+    ///
+    /// Corresponds to `Echo.admissibleWithResidue` in `JtvEcho.lean`; the
+    /// operational justification is `rev_forward_backward_with_token` in
+    /// `JtvTheorems`.
+    pub fn admissible_with_residue(self) -> bool {
+        self != Echo::Breaking
     }
 }
 
@@ -106,7 +121,15 @@ pub fn classify_reversible_stmt(stmt: &ReversibleStmt) -> Echo {
         // in `e`, in which case the original value is destroyed (Breaking).
         ReversibleStmt::AddAssign(target, expr) | ReversibleStmt::SubAssign(target, expr) => {
             if data_expr_uses(expr, target) {
-                Echo::Breaking
+                // Self-reference (e.g. `x += x`): the naive `-` inverse fails,
+                // but the original value is recoverable from a retained residue
+                // (token) — this is the `Neutral` (Bennett) tier, NOT total
+                // erasure. In the addition-only group every overwrite can be
+                // tokenised, so `Breaking` never arises here; it is reserved for
+                // future non-group / idempotent number systems (ADR-0007 D6).
+                // Formal basis: `rev_forward_backward_with_token` /
+                // `rev_backward_naive_fails_self_ref` in `JtvTheorems`.
+                Echo::Neutral
             } else {
                 Echo::Safe
             }
@@ -173,10 +196,15 @@ mod tests {
         assert!(Neutral.leq(Breaking));
         assert!(Safe.leq(Breaking));
         assert!(!Breaking.leq(Safe));
-        // Safe-only reversal policy: only Safe is admissible in a reverse block.
+        // Safe-only reversal policy (`reverse { }`): only Safe is admissible.
         assert!(Safe.admissible_in_reverse());
         assert!(!Neutral.admissible_in_reverse());
         assert!(!Breaking.admissible_in_reverse());
+        // Residue policy (`reversible { } -> tok`): Safe + Neutral admissible,
+        // Breaking rejected. Matches `Echo.admissibleWithResidue` in Lean.
+        assert!(Safe.admissible_with_residue());
+        assert!(Neutral.admissible_with_residue());
+        assert!(!Breaking.admissible_with_residue());
     }
 
     #[test]
@@ -188,20 +216,25 @@ mod tests {
     }
 
     #[test]
-    fn self_reference_is_breaking() {
-        // x += x  destroys the original x  ->  Breaking
+    fn self_reference_is_neutral() {
+        // x += x  is lossy but token-recoverable (Bennett)  ->  Neutral, not
+        // Breaking. Rejected by `reverse { }` (Safe-only) yet admitted by
+        // `reversible { } -> tok` (residue policy).
         let stmt =
             ReversibleStmt::AddAssign("x".to_string(), DataExpr::Identifier("x".to_string()));
-        assert_eq!(classify_reversible_stmt(&stmt), Echo::Breaking);
+        assert_eq!(classify_reversible_stmt(&stmt), Echo::Neutral);
+        assert!(!classify_reversible_stmt(&stmt).admissible_in_reverse());
+        assert!(classify_reversible_stmt(&stmt).admissible_with_residue());
     }
 
     #[test]
-    fn block_breaking_iff_any_breaking() {
-        // [Safe, Safe] -> Safe ; one Breaking poisons the block.
+    fn block_neutral_when_any_self_reference() {
+        // [Safe] -> Safe ; a self-referential (Neutral) statement lifts the
+        // whole block to Neutral (still token-recoverable, never Breaking).
         let safe = ReversibleStmt::AddAssign("x".to_string(), DataExpr::Number(Number::Int(5)));
-        let breaking =
+        let neutral =
             ReversibleStmt::AddAssign("y".to_string(), DataExpr::Identifier("y".to_string()));
         assert_eq!(classify_stmts(std::slice::from_ref(&safe)), Echo::Safe);
-        assert_eq!(classify_stmts(&[safe.clone(), breaking]), Echo::Breaking);
+        assert_eq!(classify_stmts(&[safe.clone(), neutral]), Echo::Neutral);
     }
 }
