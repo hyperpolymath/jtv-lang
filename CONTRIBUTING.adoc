@@ -357,7 +357,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 [source]
 ----
-SPDX-License-Identifier: MPL-2.0-or-later
+SPDX-License-Identifier: CC-BY-SA-4.0
 ----
 
 See link:LICENSE.txt[LICENSE.txt] for details.

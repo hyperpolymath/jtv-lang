@@ -2,7 +2,7 @@
 :toc: macro
 :icons: font
 
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: CC-BY-SA-4.0
 
 *Status*: Draft (f0 milestone)
 

@@ -3,7 +3,7 @@
 **Authors:** The JtV Research Team
 **Version:** 1.0 (Draft)
 **Date:** 2025
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 ---
 

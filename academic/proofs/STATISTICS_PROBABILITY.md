@@ -1,6 +1,6 @@
 # Statistics and Probability Foundations for Julia the Viper
 
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 This document establishes the probabilistic and statistical foundations for JtV, including measure theory, probability distributions, statistical inference, and applications to program analysis.
 

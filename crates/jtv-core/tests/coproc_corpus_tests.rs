@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-// (MPL-2.0 is automatic legal fallback until PMPL is formally recognised)
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 //! Coproc conformance corpus tests (Phase 4 — JtV side).

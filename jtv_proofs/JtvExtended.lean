@@ -4,7 +4,7 @@
   This file contains additional theorems and lemmas extending the core
   proof suite for comprehensive academic verification.
 
-  SPDX-License-Identifier: GPL-3.0-or-later
+  SPDX-License-Identifier: MPL-2.0
 -/
 
 import JtvCore

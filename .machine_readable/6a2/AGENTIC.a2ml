@@ -34,7 +34,7 @@ structural-rules = [
   "no SCM files — use A2ML",
   "no state files in repo root — must be in .machine_readable/",
   "no .git in subdirs (exception: declared submodules)",
-  "no AGPL (JtV is PMPL)"
+  "no AGPL (JtV code is MPL-2.0, docs CC-BY-SA-4.0)"
 ]
 thesis-protection = [
   "Harvard separation: Data MUST NOT contain Control constructs",

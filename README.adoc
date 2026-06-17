@@ -1,10 +1,11 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = Julia the Viper (JtV)
 
 image:https://img.shields.io/badge/OpenSSF-Best_Practices-green?logo=opensourcesecurity[OpenSSF Best Practices,link="https://www.bestpractices.dev/en/projects/new?repo_url=https://github.com/hyperpolymath/jtv"]
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/Code-MPL--2.0-blue.svg[Code: MPL-2.0,link="LICENSE"]
+image:https://img.shields.io/badge/Docs-CC--BY--SA--4.0-blue.svg[Docs: CC-BY-SA-4.0,link="LICENSING.md"]
 image:https://api.thegreenwebfoundation.org/greencheckimage/github.com[Green Web,link="https://www.thegreenwebfoundation.org/green-web-check/?url=github.com"]
 
 A Harvard-architecture programming language that makes code injection *grammatically impossible* — not as a runtime check, but as a structural guarantee.
@@ -314,5 +315,7 @@ Named after Julia Robinson (1919–1985), who proved that Hilbert's 10th problem
 
 == Licence
 
-link:LICENSE[PMPL-1.0] (Palimpsest Meta Public Licence).
-See `LICENSING.md` for the full rationale and `LICENSE-PALIMPSEST` for fallback terms.
+Dual-licensed by artifact type: **source code** under link:LICENSE[MPL-2.0]
+(Mozilla Public License 2.0); **documentation** under
+https://creativecommons.org/licenses/by-sa/4.0/[CC-BY-SA-4.0].
+See link:LICENSING.md[LICENSING.md] for details.

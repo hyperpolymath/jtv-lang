@@ -2,12 +2,13 @@
 :toc: macro
 :icons: font
 
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: CC-BY-SA-4.0
 
 *Controlled experimentation workbench for Julia-the-Viper language development*
 
 image:https://img.shields.io/badge/Language-JTV-red[JTV]
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/Code-MPL--2.0-blue.svg[Code: MPL-2.0,link="../../LICENSE"]
+image:https://img.shields.io/badge/Docs-CC--BY--SA--4.0-blue.svg[Docs: CC-BY-SA-4.0,link="../../LICENSING.md"]
 image:https://img.shields.io/badge/Status-f0-green[f0]
 
 toc::[]
@@ -104,4 +105,4 @@ Per the ANCHOR directive:
 
 == License
 
-SPDX-License-Identifier: MPL-2.0-or-later
+SPDX-License-Identifier: CC-BY-SA-4.0

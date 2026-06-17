@@ -1,6 +1,6 @@
 # Academic Documentation: TODOs and Implementation Gaps
 
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 This document tracks all items marked as TODO in the academic documentation and identifies gaps between the theoretical foundations and the current implementation.
 

@@ -1,6 +1,6 @@
 # Mathematical Foundations of Julia the Viper
 
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 This document establishes the rigorous mathematical foundations underlying the Julia the Viper programming language, drawing from set theory, category theory, domain theory, and lambda calculus.
 

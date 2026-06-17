@@ -1,6 +1,6 @@
 # Security Proofs for Julia the Viper: A Formal Analysis
 
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 This document provides rigorous security proofs demonstrating that JtV achieves code injection immunity through grammatical separation. We formalize attack models, prove non-interference properties, and map to established security frameworks.
 

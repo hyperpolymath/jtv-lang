@@ -1,6 +1,6 @@
 # Computational Theory of Julia the Viper
 
-**SPDX-License-Identifier: MPL-2.0
+**SPDX-License-Identifier: CC-BY-SA-4.0
 
 This document establishes the computational-theoretic properties of JtV, including Chomsky hierarchy classification, decidability results, complexity analysis, and connections to automata theory.
 
