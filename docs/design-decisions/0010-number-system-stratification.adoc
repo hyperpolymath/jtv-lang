@@ -17,10 +17,10 @@ algebra — not a re-proof of the reversibility spine.
 
 == Status
 
-*Decided (2026-06-18).* Proof layer and type-/value-level classifiers landed
-(PR #44 + this PR). One slice remains open for soundness over float *locals*
-(see Open / deferred). Realizes ADR-0007 D6; refines its tier vocabulary for the
-floating-point case.
+*Decided (2026-06-18).* Proof, type-, value-level classifiers and the
+carrier-aware typechecker gate all landed (PRs #44, #45, and the float-locals
+slice). Realizes ADR-0007 D6; refines its tier vocabulary for the floating-point
+case.
 
 == Context
 
@@ -127,19 +127,25 @@ The algebra -> tier map has a single home and is mirrored, not duplicated:
 . *Type-level carrier-aware Echo — landed (PR #44).* `float` `+=` grades
   `Neutral` when the carrier is known; shape-only wrappers keep all prior
   behaviour (empty env ⇒ Int).
-. *Runtime-value bridge — landed (this PR).* `Value::reversal_echo`.
+. *Runtime-value bridge — landed (PR #45).* `Value::reversal_echo`.
+. *Float-locals soundness gate — landed.* `check_echo_admissible` /
+  `check_echo_admissible_with_residue` seed the `CarrierEnv` from the
+  typechecker's *inferred* type env (`self.env`, which records local types as
+  statements are checked), so a `reverse { z += v }` over a float *local* — which
+  carries no annotation — is now correctly rejected under Safe-only, while
+  `reversible { } -> tok` still admits it (the token retains the rounding
+  residue). Closes the gap this ADR previously flagged.
 . *`gap-005` partially addressed:* the seven systems are now *classified* by
   additive algebra at type and value level. The orthogonal half — lifting
   `type_preservation` semantics beyond `τ = int` — remains open.
 
 == Open / deferred
 
-* *Float-locals soundness slice (required, next).* The `CarrierEnv` is seeded
-  from *parameter* annotations only. JtV locals carry no annotation (the
-  `Assignment` node has no type field), so a float *local* — typed only by
-  inference — currently grades `Safe`, and a `reverse { z += v }` over it would
-  be wrongly admitted under the Safe-only policy. Closing this needs the
-  typechecker's *inferred* types threaded into the `CarrierEnv`.
+* *Carrier-awareness inside reversible `if` branches.* The gate grades the
+  carrier of a reversible `+=` / `-=` target directly; a plain assignment nested
+  inside a reversible `if` branch is still treated structurally (`Safe`) without
+  consulting its carrier. A rare corner — the direct reverse-add case (the common
+  one) is fully gated.
 * *Uninhabited D6 routes.* If ℕ (cancellative) or a tropical/min-plus
   (idempotent) system is added, give it its `NumAlgebra` level and the
   Neutral/Breaking tier follows; no spine re-proof.

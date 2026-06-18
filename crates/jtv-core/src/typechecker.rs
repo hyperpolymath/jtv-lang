@@ -424,6 +424,36 @@ impl TypeChecker {
         }
     }
 
+    /// Build the Echo `CarrierEnv` from the current type environment, so that
+    /// reverse-block classification is *carrier-aware*: every numeric variable
+    /// in scope (parameter or inferred local) contributes its number system, and
+    /// a `+=` over a `float` carrier therefore grades `Neutral` rather than
+    /// `Safe` (ADR-0010 / `JtvEcho.lean` SECTION 6). This is what makes the
+    /// Safe-only reversal gate *sound* over float *locals*: locals carry no
+    /// annotation, but their type has been inferred and recorded in `self.env`
+    /// by the time a reverse block is reached. Non-numeric and not-yet-inferred
+    /// (`Any`) variables are omitted — they fall back to the default `Int`
+    /// carrier (`Safe`) in `carrier_echo`.
+    fn carrier_env(&self) -> echo::CarrierEnv {
+        self.env
+            .vars
+            .iter()
+            .filter_map(|(name, ty)| {
+                let bt = match ty {
+                    Type::Int => BasicType::Int,
+                    Type::Float => BasicType::Float,
+                    Type::Rational => BasicType::Rational,
+                    Type::Complex => BasicType::Complex,
+                    Type::Hex => BasicType::Hex,
+                    Type::Binary => BasicType::Binary,
+                    Type::Symbolic => BasicType::Symbolic,
+                    _ => return None,
+                };
+                Some((name.clone(), bt))
+            })
+            .collect()
+    }
+
     /// Enforce the Echo admissibility rule for a plain `reverse { }` block (and
     /// a tokenless `reversible { }`) (spec v2 §9) under the **Safe-only**
     /// reversal policy: the block is well-typed iff its aggregate echo is
@@ -434,7 +464,7 @@ impl TypeChecker {
     /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`; the
     /// residue (token) policy is `check_echo_admissible_with_residue`.
     fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate = echo::classify_stmts(body);
+        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
         if !aggregate.admissible_in_reverse() {
             return Err(JtvError::EchoViolation(format!(
                 "reverse block has echo {aggregate}: it is not fully reversible. \
@@ -457,7 +487,7 @@ impl TypeChecker {
     /// the type-checker realisation of `blockEcho_admissibleWithResidue` in
     /// `jtv_proofs/JtvEcho.lean` (the v2 "(c)" Neutral bridge).
     fn check_echo_admissible_with_residue(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate = echo::classify_stmts(body);
+        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
         if !aggregate.admissible_with_residue() {
             return Err(JtvError::EchoViolation(format!(
                 "reversible block has echo {aggregate}: it destroys information. \
@@ -710,6 +740,83 @@ mod tests {
         };
         let stmt = ControlStmt::ReverseBlock(block);
         assert!(checker.check_control_stmt(&stmt).is_ok());
+    }
+
+    #[test]
+    fn test_reverse_block_rejects_float_carrier() {
+        // Carrier-aware Safe-only gate: `reverse { x += 5.0 }` over a FLOAT `x`
+        // is rejected even with no self-reference, because float reverse-add is
+        // lossy (IEEE-754 non-associative) — EchoNeutral, not Safe (ADR-0010).
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        checker.env.set_var("x".to_string(), Type::Float);
+        let block = ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Float(5.0)),
+            )],
+        };
+        assert!(matches!(
+            checker.check_control_stmt(&ControlStmt::ReverseBlock(block)),
+            Err(JtvError::EchoViolation(_))
+        ));
+        // Contrast: the same block shape over an INT `x` is admissible.
+        let mut checker2 = TypeChecker::new();
+        checker2.env.set_var("x".to_string(), Type::Int);
+        let block2 = ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Int(5)),
+            )],
+        };
+        assert!(checker2
+            .check_control_stmt(&ControlStmt::ReverseBlock(block2))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_reverse_block_rejects_inferred_float_local() {
+        // The soundness slice, end-to-end: a float *local* carries no annotation,
+        // but `x = 2.5` infers `x : Float` into the env, so the following
+        // `reverse { x += 1.0 }` is correctly rejected — whereas the shape-only
+        // classifier would have wrongly Safe-admitted it.
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        let assign = ControlStmt::Assignment(Assignment {
+            target: "x".to_string(),
+            value: Expr::Data(DataExpr::Number(Number::Float(2.5))),
+        });
+        assert!(checker.check_control_stmt(&assign).is_ok());
+        let block = ControlStmt::ReverseBlock(ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Float(1.0)),
+            )],
+        });
+        assert!(matches!(
+            checker.check_control_stmt(&block),
+            Err(JtvError::EchoViolation(_))
+        ));
+    }
+
+    #[test]
+    fn test_reversible_token_admits_float_carrier() {
+        // Float routes to the token policy: `reversible { x += 1.0 } -> tok` over
+        // a float `x` is ADMITTED (the token retains the rounding residue), even
+        // though plain `reverse {}` rejects it. Only EchoBreaking is rejected.
+        use crate::ast::*;
+        let mut checker = TypeChecker::new();
+        checker.env.set_var("x".to_string(), Type::Float);
+        let block = ReversibleBlockStmt {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Number(Number::Float(1.0)),
+            )],
+            token_binding: Some("tok".to_string()),
+        };
+        assert!(checker
+            .check_control_stmt(&ControlStmt::ReversibleBlock(block))
+            .is_ok());
     }
 
     #[test]
