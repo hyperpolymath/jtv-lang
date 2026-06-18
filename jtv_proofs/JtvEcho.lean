@@ -383,4 +383,114 @@ theorem feffect_join_idem (a : FunctionEffect) : a.join a = a := by
   cases a
   simp [FunctionEffect.join, join_idem, epi_join_idem]
 
+-- ============================================================================
+-- SECTION 6: NUMBER-SYSTEM STRATIFICATION BY ADDITIVE ALGEBRA
+-- ============================================================================
+
+/-
+  The reversibility tier of `+` — and hence of `reverse { x += v }` — over a
+  given number system is NOT a per-system stipulation. It is *forced* by the
+  additive algebra of the carrier. This section stratifies JtV's numeric
+  systems by where they sit in the additive-algebra tower and reads off the
+  Echo tier mechanically.
+
+  Additive-algebra tower (only the levels reversal can distinguish):
+
+    abelianGroup   associative + commutative + EXACT inverses
+                   → reverse-add is total and exact            → safe
+    approxGroup    commutative with identity, but NON-associative
+                   and inverses only approximate (rounding)
+                   → reverse-add recoverable but lossy          → neutral
+    nonGroup       `+` not invertible at all (e.g. tropical
+                   min-plus): no reverse exists                 → breaking
+
+  This tower maps 1:1 onto the Echo lattice of SECTION 1 (safe/neutral/breaking)
+  — which is why three levels suffice: a finer carrier tower
+  (Monoid ⊂ CancellativeMonoid ⊂ Group) would collapse onto the same 3-valued
+  Echo codomain.
+
+  Headline collapse: `hex` and `binary` are NOT distinct algebras — they are
+  *encodings of ℤ* (cf. the `JtvType` constructor comments "represented as
+  int"), so they share `int`'s `abelianGroup` instance. The seven surface
+  systems thus reduce to TWO inhabited algebra classes here; `nonGroup` is
+  reserved for future non-invertible systems (spec D6).
+
+  Mirrors `crates/jtv-core/src/number.rs` (the runtime carriers) and the
+  numeric constructors of `Jtv.JtvType`.
+-/
+
+/-- The additive-algebra class of a carrier, at the granularity reversal cares
+    about. One constructor per Echo tier. -/
+inductive NumAlgebra where
+  | abelianGroup   -- exact inverses; reverse-add total & exact
+  | approxGroup    -- non-associative / rounding; reverse-add lossy
+  | nonGroup       -- `+` not invertible; no reverse
+  deriving Repr, DecidableEq
+
+/-- JtV's addable number systems (the numeric constructors of `JtvType`). -/
+inductive NumSystem where
+  | int | rational | complex | symbolic | hex | binary | float
+  deriving Repr, DecidableEq
+
+/-- Where each system sits in the additive-algebra tower. `hex`/`binary` map to
+    the SAME class as `int` because they are encodings of ℤ, not new algebras. -/
+def NumSystem.algebra : NumSystem → NumAlgebra
+  | .int      => .abelianGroup
+  | .rational => .abelianGroup
+  | .complex  => .abelianGroup
+  | .symbolic => .abelianGroup
+  | .hex      => .abelianGroup   -- ℤ in hex clothing
+  | .binary   => .abelianGroup   -- ℤ in binary clothing
+  | .float    => .approxGroup    -- IEEE-754: non-associative, rounding
+
+/-- The Echo tier *forced* by an additive algebra. This is the stratification
+    law: the reversal tier is a function of the algebra, never a free choice. -/
+def NumAlgebra.echo : NumAlgebra → Echo
+  | .abelianGroup => .safe
+  | .approxGroup  => .neutral
+  | .nonGroup     => .breaking
+
+/-- A number system's reversal tier = the Echo of its additive algebra. -/
+def NumSystem.echo (s : NumSystem) : Echo := s.algebra.echo
+
+-- The stratification is total and the map is a genuine function of the algebra,
+-- so every result below is closed by definitional reduction / finite decision.
+
+/-- **The hex/binary collapse**: the integer *encodings* carry int's tier
+    exactly — encoding is not algebra. -/
+theorem hex_binary_collapse :
+    NumSystem.echo .hex = NumSystem.echo .int
+  ∧ NumSystem.echo .binary = NumSystem.echo .int := ⟨rfl, rfl⟩
+
+/-- The exact abelian groups are all `safe` (`+` is fully reversible). -/
+theorem exact_groups_safe :
+    NumSystem.echo .int = .safe
+  ∧ NumSystem.echo .rational = .safe
+  ∧ NumSystem.echo .complex = .safe
+  ∧ NumSystem.echo .symbolic = .safe := ⟨rfl, rfl, rfl, rfl⟩
+
+/-- **Float is not `safe`.** IEEE-754 addition is non-associative, so its
+    reversal is lossy; the stratification lifts it to `neutral`. This is the one
+    place the surface "addition-only ⇒ reversible" slogan is *qualified* by the
+    carrier — and exactly why float's Echo grade sits above `safe`. -/
+theorem float_not_safe : NumSystem.echo .float ≠ .safe := by decide
+
+theorem float_neutral : NumSystem.echo .float = .neutral := rfl
+
+/-- **No current system is `breaking`.** Every inhabited carrier is at least an
+    approximate group, so the `breaking` tier is presently empty — it is held in
+    reserve for a future non-invertible (`nonGroup`) system. -/
+theorem no_current_system_breaks (s : NumSystem) : NumSystem.echo s ≠ .breaking := by
+  cases s <;> decide
+
+/-- **Stratification meets the reversal policies.** Reading the algebra off the
+    carrier decides admissibility under both policies of SECTION 1/2b:
+    `safe` (Safe-only reversal) holds iff the carrier is an exact abelian group;
+    non-`breaking` (the `reversible { } -> tok` token policy, which also admits
+    `neutral`) holds iff the carrier is not a `nonGroup`. -/
+theorem reversal_tier_by_algebra (s : NumSystem) :
+    (NumSystem.echo s = .safe ↔ s.algebra = .abelianGroup)
+  ∧ (NumSystem.echo s ≠ .breaking ↔ s.algebra ≠ .nonGroup) := by
+  cases s <;> decide
+
 end Jtv.Echo
