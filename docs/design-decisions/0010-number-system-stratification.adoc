@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0010: Number-System Stratification by Additive Algebra
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-06-18
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+Realizes ADR-0007 D6 ("additive algebra fixes the reversibility tier") for JtV's
+seven number systems. The reversal `Echo` of `+` over a carrier is *not* a
+per-system stipulation: it is read off the carrier's additive algebra by a
+single map. Adding a number system becomes *stratification* — classify it by its
+algebra — not a re-proof of the reversibility spine.
+
+== Status
+
+*Decided (2026-06-18).* Proof layer and type-/value-level classifiers landed
+(PR #44 + this PR). One slice remains open for soundness over float *locals*
+(see Open / deferred). Realizes ADR-0007 D6; refines its tier vocabulary for the
+floating-point case.
+
+== Context
+
+* ADR-0007 D6 states the principle as `group -> Safe / cancellative -> Neutral /
+  idempotent -> Breaking`: the additive algebra of a carrier determines whether
+  reverse-add is exact, structurally lossy, or impossible.
+* `gap-005`: JtV's semantic model is Int-only — the seven systems are *typed*
+  but value-level reversibility was stated-unproven beyond `int`.
+* Echo (`echo.rs` / `JtvEcho.lean`) is a 3-valued lattice
+  `Safe ⊑ Neutral ⊑ Breaking`. A tier map therefore has a 3-valued codomain.
+
+== Decision
+
+=== D1 — A 3-level additive-algebra tower, 1:1 with the Echo lattice
+
+[source]
+----
+NumAlgebra        reverse-add                         Echo
+----------        -----------                         ----
+abelianGroup      total & exact (exact inverses)      Safe
+approxGroup       lossy (non-associative / rounding)  Neutral
+nonGroup          impossible (+ not invertible)       Breaking
+----
+
+Three levels suffice precisely because the Echo codomain is 3-valued: a finer
+carrier tower (`Monoid ⊂ CancellativeMonoid ⊂ Group`) would collapse onto the
+same three tiers.
+
+=== D2 — Classification of the seven systems
+
+[cols="1,1,1",options="header"]
+|===
+| System | Additive algebra | Echo
+
+| int, rational, complex, symbolic | abelianGroup | Safe
+| hex, binary | abelianGroup (= int) | Safe
+| float | approxGroup | Neutral
+|===
+
+* *hex/binary collapse:* hex and binary are *encodings of ℤ*, not distinct
+  algebras (the `JtvType` constructors are literally "represented as int"), so
+  they carry int's tier exactly. Encoding ≠ algebra.
+* *float is the qualified case:* IEEE-754 `+` is non-associative
+  (`(a+b)+c ≠ a+(b+c)`) and non-cancellative under rounding
+  (`(x+v)-v ≠ x`), so reverse-add is lossy — `Neutral`, not `Safe`. This is the
+  one place the surface slogan "addition-only ⇒ reversible" is qualified by the
+  carrier.
+* *Breaking is presently empty,* reserved for a future non-invertible system.
+
+=== D3 — Reconciliation with ADR-0007 D6 (honest note)
+
+D6's vocabulary is `group / cancellative / idempotent`, chosen for *exact*
+algebras (ℤ a group, ℕ a cancellative monoid, tropical/min-plus idempotent).
+The realized tower here is `abelianGroup / approxGroup / nonGroup`. They are not
+the same decomposition, and float is why:
+
+* float has (exact) additive inverses yet is *not a group* (non-associative), so
+  it sits in neither D6 `group` nor D6 `cancellative`; it is an *approximate*
+  group. The `approxGroup` level names this realized inhabitant of the `Neutral`
+  tier.
+* Among the seven systems, D6's `cancellative` Neutral-route (e.g. ℕ) and its
+  `idempotent` Breaking-route (tropical) are *anticipated but uninhabited*.
+  Were ℕ or a tropical system added, both towers agree at the `Echo` level
+  (cancellative ⇒ Neutral, idempotent ⇒ Breaking) — they meet at
+  `Safe/Neutral/Breaking`. D6 is the principle; this ADR is the realized map.
+
+=== D4 — Carrier-aware Echo classification
+
+Echo classification of a reversible `+=` is graded by the *join* of two
+independent loss sources:
+
+[source]
+----
+echo(x += v)  =  shape(x += v)  ⊔  carrier_echo(typeof x)
+----
+
+* `shape` — self-reference (`x += x`) is `Neutral` (token-recoverable), else
+  `Safe`.
+* `carrier_echo` — the D1 map applied to the target's number system; `float`
+  lifts the grade to `Neutral` regardless of shape.
+
+A `CarrierEnv` (variable -> `BasicType`) is threaded through classification.
+*Default-carrier soundness:* a variable absent from the env is treated as `Int`
+(`Safe`), not "unknown-lossy". JtV numeric literals default to `int`
+(`inferType (lit _) = int` in Lean), so an unannotated numeric *is* int; the only
+lossy carrier (float) is exactly the one that must be annotated/inferred to
+exist — so the default cannot under-report loss for a *typed* program.
+
+=== D5 — One algebra, three surfaces
+
+The algebra -> tier map has a single home and is mirrored, not duplicated:
+
+* *Proof:* `JtvEcho.lean` SECTION 6 (`NumAlgebra`, `NumSystem.echo`,
+  `hex_binary_collapse`, `float_not_safe`, `reversal_tier_by_algebra`).
+* *Type level:* `echo.rs` `additive_algebra` / `carrier_echo` (`BasicType ->
+  Echo`), consumed by the carrier-aware classifiers and `effect::own_effect`.
+* *Value level:* `number.rs` `Value::number_system` / `Value::reversal_echo`
+  (runtime value -> Echo), delegating to `echo::carrier_echo`.
+
+== Consequences
+
+. *Proof layer — landed (PR #44).* SECTION 6 stratification under
+  `--safe`-equivalent discipline (zero `sorry`/`admit`/`axiom`).
+. *Type-level carrier-aware Echo — landed (PR #44).* `float` `+=` grades
+  `Neutral` when the carrier is known; shape-only wrappers keep all prior
+  behaviour (empty env ⇒ Int).
+. *Runtime-value bridge — landed (this PR).* `Value::reversal_echo`.
+. *`gap-005` partially addressed:* the seven systems are now *classified* by
+  additive algebra at type and value level. The orthogonal half — lifting
+  `type_preservation` semantics beyond `τ = int` — remains open.
+
+== Open / deferred
+
+* *Float-locals soundness slice (required, next).* The `CarrierEnv` is seeded
+  from *parameter* annotations only. JtV locals carry no annotation (the
+  `Assignment` node has no type field), so a float *local* — typed only by
+  inference — currently grades `Safe`, and a `reverse { z += v }` over it would
+  be wrongly admitted under the Safe-only policy. Closing this needs the
+  typechecker's *inferred* types threaded into the `CarrierEnv`.
+* *Uninhabited D6 routes.* If ℕ (cancellative) or a tropical/min-plus
+  (idempotent) system is added, give it its `NumAlgebra` level and the
+  Neutral/Breaking tier follows; no spine re-proof.
+* *Value-level semantics (`gap-005`).* `type_preservation` / round-trip proofs
+  for `τ ≠ int`.
+
+== References
+
+* `docs/design-decisions/0007-addition-only-mandate-and-reversibility-tiering.adoc` — D6 (algebra → tier), the principle realized here.
+* `jtv_proofs/JtvEcho.lean` — SECTION 6 (stratification) + SECTION 1 (Echo lattice).
+* `crates/jtv-core/src/echo.rs` — `additive_algebra` / `carrier_echo` / `CarrierEnv` (type level).
+* `crates/jtv-core/src/number.rs` — `Value::number_system` / `Value::reversal_echo` (value level).
+* `docs/design-decisions/0009-echo-epistemic-first-class-function-effects.adoc` — Echo as a function effect (consumes the carrier grade).
