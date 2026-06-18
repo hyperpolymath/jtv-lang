@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0008: `neg` is Reverse-Only — the Purist / Adulterated Dialect Split
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-06-18
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+Resolves the `DataExpr.neg` open tension flagged in ADR-0007 D2. Subtraction is
+*reverse addition* (effect-level) in every number system; expression-level
+`neg` is a convenience that escapes that discipline. This ADR moves `neg` out of
+the purist core into an optional, feature-gated *sugar* aspect, so JtV ships as
+two structurally-distinct dialects — *purist* and *adulterated* — and the
+compiler stamps every program with a *purity certificate*.
+
+== Status
+
+*Decided (2026-06-18).* Resolves the ADR-0007 D2 open tension. Constrains the
+Data-plane grammar and the v2 toolchain. Implementation is staged: this ADR is
+the decision record; the feature-gating, lint, and certificate are follow-on
+work.
+
+== Context
+
+ADR-0007 D2 mandated subtraction = reverse addition and flagged the surviving
+`DataExpr`/`Negate` (Lean `DataExpr.neg`) *primitive* as an open tension: it lets
+a program write expression-level negation/subtraction (`x + neg y`) directly in
+the total Data plane, bypassing the reverse/echo mechanism.
+
+The mission is pedagogical as much as technical: *get people to think differently
+about subtraction.* But users must not be hard-limited — if someone wants the old
+way to get a job done, that is their choice; JtV simply should not make it the
+path of least resistance, and should make its use *visible*.
+
+=== The level mismatch (why `neg` is tempting)
+
+Subtraction-as-reverse-addition is an **effect-level** operation: a
+`reverse { x += b }` statement that *inverts* a forward step, operating on a
+variable, with a token (ADR-0007 D5; the v2 "(c)" Neutral bridge). But `a - b` /
+`neg y` is an **expression-level** value — pure, no effect, no token. They live on
+different planes. `neg` exists precisely *because* expression-level subtraction
+cannot be written as a reverse block (a Control-plane effect is not a Data-plane
+value). That mismatch is the whole reason `neg` is the convenient escape hatch,
+and the reason a purist should refuse it.
+
+== Decision
+
+=== D1 — `neg` leaves the purist core; subtraction is reverse-only there
+
+The purist Data grammar has **no `neg` / `-` primitive**. In *purist-jtv*, writing
+`-` is a *parse error*; the only way to subtract is a `reverse` / `reversible`
+block (effect-level), which forces the reverse-addition mindset. This holds for
+every number system — the reversibility tier is fixed by its additive algebra
+(ADR-0007 D6), and the effect-level reverse *is* the subtraction in each.
+
+=== D2 — Sugar is an optional, feature-gated aspect (adulterated-jtv)
+
+`neg` / `-` is re-admitted only under an explicit *sugar* aspect (a compiler
+feature / parser mode). *adulterated-jtv* = purist core **+** sugar. The sugar is
+structurally separable: the purist core does not contain it. This matches the
+AOLD philosophy of ADR-0007 D3 — sugar is just another graftable aspect.
+
+=== D3 — Sugar works, but is discouraged (a lint, not a wall)
+
+When sugar is enabled and `neg` / `-` is used, the compiler emits a
+*discouragement diagnostic* ("subtraction sugar used — prefer reverse-addition").
+It still compiles and runs; it is not blocked. Users are not limited; the
+language simply *nags*, keeping the old way available but non-default.
+
+=== D4 — The compiler emits a purity certificate
+
+Every build is stamped *purist* or *adulterated* (and, if adulterated, which
+sugar it used). This is the "co-product / pre-final product": the artifact
+carries a badge, so reaching for the escape hatch is *visible and accountable*,
+not silent. This is the load-bearing piece for the mission — accountability
+without prohibition.
+
+=== D5 — Chosen rung: feature-gated dialect (rungs 2 and 3 are future-purer)
+
+Three architectures were considered, increasing in purity and cost:
+
+. *Feature-gated dialect (CHOSEN).* `neg` behind a `sugar` feature; purist mode
+  rejects it at parse time; adulterated mode admits it with the D3 lint. One
+  codebase, low cost.
+. *Sidecar desugarer.* A separate front-end pass rewrites adulterated → purist
+  before the core compiler sees anything; the core knows *only* purist-jtv.
+  Cleanest core, but the level mismatch means `a - b` cannot desugar to a pure
+  expression — the honest version lifts it into a hidden reverse-computation
+  (heavier); the dishonest version is a thin alias to a primitive `neg`.
+  Deferred as a future purity upgrade.
+. *Co-product grammar.* Two grammars `Core ⊕ Sugar`; purist-jtv literally cannot
+  *represent* `neg`. Most principled (pure AOLD), most plumbing. Deferred.
+
+The feature-gated dialect (1) reaches the purist/adulterated split at low cost and
+keeps (2)/(3) open as later purity upgrades.
+
+== Consequences
+
+. *Implementation (follow-on).* Add a `sugar` build feature / parser mode; gate the
+  `Negate` AST node + `-` lexing behind it; emit the D3 lint on use; emit the D4
+  purity certificate (in the compiler's machine-readable output and as a header on
+  emitted artifacts).
+. *Mechanisation.* The purist core's `DataExpr` drops `neg`, which *simplifies* the
+  core proofs (no `neg` cases). The existing `JtvExtended` negation theorems
+  (`neg_add_distrib`, `simplify_neg_neg`, `sub_eq_add_neg`, …) describe *adulterated*
+  semantics and move to a sugar/adulterated module, or are re-cast as the denotation
+  of the reverse mechanism rather than of a primitive.
+. *Number systems (ADR-0007 D6).* Reverse-addition is the subtraction in every system
+  at the effect level; float's non-associative rounding (D6 note) makes its reverse
+  Neutral/approximate, never Safe — independent of this ADR.
+. *Identity preserved.* This *strengthens* the addition-only mandate (D1 of ADR-0007):
+  the purist Data plane is now genuinely addition-only with no subtraction escape,
+  while pragmatic users keep an opt-in, accountable path.
+
+== References
+
+* `docs/design-decisions/0007-addition-only-mandate-and-reversibility-tiering.adoc` — D2 (the open tension), D3 (AOLD), D5 (reversal ladder), D6 (algebra → tier).
+* `jtv_proofs/JtvExtended.lean` — the current `neg` theorems (to be re-homed under the sugar/adulterated reading).
+* `crates/jtv-core/src/ast.rs` — `DataExpr::Negate` (to be feature-gated).
