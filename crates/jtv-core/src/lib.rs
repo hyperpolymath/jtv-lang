@@ -16,6 +16,7 @@ pub mod coproc;
 pub mod coproc_lower;
 pub mod dialect;
 pub mod echo;
+pub mod epistemic;
 pub mod error;
 pub mod formatter;
 pub mod interpreter;
