@@ -76,19 +76,28 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<TopLevel> {
     let mut inner = pair.into_inner();
 
     let mut purity = Purity::Impure;
+    let mut echo_annotation: Option<Echo> = None;
     let mut first = inner
         .next()
         .ok_or_else(|| JtvError::ParseError("Expected function declaration".to_string()))?;
 
-    // Check for purity marker
-    if first.as_rule() == Rule::purity_marker {
-        purity = match first.as_str() {
-            "@pure" => Purity::Pure,
-            "@total" => Purity::Total,
-            _ => Purity::Impure,
-        };
+    // Consume any leading markers — `@pure`/`@total` and `@echo(...)` — in any order.
+    loop {
+        match first.as_rule() {
+            Rule::purity_marker => {
+                purity = match first.as_str() {
+                    "@pure" => Purity::Pure,
+                    "@total" => Purity::Total,
+                    _ => Purity::Impure,
+                };
+            }
+            Rule::echo_marker => {
+                echo_annotation = parse_echo_grade(first.clone());
+            }
+            _ => break,
+        }
         first = inner.next().ok_or_else(|| {
-            JtvError::ParseError("Expected function name after purity marker".to_string())
+            JtvError::ParseError("Expected function name after marker".to_string())
         })?;
     }
 
@@ -126,8 +135,18 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<TopLevel> {
         params,
         return_type,
         purity,
+        echo_annotation,
         body,
     }))
+}
+
+/// Extract the Echo grade from an `@echo(...)` marker pair (ADR-0009 D1).
+fn parse_echo_grade(marker: pest::iterators::Pair<Rule>) -> Option<Echo> {
+    marker.into_inner().next().map(|g| match g.as_str() {
+        "Neutral" => Echo::Neutral,
+        "Breaking" => Echo::Breaking,
+        _ => Echo::Safe,
+    })
 }
 
 fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param> {
@@ -962,6 +981,32 @@ mod tests {
         "#;
         let result = parse_program(code);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_echo_annotation() {
+        let program = parse_program("@echo(Neutral) fn f(): Int { return 0 }").unwrap();
+        match &program.statements[0] {
+            TopLevel::Function(func) => assert_eq!(func.echo_annotation, Some(Echo::Neutral)),
+            _ => panic!("expected a function"),
+        }
+    }
+
+    #[test]
+    fn test_parse_echo_with_purity_either_order() {
+        for code in [
+            "@pure @echo(Breaking) fn f(): Int { return 0 }",
+            "@echo(Breaking) @pure fn f(): Int { return 0 }",
+        ] {
+            let program = parse_program(code).unwrap();
+            match &program.statements[0] {
+                TopLevel::Function(func) => {
+                    assert_eq!(func.purity, Purity::Pure);
+                    assert_eq!(func.echo_annotation, Some(Echo::Breaking));
+                }
+                _ => panic!("expected a function"),
+            }
+        }
     }
 
     #[test]

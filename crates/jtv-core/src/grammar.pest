@@ -122,10 +122,14 @@ encoding_clause = { "encoding" ~ string }
 
 // ===== FUNCTIONS =====
 function_decl = {
-    purity_marker? ~ "fn" ~ identifier ~ "(" ~ param_list? ~ ")" ~ (":" ~ return_type)? ~ block
+    (purity_marker | echo_marker)* ~ "fn" ~ identifier ~ "(" ~ param_list? ~ ")" ~ (":" ~ return_type)? ~ block
 }
 
 purity_marker = { "@pure" | "@total" }
+
+// ADR-0009 D1: an optional Echo grade ceiling on the function arrow.
+echo_marker = { "@echo" ~ "(" ~ echo_grade ~ ")" }
+echo_grade = { "Safe" | "Neutral" | "Breaking" }
 
 param_list = { param ~ ("," ~ param)* }
 param = { identifier ~ (":" ~ type_annotation)? }

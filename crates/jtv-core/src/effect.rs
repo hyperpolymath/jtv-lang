@@ -6,10 +6,12 @@
 // Epistemic via `function_epistemic`); `resolved_effects` joins in the effects
 // of the functions it calls, transitively, to a fixpoint over the call graph.
 //
-// This is the *composition* half of Echo+Epistemic-as-function-effects. It works
-// over the existing AST via an effect environment — it does not yet store the
-// grade in the type AST (`TypeAnnotation::Function`); that surface-level wiring
-// is a later slice.
+// This is the *composition* half of Echo+Epistemic-as-function-effects. The
+// surface `@echo(...)` annotation on a `FunctionDecl` and its upper-bound check
+// (`inferred ⊑ annotated`, ADR-0009 D1) landed via the typechecker's
+// `check_echo_annotations`, which consumes `resolved_effects` here. Carrying the
+// grade in the *type* AST (`TypeAnnotation::Function`, for function-valued
+// params) and the parallel `@epi(...)` surface remain later slices.
 
 use crate::ast::*;
 use crate::echo::{function_echo_in_env, CarrierEnv, Echo};
@@ -266,6 +268,7 @@ mod tests {
                 .collect(),
             return_type: None,
             purity: Purity::Pure,
+            echo_annotation: None,
             body,
         }
     }
