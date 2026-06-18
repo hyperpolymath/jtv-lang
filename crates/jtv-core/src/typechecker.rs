@@ -198,8 +198,8 @@ impl TypeChecker {
             self.check_top_level(stmt)?;
         }
 
-        // Third pass: Echo annotation check (ADR-0009 D1, upper-bound policy).
-        self.check_echo_annotations(program)?;
+        // Third pass: Echo + Epistemic annotation check (ADR-0009 D1/D2, upper-bound).
+        self.check_effect_annotations(program)?;
 
         if self.errors.is_empty() {
             Ok(())
@@ -208,34 +208,53 @@ impl TypeChecker {
         }
     }
 
-    /// Verify each `@echo(...)` annotation is an upper bound on the function's
-    /// inferred (composed) echo grade — `inferred ⊑ annotated` (ADR-0009 D1).
-    /// A function may declare *more* loss than it incurs, never less. The
-    /// inferred grade is the carrier-aware, call-graph-composed `resolved_effects`,
-    /// so a caller can be checked against a callee's declared ceiling (modular).
-    fn check_echo_annotations(&self, program: &Program) -> Result<()> {
-        fn grade_name(e: Echo) -> &'static str {
+    /// Verify each `@echo(...)` / `@epi(...)` annotation is an upper bound on the
+    /// function's inferred (composed) grade — `inferred ⊑ annotated` (ADR-0009
+    /// D1/D2). A function may declare *more* loss / revelation than it incurs,
+    /// never less. The inferred grade is the carrier-aware, call-graph-composed
+    /// `resolved_effects`, so a caller can be checked against a callee's declared
+    /// ceiling (modular).
+    fn check_effect_annotations(&self, program: &Program) -> Result<()> {
+        fn echo_name(e: Echo) -> &'static str {
             match e {
                 Echo::Safe => "Safe",
                 Echo::Neutral => "Neutral",
                 Echo::Breaking => "Breaking",
             }
         }
+        fn epi_name(e: Epistemic) -> &'static str {
+            match e {
+                Epistemic::Opaque => "Opaque",
+                Epistemic::Partial => "Partial",
+                Epistemic::Transparent => "Transparent",
+            }
+        }
         let effects = effect::resolved_effects(program);
         for stmt in &program.statements {
             if let TopLevel::Function(func) = stmt {
+                let inferred = effects
+                    .get(&func.name)
+                    .copied()
+                    .unwrap_or(effect::FunctionEffect::SAFE);
                 if let Some(annotated) = func.echo_annotation {
-                    let inferred = effects
-                        .get(&func.name)
-                        .map(|e| e.echo)
-                        .unwrap_or(Echo::Safe);
-                    if !inferred.leq(annotated) {
+                    if !inferred.echo.leq(annotated) {
                         return Err(JtvError::EchoViolation(format!(
                             "function `{}` declares `@echo({})` but its inferred echo is `{}` — \
                              a function may declare more loss than it incurs, never less",
                             func.name,
-                            grade_name(annotated),
-                            grade_name(inferred),
+                            echo_name(annotated),
+                            echo_name(inferred.echo),
+                        )));
+                    }
+                }
+                if let Some(annotated) = func.epi_annotation {
+                    if !inferred.epi.leq(annotated) {
+                        return Err(JtvError::EchoViolation(format!(
+                            "function `{}` declares `@epi({})` but its inferred epistemic grade is \
+                             `{}` — a function may declare more revelation than it incurs, never less",
+                            func.name,
+                            epi_name(annotated),
+                            epi_name(inferred.epi),
                         )));
                     }
                 }
@@ -870,6 +889,7 @@ mod tests {
                 return_type: None,
                 purity: Purity::Impure,
                 echo_annotation: annotation,
+                epi_annotation: None,
                 body: vec![
                     ControlStmt::Assignment(Assignment {
                         target: "x".to_string(),
@@ -912,6 +932,35 @@ mod tests {
         assert!(TypeChecker::new()
             .check_program(&neutral_function(None))
             .is_ok());
+    }
+
+    #[test]
+    fn epi_annotation_upper_bound_accepts_over_declaration() {
+        // An Opaque function (output independent of inputs) passes under any ceiling.
+        for ann in ["Opaque", "Partial", "Transparent"] {
+            let src = format!("@epi({ann}) fn f(x: Int): Int {{ return 0 }}");
+            let program = parse_program(&src).unwrap();
+            assert!(
+                TypeChecker::new().check_program(&program).is_ok(),
+                "@epi({ann}) over an Opaque function should pass"
+            );
+        }
+    }
+
+    #[test]
+    fn epi_annotation_upper_bound_rejects_under_declaration() {
+        // Returning a parameter is Transparent; @epi(Opaque|Partial) under-declares.
+        for ann in ["Opaque", "Partial"] {
+            let src = format!("@epi({ann}) fn f(x: Int): Int {{ return x }}");
+            let program = parse_program(&src).unwrap();
+            assert!(
+                matches!(
+                    TypeChecker::new().check_program(&program),
+                    Err(JtvError::EchoViolation(_))
+                ),
+                "@epi({ann}) over a Transparent function should reject"
+            );
+        }
     }
 
     #[test]

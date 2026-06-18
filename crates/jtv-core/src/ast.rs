@@ -214,6 +214,19 @@ pub enum Echo {
     Breaking,
 }
 
+/// The epistemic grade (ADR-0009 D2): how much a function reveals about its
+/// inputs; lattice order `Opaque ⊑ Partial ⊑ Transparent`. Defined here for the
+/// same cycle reason as `Echo`; `epistemic.rs` re-exports it and owns its ops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Epistemic {
+    /// Reveals nothing about the inputs.
+    Opaque,
+    /// Reveals a bounded function of the inputs.
+    Partial,
+    /// Reveals the inputs fully (the output determines the input).
+    Transparent,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionDecl {
     pub name: String,
@@ -223,6 +236,9 @@ pub struct FunctionDecl {
     /// Optional `@echo(...)` grade ceiling (ADR-0009 D1). The checker verifies
     /// the inferred (composed) echo does not exceed it: `inferred ⊑ annotated`.
     pub echo_annotation: Option<Echo>,
+    /// Optional `@epi(...)` epistemic-grade ceiling (ADR-0009 D2), checked the
+    /// same way as `echo_annotation`.
+    pub epi_annotation: Option<Epistemic>,
     pub body: Vec<ControlStmt>,
 }
 

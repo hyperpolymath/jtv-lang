@@ -205,6 +205,18 @@ impl PrettyPrinter {
             ));
         }
 
+        // Epistemic grade annotation
+        if let Some(epi) = func.epi_annotation {
+            out.push_str(&format!(
+                "@epi({}) ",
+                match epi {
+                    Epistemic::Opaque => "Opaque",
+                    Epistemic::Partial => "Partial",
+                    Epistemic::Transparent => "Transparent",
+                }
+            ));
+        }
+
         // Signature
         out.push_str("fn ");
         out.push_str(&func.name);
@@ -584,6 +596,12 @@ mod tests {
     }
 
     #[test]
+    fn test_round_trip_epi_annotation() {
+        round_trip("@epi(Transparent) fn f(x: Int): Int { return x }");
+        round_trip("@echo(Neutral) @epi(Partial) fn g(x: Int): Int { return x + 1 }");
+    }
+
+    #[test]
     fn test_round_trip_pure_function() {
         round_trip("@pure fn double(x: Int): Int { return x + x }");
     }
@@ -708,6 +726,7 @@ mod tests {
             return_type: Some(TypeAnnotation::Basic(BasicType::Int)),
             purity: Purity::Impure,
             echo_annotation: None,
+            epi_annotation: None,
             body: vec![ControlStmt::Return(Some(DataExpr::Number(Number::Int(0))))],
         };
         let rendered = printer.print_function(&func, 0);

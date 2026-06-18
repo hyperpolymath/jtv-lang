@@ -15,16 +15,10 @@
 use crate::ast::*;
 use std::collections::HashSet;
 
-/// The epistemic grade (ADR-0009 D2): how much a function reveals about inputs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Epistemic {
-    /// Reveals nothing about the inputs.
-    Opaque,
-    /// Reveals a bounded function of the inputs.
-    Partial,
-    /// Reveals the inputs fully (the output determines the input).
-    Transparent,
-}
+/// The epistemic grade (ADR-0009 D2). The enum lives in `ast` (so the AST can
+/// carry an `@epi(...)` annotation without a module cycle); re-exported here,
+/// where its lattice operations are defined.
+pub use crate::ast::Epistemic;
 
 impl Epistemic {
     fn rank(self) -> u8 {
@@ -134,6 +128,7 @@ mod tests {
             return_type: None,
             purity: Purity::Pure,
             echo_annotation: None,
+            epi_annotation: None,
             body,
         }
     }

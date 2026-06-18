@@ -132,6 +132,18 @@ impl Formatter {
             ));
         }
 
+        // Epistemic grade annotation
+        if let Some(epi) = func.epi_annotation {
+            self.output.push_str(&format!(
+                "@epi({}) ",
+                match epi {
+                    Epistemic::Opaque => "Opaque",
+                    Epistemic::Partial => "Partial",
+                    Epistemic::Transparent => "Transparent",
+                }
+            ));
+        }
+
         // Function signature
         self.output.push_str("fn ");
         self.output.push_str(&func.name);

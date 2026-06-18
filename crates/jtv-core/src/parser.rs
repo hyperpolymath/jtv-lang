@@ -77,11 +77,12 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<TopLevel> {
 
     let mut purity = Purity::Impure;
     let mut echo_annotation: Option<Echo> = None;
+    let mut epi_annotation: Option<Epistemic> = None;
     let mut first = inner
         .next()
         .ok_or_else(|| JtvError::ParseError("Expected function declaration".to_string()))?;
 
-    // Consume any leading markers — `@pure`/`@total` and `@echo(...)` — in any order.
+    // Consume any leading markers — `@pure`/`@total`, `@echo(...)`, `@epi(...)` — in any order.
     loop {
         match first.as_rule() {
             Rule::purity_marker => {
@@ -93,6 +94,9 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<TopLevel> {
             }
             Rule::echo_marker => {
                 echo_annotation = parse_echo_grade(first.clone());
+            }
+            Rule::epi_marker => {
+                epi_annotation = parse_epi_grade(first.clone());
             }
             _ => break,
         }
@@ -136,6 +140,7 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<TopLevel> {
         return_type,
         purity,
         echo_annotation,
+        epi_annotation,
         body,
     }))
 }
@@ -146,6 +151,15 @@ fn parse_echo_grade(marker: pest::iterators::Pair<Rule>) -> Option<Echo> {
         "Neutral" => Echo::Neutral,
         "Breaking" => Echo::Breaking,
         _ => Echo::Safe,
+    })
+}
+
+/// Extract the Epistemic grade from an `@epi(...)` marker pair (ADR-0009 D2).
+fn parse_epi_grade(marker: pest::iterators::Pair<Rule>) -> Option<Epistemic> {
+    marker.into_inner().next().map(|g| match g.as_str() {
+        "Partial" => Epistemic::Partial,
+        "Transparent" => Epistemic::Transparent,
+        _ => Epistemic::Opaque,
     })
 }
 
@@ -981,6 +995,28 @@ mod tests {
         "#;
         let result = parse_program(code);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_epi_annotation() {
+        let program = parse_program("@epi(Partial) fn f(): Int { return 0 }").unwrap();
+        match &program.statements[0] {
+            TopLevel::Function(func) => assert_eq!(func.epi_annotation, Some(Epistemic::Partial)),
+            _ => panic!("expected a function"),
+        }
+    }
+
+    #[test]
+    fn test_parse_echo_and_epi_together() {
+        let program =
+            parse_program("@echo(Neutral) @epi(Transparent) fn f(): Int { return 0 }").unwrap();
+        match &program.statements[0] {
+            TopLevel::Function(func) => {
+                assert_eq!(func.echo_annotation, Some(Echo::Neutral));
+                assert_eq!(func.epi_annotation, Some(Epistemic::Transparent));
+            }
+            _ => panic!("expected a function"),
+        }
     }
 
     #[test]

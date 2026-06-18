@@ -269,6 +269,7 @@ mod tests {
             return_type: None,
             purity: Purity::Pure,
             echo_annotation: None,
+            epi_annotation: None,
             body,
         }
     }
