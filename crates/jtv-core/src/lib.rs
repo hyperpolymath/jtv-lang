@@ -14,6 +14,7 @@
 pub mod ast;
 pub mod coproc;
 pub mod coproc_lower;
+pub mod dialect;
 pub mod echo;
 pub mod error;
 pub mod formatter;
@@ -28,6 +29,7 @@ pub mod typechecker;
 pub mod wasm;
 
 pub use ast::*;
+pub use dialect::{certify, Dialect, PurityCertificate};
 pub use error::*;
 pub use formatter::*;
 pub use interpreter::*;
