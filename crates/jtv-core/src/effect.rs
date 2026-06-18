@@ -12,7 +12,7 @@
 // is a later slice.
 
 use crate::ast::*;
-use crate::echo::{function_echo, Echo};
+use crate::echo::{function_echo_in_env, CarrierEnv, Echo};
 use crate::epistemic::{function_epistemic, Epistemic};
 use std::collections::HashMap;
 
@@ -41,11 +41,29 @@ impl FunctionEffect {
 }
 
 /// A function's OWN effect, from its body alone (not yet its callees').
+///
+/// The Echo half is *carrier-aware*: parameters with a numeric type annotation
+/// seed a `CarrierEnv`, so a `reverse { x += v }` over a `float` parameter grades
+/// `Neutral` (lossy reverse-add) rather than `Safe`. See `echo::carrier_echo` and
+/// `JtvEcho.lean` SECTION 6.
 pub fn own_effect(func: &FunctionDecl) -> FunctionEffect {
     FunctionEffect {
-        echo: function_echo(&func.body),
+        echo: function_echo_in_env(&func.body, &param_carrier_env(func)),
         epi: function_epistemic(func),
     }
+}
+
+/// Seed a carrier environment from a function's parameter type annotations.
+/// Locals without annotations default to JtV's `Int` carrier (`Safe`); a fuller
+/// inferred-type env is a later slice.
+fn param_carrier_env(func: &FunctionDecl) -> CarrierEnv {
+    func.params
+        .iter()
+        .filter_map(|p| match &p.type_annotation {
+            Some(TypeAnnotation::Basic(bt)) => Some((p.name.clone(), bt.clone())),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Resolve every function's full effect, joining in the effects of the functions
@@ -345,5 +363,46 @@ mod tests {
         };
         let env = resolved_effects(&prog);
         assert_eq!(env["f"], FunctionEffect::SAFE);
+    }
+
+    #[test]
+    fn float_param_reverse_block_resolves_neutral() {
+        // fn f(x: float) { reverse { x += y } }
+        // Carrier-aware own effect: the float carrier makes the reverse-add
+        // Neutral, even though `x += y` has no self-reference.
+        let mut f = func(
+            "f",
+            vec!["x"],
+            vec![ControlStmt::ReverseBlock(ReverseBlock {
+                body: vec![ReversibleStmt::AddAssign(
+                    "x".to_string(),
+                    DataExpr::Identifier("y".to_string()),
+                )],
+            })],
+        );
+        f.params[0].type_annotation = Some(TypeAnnotation::Basic(BasicType::Float));
+        let prog = Program {
+            statements: vec![TopLevel::Function(f)],
+        };
+        let env = resolved_effects(&prog);
+        assert_eq!(env["f"].echo, Echo::Neutral);
+
+        // The same body with an int parameter stays Safe.
+        let mut g = func(
+            "g",
+            vec!["x"],
+            vec![ControlStmt::ReverseBlock(ReverseBlock {
+                body: vec![ReversibleStmt::AddAssign(
+                    "x".to_string(),
+                    DataExpr::Identifier("y".to_string()),
+                )],
+            })],
+        );
+        g.params[0].type_annotation = Some(TypeAnnotation::Basic(BasicType::Int));
+        let prog2 = Program {
+            statements: vec![TopLevel::Function(g)],
+        };
+        let env2 = resolved_effects(&prog2);
+        assert_eq!(env2["g"].echo, Echo::Safe);
     }
 }
