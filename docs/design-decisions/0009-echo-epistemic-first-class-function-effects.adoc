@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0009: Echo and Epistemic as First-Class Graded Function Effects
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-06-18
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+Lifts Echo from a gate on reversal *blocks* to a first-class *graded effect* in
+the function arrow, and adds a parallel *epistemic* (knowledge/observability)
+effect alongside it. A function's type then records both what it *loses* (Echo)
+and what it *reveals* (Epistemic), and both compose through calls by lattice
+join. This is the "echo + epistemic first-class" design.
+
+== Status
+
+*Decided (2026-06-18).* The Echo-as-function-effect half is unambiguous and is
+the first implementation slice. The epistemic axis is committed to the
+*knowledge/observability* reading (the belief/certainty alternative was offered
+and not chosen); its exact lattice points may be refined on first use.
+Implementation is staged and slice-wise.
+
+== Context
+
+* Echo today classifies reversal *blocks*: `echo.rs` /`JtvEcho.lean` give the
+  `Safe ⊑ Neutral ⊑ Breaking` lattice with an idempotent `join`, and
+  `classify_stmts` aggregates a block's echo. PR #26 made it a *structural*
+  type-system gate on `reverse {}` / `reversible {} -> tok`. But it is not yet
+  carried in *function* types, so it does not compose across calls.
+* ADR-0007's closing note characterises Echo as a *graded comonad of structured
+  loss* (the echo-types establishment track). The natural home for a graded
+  effect is the function arrow.
+* The mission wants *both* Echo and an epistemic decoration to be first-class.
+
+== Decision
+
+=== D1 — Echo is a graded effect carried by the function arrow
+
+A function's type records the Echo grade it induces:
+
+[source]
+----
+f : A -[echo E]-> B        where  E ∈ {Safe ⊑ Neutral ⊑ Breaking}
+----
+
+* Bijective / injective functions are `echo Safe`; lossy-but-residue-retaining
+  ones are `Neutral`; total-erasure ones are `Breaking`.
+* *Composition is join:* `(g ∘ f).echo = f.echo ⊔ g.echo`, the *same*
+  idempotent lattice join already in `echo.rs` (`Echo::join`) and proved in
+  `JtvEcho.lean` (`join_comm`/`join_assoc`/`join_idem`). The existing
+  block-level `classify_stmts` becomes the special case "the echo of a function
+  body is the join of its statements' echoes".
+* This is exactly the graded-comonad reading (ADR-0007 note): the grade is the
+  loss tier and the arrow carries it.
+
+=== D2 — Epistemic is a parallel graded effect: knowledge / observability
+
+A second grade rides the same arrow, tracking what the function *reveals about
+its inputs* (information flow — JtV's security home turf):
+
+[source]
+----
+f : A -[echo E, epi K]-> B   where  K ∈ {Opaque ⊑ Partial ⊑ Transparent}
+----
+
+* `Opaque` — the output reveals nothing about the input (no leak); the safe
+  bottom.
+* `Partial` — the output reveals some bounded function of the input.
+* `Transparent` — the output determines/reveals the input fully; the leaky top.
+* *Composition is join:* `(g ∘ f).epi = f.epi ⊔ g.epi` — the worst-case
+  revelation of the parts.
+
+Echo and Epistemic are *dual axes*: Echo grades what is *lost* (a backward /
+recoverability question), Epistemic grades what is *revealed* (a forward /
+observability question). Both run bottom = best, top = worst, join = worst-case
+— so the two lattices have the same shape and the same compositional law.
+
+=== D3 — The effect row is the product of the two graded lattices
+
+The function effect is a pair `(echo : E, epi : K)` drawn from the product
+lattice `Echo × Epistemic`. The two axes are *orthogonal* and compose
+*componentwise* (each by its own join); there is no cross-axis interaction. This
+is a graded effect system whose grade is a product of idempotent lattices.
+
+=== D4 — Orthogonal to the existing purity and dialect machinery
+
+* `Purity` (`@pure` / `@total` / impure) is the termination / side-effect axis —
+  *not* subsumed by either effect; it stays separate.
+* The ADR-0008 dialect *purity certificate* (purist vs adulterated) is sugar
+  accounting — orthogonal again.
+* `echo-types`' graded-comonad theory is the semantic backing for the Echo axis;
+  an `Epistemic` decoration there can be mirrored for the second axis.
+
+== Consequences (implementation, slice-wise)
+
+. *Echo-effect slice (first; mostly additive).* Carry an `Echo` grade on
+  `FunctionDecl` and in `TypeAnnotation::Function`; the typechecker infers a
+  function body's grade as the join of its statements' echoes (reusing
+  `echo::classify_stmts`) and checks it against any annotation; calls join the
+  callee's grade into the caller's. Surface: an inferred grade plus an optional
+  `@echo(...)` annotation.
+. *Epistemic-effect slice.* Add the `Epistemic` lattice
+  (`Opaque ⊑ Partial ⊑ Transparent`) with its own `join`, mirror the Echo
+  inference/check/compose path, and an optional `@epi(...)` annotation.
+. *Mechanisation.* Extend `JtvEcho.lean` with the function-effect lattice and a
+  composition theorem (grade of `g ∘ f` = join of grades); add the `Epistemic`
+  lattice as a second graded comonad with the analogous laws.
+. *Interaction with v2 (c).* A `reversible {} -> tok` function is `echo Neutral`
+  and carries its residue token; the token is the operational witness of the
+  `Neutral` grade. Epistemic grade is independent of the token.
+
+== Open / deferred
+
+* The precise epistemic lattice points and their formal semantics
+  (`Opaque`/`Partial`/`Transparent` is the working default — refine on use).
+* Inference-vs-annotation policy (how much is inferred, where annotations are
+  required).
+* Whether the epistemic axis should instead/also model the belief/certainty
+  reading (`Known ⊑ Inferred ⊑ Unknown`) — recorded as the alternative.
+
+== References
+
+* `docs/design-decisions/0007-addition-only-mandate-and-reversibility-tiering.adoc` — graded-comonad note, D6 (algebra → tier).
+* `crates/jtv-core/src/echo.rs` / `jtv_proofs/JtvEcho.lean` — the Echo lattice, `join`, `classify_stmts` (to lift to the arrow).
+* `crates/jtv-core/src/dialect.rs` — the ADR-0008 purity certificate (orthogonal).
