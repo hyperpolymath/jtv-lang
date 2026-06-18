@@ -172,9 +172,105 @@ fn classify_control_stmts(stmts: &[ControlStmt]) -> Echo {
         .fold(Echo::Safe, Echo::join)
 }
 
+// ============================================================================
+// SECTION 4: ECHO AS A FUNCTION EFFECT (ADR-0009 D1, slice 1)
+// ============================================================================
+
+/// The Echo grade a *function body* induces (ADR-0009 D1) — the inference half
+/// of Echo-as-a-first-class-function-effect. It is the join of the echoes of the
+/// body's statements: addition-only data assignments are `Safe` (no loss);
+/// `reverse` / `reversible` blocks contribute their block echo
+/// (`classify_stmts`); control flow joins its sub-bodies. Lifts the block-level
+/// `classify_stmts` to a whole function body.
+///
+/// Slice 1 computes a function's *own* body grade; resolving the grade of
+/// `FunctionCall`s (joining the callee's grade into the caller's) is a later
+/// slice that needs a function-echo environment.
+pub fn function_echo(body: &[ControlStmt]) -> Echo {
+    body.iter()
+        .map(control_stmt_echo)
+        .fold(Echo::Safe, Echo::join)
+}
+
+fn control_stmt_echo(s: &ControlStmt) -> Echo {
+    match s {
+        // Addition-only data assignment: no loss.
+        ControlStmt::Assignment(_) => Echo::Safe,
+        ControlStmt::If(i) => {
+            let then_echo = function_echo(&i.then_branch);
+            match &i.else_branch {
+                Some(b) => then_echo.join(function_echo(b)),
+                None => then_echo,
+            }
+        }
+        ControlStmt::While(w) => function_echo(&w.body),
+        ControlStmt::For(f) => function_echo(&f.body),
+        // Reverse / reversible blocks carry their own block echo.
+        ControlStmt::ReverseBlock(b) => classify_stmts(&b.body),
+        ControlStmt::ReversibleBlock(b) => classify_stmts(&b.body),
+        ControlStmt::Block(ss) => function_echo(ss),
+        // Reading, printing, and token consumption induce no data loss here.
+        ControlStmt::Return(_)
+        | ControlStmt::Print(_)
+        | ControlStmt::ReverseToken(_)
+        | ControlStmt::AbandonToken(_) => Echo::Safe,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_function_is_safe() {
+        assert_eq!(function_echo(&[]), Echo::Safe);
+    }
+
+    #[test]
+    fn function_echo_addition_only_is_safe() {
+        // body: x = a + b
+        let body = vec![ControlStmt::Assignment(Assignment {
+            target: "x".to_string(),
+            value: Expr::Data(DataExpr::add(
+                DataExpr::identifier("a"),
+                DataExpr::identifier("b"),
+            )),
+        })];
+        assert_eq!(function_echo(&body), Echo::Safe);
+    }
+
+    #[test]
+    fn function_echo_self_reference_reverse_is_neutral() {
+        // body: reverse { x += x } — the block is Neutral, so the function is.
+        let body = vec![ControlStmt::ReverseBlock(ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+        })];
+        assert_eq!(function_echo(&body), Echo::Neutral);
+    }
+
+    #[test]
+    fn function_echo_joins_branches() {
+        // if cond { reverse { x += x } } else { y = 1 }  ->  Neutral join Safe = Neutral
+        let then_branch = vec![ControlStmt::ReverseBlock(ReverseBlock {
+            body: vec![ReversibleStmt::AddAssign(
+                "x".to_string(),
+                DataExpr::Identifier("x".to_string()),
+            )],
+        })];
+        let else_branch = vec![ControlStmt::Assignment(Assignment {
+            target: "y".to_string(),
+            value: Expr::Data(DataExpr::Number(Number::Int(1))),
+        })];
+        let body = vec![ControlStmt::If(IfStmt {
+            condition: ControlExpr::Data(DataExpr::Identifier("cond".to_string())),
+            then_branch,
+            else_branch: Some(else_branch),
+        })];
+        assert_eq!(function_echo(&body), Echo::Neutral);
+    }
 
     #[test]
     fn join_is_lattice() {
