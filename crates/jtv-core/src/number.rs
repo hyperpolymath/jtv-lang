@@ -1,5 +1,6 @@
 // Number system implementation supporting 7 types
-use crate::ast::Number;
+use crate::ast::{BasicType, Number};
+use crate::echo::{carrier_echo, Echo};
 use crate::error::{JtvError, Result};
 use num_complex::Complex64;
 use num_rational::Ratio;
@@ -24,6 +25,50 @@ pub enum Value {
     /// against it fall through to the existing `TypeError` arms.
     ReversalToken(u64),
     Unit,
+}
+
+// ============================================================================
+// NUMBER-SYSTEM STRATIFICATION — runtime-value bridge to Echo (ADR-0010)
+// ============================================================================
+// The runtime-value counterpart of the type-level `echo::carrier_echo`
+// (`BasicType -> Echo`) and the Lean `JtvEcho.lean` SECTION 6 stratification:
+// a runtime `Value`'s reversal tier is forced by the additive algebra of its
+// number system. The algebra -> tier map is NOT duplicated here — it is taken
+// from `echo::carrier_echo`, so there is a single source of truth.
+
+impl Value {
+    /// The number system this runtime value belongs to, or `None` for the
+    /// non-numeric carriers (bool / string / list / tuple / token / unit) —
+    /// which have no additive algebra and so cannot be `+=` targets.
+    pub fn number_system(&self) -> Option<BasicType> {
+        Some(match self {
+            Value::Int(_) => BasicType::Int,
+            Value::Float(_) => BasicType::Float,
+            Value::Rational(_) => BasicType::Rational,
+            Value::Complex(_) => BasicType::Complex,
+            Value::Hex(_) => BasicType::Hex,
+            Value::Binary(_) => BasicType::Binary,
+            Value::Symbolic(_) => BasicType::Symbolic,
+            Value::Bool(_)
+            | Value::String(_)
+            | Value::List(_)
+            | Value::Tuple(_)
+            | Value::ReversalToken(_)
+            | Value::Unit => return None,
+        })
+    }
+
+    /// The Echo reversal tier forced by this value's additive algebra — the
+    /// runtime-value counterpart of `echo::carrier_echo` and `JtvEcho.lean`
+    /// SECTION 6 (`abelianGroup -> Safe`, `approxGroup -> Neutral`,
+    /// `nonGroup -> Breaking`). A non-numeric value induces no additive-reversal
+    /// obligation, hence `Safe`.
+    pub fn reversal_echo(&self) -> Echo {
+        match self.number_system() {
+            Some(ty) => carrier_echo(&ty),
+            None => Echo::Safe,
+        }
+    }
 }
 
 impl Value {
@@ -337,5 +382,35 @@ mod tests {
         let b = Value::Float(3.5);
         let result = a.add(&b).unwrap();
         assert!(matches!(result, Value::Float(_)));
+    }
+
+    #[test]
+    fn value_number_system_maps_carriers() {
+        assert_eq!(Value::Int(0).number_system(), Some(BasicType::Int));
+        assert_eq!(Value::Float(0.0).number_system(), Some(BasicType::Float));
+        assert_eq!(Value::Hex(0).number_system(), Some(BasicType::Hex));
+        assert_eq!(Value::Binary(0).number_system(), Some(BasicType::Binary));
+        assert_eq!(
+            Value::Symbolic("x".to_string()).number_system(),
+            Some(BasicType::Symbolic)
+        );
+        // Non-numeric carriers have no additive algebra.
+        assert_eq!(Value::Bool(true).number_system(), None);
+        assert_eq!(Value::Unit.number_system(), None);
+        assert_eq!(Value::ReversalToken(0).number_system(), None);
+    }
+
+    #[test]
+    fn value_reversal_echo_mirrors_section6() {
+        // Exact abelian groups -> Safe (incl. the ℤ-encodings hex/binary).
+        assert_eq!(Value::Int(0).reversal_echo(), Echo::Safe);
+        assert_eq!(Value::Hex(0).reversal_echo(), Echo::Safe);
+        assert_eq!(Value::Binary(0).reversal_echo(), Echo::Safe);
+        assert_eq!(Value::Symbolic("x".to_string()).reversal_echo(), Echo::Safe);
+        // Float -> Neutral (non-associative, lossy reverse-add).
+        assert_eq!(Value::Float(1.5).reversal_echo(), Echo::Neutral);
+        // Non-numeric -> Safe (no additive-reversal obligation).
+        assert_eq!(Value::Bool(true).reversal_echo(), Echo::Safe);
+        assert_eq!(Value::Unit.reversal_echo(), Echo::Safe);
     }
 }
