@@ -31,16 +31,10 @@
 use crate::ast::*;
 use std::collections::HashMap;
 
-/// The three loss classes of the Echo taxonomy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Echo {
-    /// No loss — injective / reversible.
-    Safe,
-    /// Structured loss — non-total erasure, residue retained.
-    Neutral,
-    /// Total erasure — irreversible.
-    Breaking,
-}
+/// The three loss classes of the Echo taxonomy. The enum lives in `ast` (so the
+/// AST can carry an `@echo(...)` annotation without a module cycle); it is
+/// re-exported here, where its lattice operations are defined.
+pub use crate::ast::Echo;
 
 impl Echo {
     /// Least upper bound. `Breaking` is absorbing; `Safe` is the unit.

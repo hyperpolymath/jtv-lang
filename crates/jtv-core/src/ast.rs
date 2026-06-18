@@ -200,12 +200,29 @@ pub enum LogicalOp {
 
 // ===== FUNCTIONS =====
 
+/// The three loss classes of the Echo effect taxonomy (spec v2 §8–9); lattice
+/// order `Safe ⊑ Neutral ⊑ Breaking`. Defined here, rather than in `echo.rs`, so
+/// the AST can carry an `@echo(...)` annotation without a module cycle
+/// (`echo.rs` imports `ast`). `echo.rs` re-exports it and owns its lattice ops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Echo {
+    /// No loss — injective / reversible.
+    Safe,
+    /// Structured loss — non-total erasure, residue retained.
+    Neutral,
+    /// Total erasure — irreversible.
+    Breaking,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionDecl {
     pub name: String,
     pub params: Vec<Param>,
     pub return_type: Option<TypeAnnotation>,
     pub purity: Purity,
+    /// Optional `@echo(...)` grade ceiling (ADR-0009 D1). The checker verifies
+    /// the inferred (composed) echo does not exceed it: `inferred ⊑ annotated`.
+    pub echo_annotation: Option<Echo>,
     pub body: Vec<ControlStmt>,
 }
 

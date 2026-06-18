@@ -133,6 +133,7 @@ mod tests {
                 .collect(),
             return_type: None,
             purity: Purity::Pure,
+            echo_annotation: None,
             body,
         }
     }

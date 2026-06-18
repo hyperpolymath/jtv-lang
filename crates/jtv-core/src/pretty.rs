@@ -193,6 +193,18 @@ impl PrettyPrinter {
             Purity::Impure => {}
         }
 
+        // Echo grade annotation
+        if let Some(echo) = func.echo_annotation {
+            out.push_str(&format!(
+                "@echo({}) ",
+                match echo {
+                    Echo::Safe => "Safe",
+                    Echo::Neutral => "Neutral",
+                    Echo::Breaking => "Breaking",
+                }
+            ));
+        }
+
         // Signature
         out.push_str("fn ");
         out.push_str(&func.name);
@@ -565,6 +577,13 @@ mod tests {
     }
 
     #[test]
+    fn test_round_trip_echo_annotation() {
+        // The @echo(...) grade must survive parse -> print -> parse.
+        round_trip("@echo(Neutral) fn double(x: Int): Int { return x + x }");
+        round_trip("@pure @echo(Breaking) fn id(x: Int): Int { return x }");
+    }
+
+    #[test]
     fn test_round_trip_pure_function() {
         round_trip("@pure fn double(x: Int): Int { return x + x }");
     }
@@ -688,6 +707,7 @@ mod tests {
             params: vec![],
             return_type: Some(TypeAnnotation::Basic(BasicType::Int)),
             purity: Purity::Impure,
+            echo_annotation: None,
             body: vec![ControlStmt::Return(Some(DataExpr::Number(Number::Int(0))))],
         };
         let rendered = printer.print_function(&func, 0);

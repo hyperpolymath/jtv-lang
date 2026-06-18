@@ -120,6 +120,18 @@ impl Formatter {
             Purity::Impure => {}
         }
 
+        // Echo grade annotation
+        if let Some(echo) = func.echo_annotation {
+            self.output.push_str(&format!(
+                "@echo({}) ",
+                match echo {
+                    Echo::Safe => "Safe",
+                    Echo::Neutral => "Neutral",
+                    Echo::Breaking => "Breaking",
+                }
+            ));
+        }
+
         // Function signature
         self.output.push_str("fn ");
         self.output.push_str(&func.name);

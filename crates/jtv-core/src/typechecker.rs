@@ -3,6 +3,7 @@
 
 use crate::ast::*;
 use crate::echo::{self, Echo};
+use crate::effect;
 use crate::error::{JtvError, Result};
 use std::collections::HashMap;
 
@@ -197,11 +198,50 @@ impl TypeChecker {
             self.check_top_level(stmt)?;
         }
 
+        // Third pass: Echo annotation check (ADR-0009 D1, upper-bound policy).
+        self.check_echo_annotations(program)?;
+
         if self.errors.is_empty() {
             Ok(())
         } else {
             Err(self.errors[0].clone())
         }
+    }
+
+    /// Verify each `@echo(...)` annotation is an upper bound on the function's
+    /// inferred (composed) echo grade — `inferred ⊑ annotated` (ADR-0009 D1).
+    /// A function may declare *more* loss than it incurs, never less. The
+    /// inferred grade is the carrier-aware, call-graph-composed `resolved_effects`,
+    /// so a caller can be checked against a callee's declared ceiling (modular).
+    fn check_echo_annotations(&self, program: &Program) -> Result<()> {
+        fn grade_name(e: Echo) -> &'static str {
+            match e {
+                Echo::Safe => "Safe",
+                Echo::Neutral => "Neutral",
+                Echo::Breaking => "Breaking",
+            }
+        }
+        let effects = effect::resolved_effects(program);
+        for stmt in &program.statements {
+            if let TopLevel::Function(func) = stmt {
+                if let Some(annotated) = func.echo_annotation {
+                    let inferred = effects
+                        .get(&func.name)
+                        .map(|e| e.echo)
+                        .unwrap_or(Echo::Safe);
+                    if !inferred.leq(annotated) {
+                        return Err(JtvError::EchoViolation(format!(
+                            "function `{}` declares `@echo({})` but its inferred echo is `{}` — \
+                             a function may declare more loss than it incurs, never less",
+                            func.name,
+                            grade_name(annotated),
+                            grade_name(inferred),
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn register_function(&mut self, func: &FunctionDecl) -> Result<()> {
@@ -816,6 +856,61 @@ mod tests {
         };
         assert!(checker
             .check_control_stmt(&ControlStmt::ReversibleBlock(block))
+            .is_ok());
+    }
+
+    // Build a function whose inferred echo is Neutral: a self-referential
+    // `reversible { x += x } -> tok` over a prior local `x`.
+    fn neutral_function(annotation: Option<Echo>) -> Program {
+        use crate::ast::*;
+        Program {
+            statements: vec![TopLevel::Function(FunctionDecl {
+                name: "f".to_string(),
+                params: vec![],
+                return_type: None,
+                purity: Purity::Impure,
+                echo_annotation: annotation,
+                body: vec![
+                    ControlStmt::Assignment(Assignment {
+                        target: "x".to_string(),
+                        value: Expr::Data(DataExpr::Number(Number::Int(0))),
+                    }),
+                    ControlStmt::ReversibleBlock(ReversibleBlockStmt {
+                        body: vec![ReversibleStmt::AddAssign(
+                            "x".to_string(),
+                            DataExpr::Identifier("x".to_string()),
+                        )],
+                        token_binding: Some("tok".to_string()),
+                    }),
+                ],
+            })],
+        }
+    }
+
+    #[test]
+    fn echo_annotation_upper_bound_accepts_over_declaration() {
+        // inferred Neutral ⊑ annotated Neutral (exact) and ⊑ Breaking (looser) → ok.
+        for ann in [Echo::Neutral, Echo::Breaking] {
+            let program = neutral_function(Some(ann));
+            assert!(TypeChecker::new().check_program(&program).is_ok());
+        }
+    }
+
+    #[test]
+    fn echo_annotation_upper_bound_rejects_under_declaration() {
+        // @echo(Safe) on a Neutral function: Neutral ⋢ Safe → rejected.
+        let program = neutral_function(Some(Echo::Safe));
+        assert!(matches!(
+            TypeChecker::new().check_program(&program),
+            Err(JtvError::EchoViolation(_))
+        ));
+    }
+
+    #[test]
+    fn echo_annotation_absent_is_unconstrained() {
+        // No annotation → no ceiling check; the Neutral function type-checks.
+        assert!(TypeChecker::new()
+            .check_program(&neutral_function(None))
             .is_ok());
     }
 
