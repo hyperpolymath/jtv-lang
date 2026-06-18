@@ -91,7 +91,7 @@ fn count_control_stmt(s: &ControlStmt) -> usize {
         ControlStmt::For(fo) => {
             count_range(&fo.range) + fo.body.iter().map(count_control_stmt).sum::<usize>()
         }
-        ControlStmt::Return(opt) => opt.as_ref().map(count_data_expr).unwrap_or(0),
+        ControlStmt::Return(opt) => opt.iter().map(count_data_expr).sum(),
         ControlStmt::Print(es) => es.iter().map(count_data_expr).sum(),
         ControlStmt::ReverseBlock(b) => b.body.iter().map(count_reversible).sum(),
         ControlStmt::ReversibleBlock(b) => b.body.iter().map(count_reversible).sum(),
@@ -104,9 +104,10 @@ fn count_if(i: &IfStmt) -> usize {
     count_control_expr(&i.condition)
         + i.then_branch.iter().map(count_control_stmt).sum::<usize>()
         + i.else_branch
-            .as_ref()
-            .map(|b| b.iter().map(count_control_stmt).sum())
-            .unwrap_or(0)
+            .iter()
+            .flatten()
+            .map(count_control_stmt)
+            .sum::<usize>()
 }
 
 fn count_expr(e: &Expr) -> usize {
@@ -146,7 +147,7 @@ fn count_reversible(s: &ReversibleStmt) -> usize {
 fn count_range(r: &RangeExpr) -> usize {
     count_data_expr(&r.start)
         + count_data_expr(&r.end)
-        + r.step.as_ref().map(|s| count_data_expr(s)).unwrap_or(0)
+        + r.step.iter().map(|s| count_data_expr(s)).sum::<usize>()
 }
 
 #[cfg(test)]
