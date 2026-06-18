@@ -312,4 +312,75 @@ theorem neg_injective : Injective (fun n : Int => -n) := by
   have h' : -a = -b := h
   omega
 
+-- ============================================================================
+-- SECTION 5: FUNCTION EFFECTS — Echo × Epistemic (ADR-0009 D1+D3)
+-- ============================================================================
+
+/-
+  ADR-0009 lifts Echo to a first-class *function effect* and adds a parallel
+  *Epistemic* effect (what a function reveals about its inputs). The effect a
+  function carries is a point in the product lattice `Echo × Epistemic`, and
+  composition across calls is the (idempotent, commutative) join. This section
+  mechanises the Epistemic lattice and the product, mirroring the Echo lattice
+  of SECTION 1, and pins the lattice laws that make composition well-defined.
+
+  Constructor names map to the Rust `epistemic.rs` / ADR-0009 D2 grades:
+  `hidden = Opaque`, `bounded = Partial`, `full = Transparent`
+  (lowercase `opaque` / `partial` are Lean keywords, hence the rename).
+-/
+
+/-- The epistemic grade (ADR-0009 D2): how much a function reveals about inputs.
+    `hidden ⊑ bounded ⊑ full`  (= Opaque ⊑ Partial ⊑ Transparent). -/
+inductive Epistemic where
+  | hidden
+  | bounded
+  | full
+  deriving Repr, DecidableEq
+
+/-- Join (worst-case revelation): `full` absorbing, `hidden` the unit. -/
+def Epistemic.join : Epistemic → Epistemic → Epistemic
+  | .full,    _        => .full
+  | _,        .full    => .full
+  | .bounded, _        => .bounded
+  | _,        .bounded => .bounded
+  | .hidden,  .hidden  => .hidden
+
+theorem epi_join_comm (a b : Epistemic) : a.join b = b.join a := by
+  cases a <;> cases b <;> rfl
+
+theorem epi_join_assoc (a b c : Epistemic) :
+    (a.join b).join c = a.join (b.join c) := by
+  cases a <;> cases b <;> cases c <;> rfl
+
+theorem epi_join_idem (a : Epistemic) : a.join a = a := by
+  cases a <;> rfl
+
+/-- The function effect row (ADR-0009 D3): a point in `Echo × Epistemic`,
+    composed componentwise. -/
+structure FunctionEffect where
+  echo : Echo
+  epi : Epistemic
+  deriving Repr, DecidableEq
+
+/-- Componentwise join of two function effects. -/
+def FunctionEffect.join (x y : FunctionEffect) : FunctionEffect :=
+  { echo := x.echo ⊔ y.echo, epi := x.epi.join y.epi }
+
+/-- **Composition is a commutative, idempotent join** (ADR-0009): the effect of
+    a composite is the join of its parts', and these three laws make that fold
+    independent of the order and repetition of calls — so `g ∘ f` carries
+    `effect f ⊔ effect g` however the calls are arranged. -/
+theorem feffect_join_comm (a b : FunctionEffect) : a.join b = b.join a := by
+  cases a; cases b
+  simp [FunctionEffect.join, join_comm, epi_join_comm]
+
+theorem feffect_join_assoc (a b c : FunctionEffect) :
+    (a.join b).join c = a.join (b.join c) := by
+  cases a; cases b; cases c
+  simp [FunctionEffect.join, join_assoc, epi_join_assoc]
+
+theorem feffect_join_idem (a : FunctionEffect) : a.join a = a := by
+  cases a
+  simp [FunctionEffect.join, join_idem, epi_join_idem]
+
 end Jtv.Echo
