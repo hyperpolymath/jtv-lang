@@ -276,12 +276,23 @@ impl FunctionCall {
 
 // ===== TYPE SYSTEM =====
 
+/// An optional `(echo, epi)` effect row decorating a function *type* (ADR-0009
+/// D1/D3), written with the same `@echo(...)` / `@epi(...)` markers as on
+/// declarations. `None` on an axis means unspecified (unconstrained).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct EffectGrade {
+    pub echo: Option<Echo>,
+    pub epi: Option<Epistemic>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeAnnotation {
     Basic(BasicType),
     List(Box<TypeAnnotation>),
     Tuple(Vec<TypeAnnotation>),
-    Function(Vec<TypeAnnotation>, Box<TypeAnnotation>),
+    /// `@echo(...) @epi(...) Fn(params) -> ret` — the trailing `EffectGrade`
+    /// carries the optional grade row (ADR-0009 D1/D3).
+    Function(Vec<TypeAnnotation>, Box<TypeAnnotation>, EffectGrade),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

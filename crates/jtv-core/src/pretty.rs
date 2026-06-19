@@ -499,13 +499,35 @@ impl PrettyPrinter {
                     .collect();
                 format!("({})", parts.join(", "))
             }
-            TypeAnnotation::Function(params, ret) => {
+            TypeAnnotation::Function(params, ret, grade) => {
                 let parts: Vec<String> = params
                     .iter()
                     .map(|t| self.print_type_annotation(t))
                     .collect();
+                let mut prefix = String::new();
+                if let Some(e) = grade.echo {
+                    prefix.push_str(&format!(
+                        "@echo({}) ",
+                        match e {
+                            Echo::Safe => "Safe",
+                            Echo::Neutral => "Neutral",
+                            Echo::Breaking => "Breaking",
+                        }
+                    ));
+                }
+                if let Some(e) = grade.epi {
+                    prefix.push_str(&format!(
+                        "@epi({}) ",
+                        match e {
+                            Epistemic::Opaque => "Opaque",
+                            Epistemic::Partial => "Partial",
+                            Epistemic::Transparent => "Transparent",
+                        }
+                    ));
+                }
                 format!(
-                    "Fn({}) -> {}",
+                    "{}Fn({}) -> {}",
+                    prefix,
                     parts.join(", "),
                     self.print_type_annotation(ret)
                 )
@@ -599,6 +621,15 @@ mod tests {
     fn test_round_trip_epi_annotation() {
         round_trip("@epi(Transparent) fn f(x: Int): Int { return x }");
         round_trip("@echo(Neutral) @epi(Partial) fn g(x: Int): Int { return x + 1 }");
+    }
+
+    #[test]
+    fn test_round_trip_graded_function_type() {
+        // The grade on a function *type* (param annotation) must survive too.
+        round_trip("fn apply(f: @echo(Neutral) Fn(Int) -> Int): Int { return 0 }");
+        round_trip(
+            "fn apply(g: @echo(Safe) @epi(Transparent) Fn(Int, Int) -> Int): Int { return 0 }",
+        );
     }
 
     #[test]

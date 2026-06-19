@@ -22,7 +22,7 @@ pub enum Type {
     Unit,
     List(Box<Type>),
     Tuple(Vec<Type>),
-    Function(Vec<Type>, Box<Type>),
+    Function(Vec<Type>, Box<Type>, EffectGrade),
     Any, // For type inference placeholder
 }
 
@@ -31,6 +31,12 @@ impl Type {
     pub fn coercible_to(&self, target: &Type) -> bool {
         if self == target {
             return true;
+        }
+        // Function types: same params/return, covariant in the effect grade — a
+        // function that loses/reveals *less* is usable where *more* is allowed
+        // (ADR-0009). Params/return are compared invariantly for now.
+        if let (Type::Function(p1, r1, g1), Type::Function(p2, r2, g2)) = (self, target) {
+            return p1 == p2 && r1 == r2 && grade_leq(*g1, *g2);
         }
         matches!(
             (self, target),
@@ -93,6 +99,23 @@ impl Type {
     }
 }
 
+/// Covariant ordering on function-type effect grades: `sub`'s declared grade is
+/// at most `sup`'s on each axis. `None` on `sup` is unconstrained (accepts
+/// anything); `None` on `sub` against a `Some` bound cannot be guaranteed.
+fn grade_leq(sub: EffectGrade, sup: EffectGrade) -> bool {
+    let echo_ok = match (sub.echo, sup.echo) {
+        (_, None) => true,
+        (Some(s), Some(t)) => s.leq(t),
+        (None, Some(_)) => false,
+    };
+    let epi_ok = match (sub.epi, sup.epi) {
+        (_, None) => true,
+        (Some(s), Some(t)) => s.leq(t),
+        (None, Some(_)) => false,
+    };
+    echo_ok && epi_ok
+}
+
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -117,7 +140,29 @@ impl std::fmt::Display for Type {
                 }
                 write!(f, ")")
             }
-            Type::Function(params, ret) => {
+            Type::Function(params, ret, grade) => {
+                if let Some(e) = grade.echo {
+                    write!(
+                        f,
+                        "@echo({}) ",
+                        match e {
+                            Echo::Safe => "Safe",
+                            Echo::Neutral => "Neutral",
+                            Echo::Breaking => "Breaking",
+                        }
+                    )?;
+                }
+                if let Some(e) = grade.epi {
+                    write!(
+                        f,
+                        "@epi({}) ",
+                        match e {
+                            Epistemic::Opaque => "Opaque",
+                            Epistemic::Partial => "Partial",
+                            Epistemic::Transparent => "Transparent",
+                        }
+                    )?;
+                }
                 write!(f, "Fn(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -304,7 +349,7 @@ impl TypeChecker {
                     .map(|t| self.annotation_to_type(&Some(t.clone())))
                     .collect(),
             ),
-            Some(TypeAnnotation::Function(params, ret)) => {
+            Some(TypeAnnotation::Function(params, ret, grade)) => {
                 let param_types: Vec<Type> = params
                     .iter()
                     .map(|t| self.annotation_to_type(&Some(t.clone())))
@@ -312,6 +357,7 @@ impl TypeChecker {
                 Type::Function(
                     param_types,
                     Box::new(self.annotation_to_type(&Some(*ret.clone()))),
+                    *grade,
                 )
             }
         }
@@ -961,6 +1007,28 @@ mod tests {
                 "@epi({ann}) over a Transparent function should reject"
             );
         }
+    }
+
+    #[test]
+    fn graded_function_type_is_covariant_in_the_grade() {
+        use crate::ast::*;
+        let fn_ty = |echo: Option<Echo>| {
+            Type::Function(
+                vec![Type::Int],
+                Box::new(Type::Int),
+                EffectGrade { echo, epi: None },
+            )
+        };
+        // Safe ⊑ Neutral: a less-lossy function is usable where more loss is allowed.
+        assert!(fn_ty(Some(Echo::Safe)).coercible_to(&fn_ty(Some(Echo::Neutral))));
+        // Neutral ⋢ Safe: not the other way.
+        assert!(!fn_ty(Some(Echo::Neutral)).coercible_to(&fn_ty(Some(Echo::Safe))));
+        // An unconstrained target accepts anything.
+        assert!(fn_ty(Some(Echo::Breaking)).coercible_to(&fn_ty(None)));
+        // An unconstrained source cannot satisfy a specific ceiling.
+        assert!(!fn_ty(None).coercible_to(&fn_ty(Some(Echo::Safe))));
+        // Identical grades coerce (via ==).
+        assert!(fn_ty(Some(Echo::Neutral)).coercible_to(&fn_ty(Some(Echo::Neutral))));
     }
 
     #[test]

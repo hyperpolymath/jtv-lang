@@ -213,7 +213,27 @@ impl Formatter {
                 }
                 self.output.push(')');
             }
-            TypeAnnotation::Function(params, ret) => {
+            TypeAnnotation::Function(params, ret, grade) => {
+                if let Some(e) = grade.echo {
+                    self.output.push_str(&format!(
+                        "@echo({}) ",
+                        match e {
+                            Echo::Safe => "Safe",
+                            Echo::Neutral => "Neutral",
+                            Echo::Breaking => "Breaking",
+                        }
+                    ));
+                }
+                if let Some(e) = grade.epi {
+                    self.output.push_str(&format!(
+                        "@epi({}) ",
+                        match e {
+                            Epistemic::Opaque => "Opaque",
+                            Epistemic::Partial => "Partial",
+                            Epistemic::Transparent => "Transparent",
+                        }
+                    ));
+                }
                 self.output.push_str("Fn(");
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {

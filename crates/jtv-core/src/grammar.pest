@@ -158,7 +158,8 @@ basic_type = {
 
 list_type = { "List" ~ "<" ~ type_annotation ~ ">" }
 tuple_type = { "(" ~ type_annotation ~ ("," ~ type_annotation)+ ~ ")" }
-function_type = { "Fn" ~ "(" ~ (type_annotation ~ ("," ~ type_annotation)*)? ~ ")" ~ "->" ~ type_annotation }
+// ADR-0009: a function type may carry the same `@echo(...)`/`@epi(...)` grade markers.
+function_type = { (echo_marker | epi_marker)* ~ "Fn" ~ "(" ~ (type_annotation ~ ("," ~ type_annotation)*)? ~ ")" ~ "->" ~ type_annotation }
 
 return_type = { type_annotation }
 
