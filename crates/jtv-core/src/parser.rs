@@ -790,21 +790,31 @@ fn parse_type_annotation(pair: pest::iterators::Pair<Rule>) -> Result<TypeAnnota
             Ok(TypeAnnotation::Tuple(types))
         }
         Rule::function_type => {
-            let parts = inner.into_inner();
-            let mut param_types = Vec::new();
-
-            // Collect all but the last (which is return type)
-            let all_types: Vec<_> = parts.collect();
-            let return_type = all_types
+            // Leading `@echo(...)`/`@epi(...)` markers, then the param + return types.
+            let mut echo = None;
+            let mut epi = None;
+            let mut types: Vec<pest::iterators::Pair<Rule>> = Vec::new();
+            for p in inner.into_inner() {
+                match p.as_rule() {
+                    Rule::echo_marker => echo = parse_echo_grade(p),
+                    Rule::epi_marker => epi = parse_epi_grade(p),
+                    Rule::type_annotation => types.push(p),
+                    _ => {}
+                }
+            }
+            let return_type = types
                 .last()
                 .ok_or_else(|| JtvError::ParseError("Expected function return type".to_string()))?;
-
-            for i in 0..all_types.len() - 1 {
-                param_types.push(parse_type_annotation(all_types[i].clone())?);
+            let mut param_types = Vec::new();
+            for i in 0..types.len() - 1 {
+                param_types.push(parse_type_annotation(types[i].clone())?);
             }
-
             let ret = Box::new(parse_type_annotation(return_type.clone())?);
-            Ok(TypeAnnotation::Function(param_types, ret))
+            Ok(TypeAnnotation::Function(
+                param_types,
+                ret,
+                EffectGrade { echo, epi },
+            ))
         }
         _ => Err(JtvError::ParseError(format!(
             "Unknown type annotation: {:?}",
@@ -995,6 +1005,39 @@ mod tests {
         "#;
         let result = parse_program(code);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_graded_function_type() {
+        let program = parse_program(
+            "fn apply(f: @echo(Neutral) @epi(Partial) Fn(Int) -> Int): Int { return 0 }",
+        )
+        .unwrap();
+        match &program.statements[0] {
+            TopLevel::Function(func) => match &func.params[0].type_annotation {
+                Some(TypeAnnotation::Function(_, _, grade)) => {
+                    assert_eq!(grade.echo, Some(Echo::Neutral));
+                    assert_eq!(grade.epi, Some(Epistemic::Partial));
+                }
+                other => panic!("expected a graded function type, got {other:?}"),
+            },
+            _ => panic!("expected a function"),
+        }
+    }
+
+    #[test]
+    fn test_parse_ungraded_function_type_has_empty_grade() {
+        let program = parse_program("fn apply(f: Fn(Int) -> Int): Int { return 0 }").unwrap();
+        match &program.statements[0] {
+            TopLevel::Function(func) => match &func.params[0].type_annotation {
+                Some(TypeAnnotation::Function(_, _, grade)) => {
+                    assert_eq!(grade.echo, None);
+                    assert_eq!(grade.epi, None);
+                }
+                other => panic!("expected a function type, got {other:?}"),
+            },
+            _ => panic!("expected a function"),
+        }
     }
 
     #[test]
