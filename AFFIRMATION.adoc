@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= AFFIRMATION — JtV
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-06-19
+:revnumber: 1.0
+:toc: macro
+
+[.lead]
+A point-in-time affirmation of the verified state and standard-compliance of the
+*JtV* repository (`hyperpolymath/jtv`, formerly `julia-the-viper`), recorded per
+the Rhodium Standard Repositories (RSR) / hyperpolymath estate convention.
+
+[NOTE]
+====
+The hyperpolymath `standards` repository was not in this session's working scope,
+so this document follows the apparent RSR/estate convention and the in-repo
+contractile structure (`Mustfile`/`Intentfile`/`Trustfile`). Reconcile against
+the canonical `AFFIRMATION` template in `standards` when available.
+====
+
+== Affirmation
+
+As of *2026-06-19*, at commit `fff9689` on `main`, the following is affirmed of
+this repository.
+
+=== Core guarantees (the normative MUSTs)
+
+* *Harvard separation* — the Control language (Turing-complete) and the Data
+  language (Total, addition-only) are grammatically separated; code injection is
+  structurally — not heuristically — excluded.
+* *Totality* — the Data language is addition-only and provably halting.
+* *Reversibility / Echo soundness* — the `reverse {}` admissibility gate
+  classifies against the *actual* (carrier-aware, inferred) Echo grade;
+  annotations cannot loosen it. Float locals are soundly rejected (ADR-0010).
+* *ADR-0009 effect surface complete* — Echo and Epistemic are first-class graded
+  function effects, on declarations (`@echo(...)` / `@epi(...)`) and in function
+  types, with an upper-bound check against the composed grade.
+
+=== Verification status
+
+* *Rust* — `cargo build --workspace`, `cargo fmt --check`, and `cargo clippy`
+  clean; *142 jtv-core lib tests* plus integration suites green.
+* *Lean 4* — the proof suite compiles with *0 `sorry` / `admit` / `axiom`*.
+* *Idris2* — the ABI definitions type-check.
+
+=== Standard-compliance
+
+* *Language policy* — Rust (core), Lean 4 / Idris2 (proofs), per the hyperpolymath
+  standard; no banned languages introduced.
+* *Licensing* — MPL-2.0 (code) + CC-BY-SA-4.0 (docs), full per-file SPDX
+  (gap-006 resolved).
+* *Provenance* — contractiles present; `.machine_readable/6a2/STATE.a2ml` current.
+
+=== Honest open items (NOT yet affirmed)
+
+* First-class function *values* (lambdas) — required to make the function-type
+  effect check active (currently latent / representational).
+* `gap-005` — value-level number-system semantics beyond `τ = int`.
+* The GitHub repository-slug rename `julia-the-viper → jtv` (manual settings step,
+  still pending).
+
+== Signatory
+
+Affirmed for the maintainer:
+
+[%hardbreaks]
+Name: Jonathan D.A. Jewell (hyperpolymath)
+Date: 2026-06-19
+Commit: `fff9689`
+Repository: `hyperpolymath/jtv`
+
+_Prepared during an automated (Claude Code) session and submitted for the
+maintainer's affirmation._

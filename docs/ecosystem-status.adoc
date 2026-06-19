@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= Ecosystem Status — Musts / Intends / Wishes
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-06-19
+:revnumber: 1.0
+:toc: left
+:sectnums:
+
+[.lead]
+A point-in-time status of four hyperpolymath projects, each grouped into the
+normative tiers *MUST* (invariants / required), *INTEND* (declared, in-progress),
+and *WISH* (aspirational). JtV is the normative anchor.
+
+Legend: ✅ done · ◑ partial · ◻ planned · ⚠ gap · ○ aspirational.
+
+Sources / freshness: JtV is live (this session, commit `fff9689`); Absolute Zero
+from `STATE.a2ml` (2026-05-27); JanusKey from `STATE.a2ml` (2026-04-04, older) +
+README; maa-framework not yet in working scope (see §5).
+
+== JtV — the normative anchor
+
+Harvard-architecture language: Control (Turing-complete) vs Data (Total,
+addition-only); code injection grammatically impossible. Echo + Epistemic effect
+system for reversibility / structured loss.
+
+[cols="1,5,3",options="header"]
+|===
+| Tier | Item | Where we are
+| MUST | Harvard separation → code injection *grammatically* impossible | ✅ structural
+| MUST | Data language addition-only & Total (provably halting) | ✅
+| MUST | Reversibility / Echo soundness — `reverse` gate on the *actual* grade; Lean proofs 0 `sorry/admit/axiom` | ✅ (carrier-aware + float-locals, ADR-0010)
+| MUST | ADR-0009 effect surface: Echo + Epistemic on declarations *and* function types | ✅ (#48–#50)
+| INTEND | First-class function *values* (lambdas) → activates the function-type effect check | ◻ next rung
+| INTEND | `gap-005`: value-level number-system semantics beyond `τ=int` | ◻ open
+| INTEND | `Settings → jtv` repo-slug rename (make the rebrand live) | ◻ manual
+| INTEND | PataCL Phase 1 → coprocessor implementation | ◻ external dep
+| WISH | v2 reversible-computing / quantum-algorithm simulation (Landauer, Grover/Shor) | ○ spec only
+| WISH | Router-visualization playground (the "killer demo") | ○
+|===
+
+== Absolute Zero
+
+Multi-prover formal verification of Certified Null Operations (CNO). ~65%,
+proof-completion phase.
+
+[cols="1,5,3",options="header"]
+|===
+| Tier | Item | Where we are
+| MUST | Proofs green across provers: Coq 11/11 (0 `Admitted`), Lean 1631/1632, Agda `CNO.agda` clean | ✅ (2026-05-27)
+| MUST | Core CNO + category theory + statistical mechanics fully proven | ✅
+| MUST | Trusted-base discipline — 72 Coq axioms triaged (52 trusted / 17 discharge / 3 property-test) | ◑ Phase 1 (PR #58)
+| MUST | No Python (RSR) | ⚠ currently violated (high blocker)
+| INTEND | v0.8 compliance sprint (40%); discharge 17 §a Coq backlog axioms; Phase-2 triage (Lean 52 + Idris2 7) | ◻ in progress
+| INTEND | Migrate Python→Rust; physics-constant dedup; v0.9 container verification | ◻
+| WISH | v1.0 publication release + paper draft | ○
+| WISH | Mizar (10% stub) + Isabelle (40%) brought to parity | ○
+|===
+
+== JanusKey
+
+Architecturally-reversible file operations (data loss "impossible" by design, not
+backups). ~60%; content-addressed (SHA256), Rust.
+
+[cols="1,5,3",options="header"]
+|===
+| Tier | Item | Where we are
+| MUST | 100% reversible file ops by *architecture* | ◑ implemented — *formal proofs still pending* (per README)
+| MUST | Content-addressed (SHA256) storage, audit trail, transactions | ✅
+| MUST | Coverage across p2p / e2e / aspect-security / concurrency | ✅ 56 tests / 64 points (CRG D→C blitz)
+| MUST | License = MPL-2.0 | ✅ migrated (a740439, #52); PMPL stragglers retired (#65)
+| INTEND | API stability review (stated current phase) | ◻
+| INTEND | Land the formal reversibility proofs; climb CRG grade (D→C→…) | ◻
+| WISH | Broader packaging / adoption | ○ thin in current state
+|===
+
+== maa-framework — Mutually Assured Accountability
+
+The *Mutually Assured Accountability* framework. ⚠ *Not yet groundable from this
+session:* it is not in the current working repo scope, not cloned locally, and the
+repo-management tooling (`list_repos`/`add_repo`) was unavailable — so no MUST /
+INTEND / WISH rows are recorded here rather than invent them. Add it to scope
+(when the tooling is available) to populate this section from its own `STATE` and
+contractiles.
+
+== Where we are (synthesis)
+
+* *JtV* is the most mature and the only one advanced this session: core guarantees
+  and the full Echo + Epistemic effect surface are done and proven; remaining work
+  is feature-reach (function values) plus one manual rename.
+* *Absolute Zero* is deep in proof-completion — green across provers, grinding down
+  axiom / Python debt toward a publishable v1.0.
+* *JanusKey* is feature- and test-complete in architecture but has not yet *proven*
+  its headline reversibility claim; its license migration is now finished.
+* *maa-framework* awaits inclusion in working scope.
