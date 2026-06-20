@@ -17,7 +17,7 @@ Legend: ✅ done · ◑ partial · ◻ planned · ⚠ gap · ○ aspirational.
 
 Sources / freshness: JtV is live (this session, commit `fff9689`); Absolute Zero
 from `STATE.a2ml` (2026-05-27); JanusKey from `STATE.a2ml` (2026-04-04, older) +
-README; maa-framework not yet in working scope (see §5).
+README; maa-framework from GitHub repo metadata only (out of session scope — see §5).
 
 == JtV — the normative anchor
 
@@ -77,12 +77,20 @@ backups). ~60%; content-addressed (SHA256), Rust.
 
 == maa-framework — Mutually Assured Accountability
 
-The *Mutually Assured Accountability* framework. ⚠ *Not yet groundable from this
-session:* it is not in the current working repo scope, not cloned locally, and the
-repo-management tooling (`list_repos`/`add_repo`) was unavailable — so no MUST /
-INTEND / WISH rows are recorded here rather than invent them. Add it to scope
-(when the tooling is available) to populate this section from its own `STATE` and
-contractiles.
+`hyperpolymath/maa-framework` — *"Mutually Assured Accountability Framework — hub
+for MAA, Oblíbený, and Aletheia."* Rust · MPL-2.0 · active (last push 2026-06-18) ·
+5 open issues · wiki / pages / discussions enabled. A coordinating hub over MAA +
+Oblíbený (also one of the nextgen-languages) + Aletheia.
+
+Related: `hyperpolymath/valence-shell` — *"Formally verified shell implementing the
+MAA Framework — every operation backed by machine-checkable proofs"* (Rust ·
+MPL-2.0 · ~175 MB · 28 open issues): the flagship verified implementation.
+
+⚠ *Must / Intend / Wish not yet grounded.* This repository is outside the current
+session's scope — content access is denied and the `add_repo` tooling was
+unavailable — so the above is from GitHub repo *metadata* only; its `STATE` +
+contractiles were not read. Add maa-framework to the working scope to populate
+grounded MUST / INTEND / WISH rows like the other three.
 
 == Where we are (synthesis)
 
@@ -93,4 +101,6 @@ contractiles.
   axiom / Python debt toward a publishable v1.0.
 * *JanusKey* is feature- and test-complete in architecture but has not yet *proven*
   its headline reversibility claim; its license migration is now finished.
-* *maa-framework* awaits inclusion in working scope.
+* *maa-framework* is the MAA accountability hub (coordinating MAA + Oblíbený +
+  Aletheia), with `valence-shell` as its formally-verified shell; its detailed
+  Must/Intend/Wish awaits inclusion in working scope.
