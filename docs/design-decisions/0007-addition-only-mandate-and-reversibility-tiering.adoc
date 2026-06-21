@@ -171,11 +171,13 @@ basis for the v2 `(c)` Neutral bridge and the number-system → tier map.
 
 . *Number-system semantics work (next-but-one priority).* The Lean model
   is currently `Int`-only (`evalDataExpr : DataExpr → State → Int`);
-  the seven systems are *typed* but `stated-unproven` at the value
-  level, and `type_preservation` is mechanised only for `τ = int`. The
-  semantics layer must (a) give each system a value model, (b) classify
-  each by its additive algebra → Echo tier per D6, and (c) keep
-  addition-only (D1) — `×`/`÷` generated, not primitive.
+  the carrier-distinct systems (`float`/`rational`/`complex`/`symbolic`)
+  are *typed* but `stated-unproven` at the value level. `type_preservation`
+  is mechanised for the whole *integer-represented family* `{int, hex,
+  binary}` (these share the `Int` carrier; generalised via `isIntRepr`,
+  zero axioms). The semantics layer must (a) give each remaining system a
+  value model, (b) classify each by its additive algebra → Echo tier per
+  D6, and (c) keep addition-only (D1) — `×`/`÷` generated, not primitive.
 . *v2 "(c)" bridge (LANDED 2026-06-15).* Implements the Neutral tier of
   D5: `reverse { }` stays Safe-only; `reversible { } -> tok` admits
   Neutral via the retained log/token (Bennett). Lean: `JtvEcho`

@@ -137,7 +137,11 @@ The algebra -> tier map has a single home and is mirrored, not duplicated:
   residue). Closes the gap this ADR previously flagged.
 . *`gap-005` partially addressed:* the seven systems are now *classified* by
   additive algebra at type and value level. The orthogonal half — lifting
-  `type_preservation` semantics beyond `τ = int` — remains open.
+  `type_preservation` semantics beyond `τ = int` — is now done for the whole
+  *integer-represented family* `{int, hex, binary}` (hex/binary share the `Int`
+  carrier, so the generalised `type_preservation` covers them via `isIntRepr`;
+  zero axioms). It remains open for `float`/`rational`/`complex`/`symbolic`,
+  which need their own value models.
 
 == Open / deferred
 
@@ -150,7 +154,8 @@ The algebra -> tier map has a single home and is mirrored, not duplicated:
   (idempotent) system is added, give it its `NumAlgebra` level and the
   Neutral/Breaking tier follows; no spine re-proof.
 * *Value-level semantics (`gap-005`).* `type_preservation` / round-trip proofs
-  for `τ ≠ int`.
+  for the carrier-distinct systems `float`/`rational`/`complex`/`symbolic`
+  (the int-represented family `{int, hex, binary}` is now covered).
 
 == References
 

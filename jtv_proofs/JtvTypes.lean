@@ -420,20 +420,63 @@ theorem total_no_loops (s : ControlStmt) (h : s.respectsPurity Purity.total = tr
 -- SECTION 6: TYPE SOUNDNESS
 -- ============================================================================
 
-/-- Typed values: runtime values with their types -/
+/-- Typed values: runtime values with their types.
+
+    `int`, `hex`, and `binary` share the same `Int` runtime carrier —
+    hex and binary are int-represented (see `JtvType`) — so an evaluated
+    `Int` legitimately inhabits any of the three. The remaining number
+    systems (`float`/`rational`/`complex`/`symbolic`) have distinct
+    runtime carriers that the `Int`-only evaluation model does not build,
+    so they are deliberately absent here (see PROOF-CAPABILITY-MATRIX
+    §"Scope of the semantic model"). -/
 inductive TypedValue : Int → JtvType → Prop where
-  | int : ∀ n, TypedValue n JtvType.int
+  | int    : ∀ n, TypedValue n JtvType.int
+  | hex    : ∀ n, TypedValue n JtvType.hex
+  | binary : ∀ n, TypedValue n JtvType.binary
+
+/-- The integer-represented type family: exactly the `JtvType`s whose
+    runtime values are plain `Int`s (`int`, `hex`, `binary`). These are
+    the types for which `type_preservation` holds under the `Int`-only
+    evaluation model. -/
+def JtvType.isIntRepr : JtvType → Prop
+  | JtvType.int    => True
+  | JtvType.hex    => True
+  | JtvType.binary => True
+  | _              => False
 
 /--
-  **Theorem (Type Preservation)**:
-  If Γ ⊢ e : τ and e evaluates to v, then v has type τ.
+  **Theorem (Type Preservation, integer-represented family)**:
+  If `Γ ⊢ e : τ` with `τ` an integer-represented type (`int`, `hex`, or
+  `binary`) and `e` evaluates to `v`, then `v` has type `τ`. Because the
+  three int-represented types share the `Int` carrier, the evaluated
+  value inhabits whichever of them the type system assigned.
+
+  This lifts the previous `τ = int` mechanisation to the full int-
+  represented family; `float`/`rational`/`complex`/`symbolic` remain
+  `stated-unproven` at the value level pending their own evaluation
+  models (they do not share the `Int` carrier).
 -/
 theorem type_preservation (Γ : TypeEnv) (e : DataExpr) (τ : JtvType) (σ : State)
-    (_h : DataTyping Γ e τ) :
-    -- For integer types, the result is an integer
+    (_h : DataTyping Γ e τ) (hτ : τ.isIntRepr) :
+    TypedValue (evalDataExpr e σ) τ := by
+  cases τ <;>
+    first
+      | exact TypedValue.int (evalDataExpr e σ)
+      | exact TypedValue.hex (evalDataExpr e σ)
+      | exact TypedValue.binary (evalDataExpr e σ)
+      | simp only [JtvType.isIntRepr] at hτ
+
+/--
+  **Corollary**: the original `τ = int` preservation statement, recovered
+  from the int-represented-family theorem. Kept so the `int`-only claim
+  remains directly citable.
+-/
+theorem type_preservation_int (Γ : TypeEnv) (e : DataExpr) (τ : JtvType) (σ : State)
+    (h : DataTyping Γ e τ) :
     τ = JtvType.int → TypedValue (evalDataExpr e σ) JtvType.int := by
-  intro _hτ
-  exact TypedValue.int (evalDataExpr e σ)
+  intro hτ
+  subst hτ
+  exact type_preservation Γ e JtvType.int σ h trivial
 
 /--
   **Theorem (Progress for Typed Terms)**:

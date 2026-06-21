@@ -30,12 +30,15 @@ and the other document is a bug.
 | Claimed somewhere but neither mechanized nor written down rigorously.
 |===
 
-== Mechanization invariant (checked, 2026-06-04)
+== Mechanization invariant (checked, 2026-06-04; re-verified 2026-06-21)
 
-`grep -rc 'sorry\|admit\|axiom' jtv_proofs/*.lean` ⇒ *0* across all eight
+`grep -rnwE 'sorry|admit|axiom' jtv_proofs/*.lean` ⇒ *0* across all eight
 libraries. The proof layer is `sorry`-free, and `lake build` is green from a
 clean tree. The `proof-regression.yml` workflow runs `lake build` on every
-change to `jtv_proofs/**`.
+change to `jtv_proofs/**`. Re-verified locally 2026-06-21 under the pinned
+`leanprover/lean4:v4.12.0` toolchain (full `lake build` exit 0); the
+generalised `type_preservation` / `type_preservation_int` each
+`#print axioms` ⇒ *does not depend on any axioms*.
 
 NO-VACUITY invariant (added 2026-06-04): the suite also contains *no
 `True`-typed "believeme" theorems*. A previous pass had eight theorems whose
@@ -53,12 +56,17 @@ stale* — `data_terminates` is a complete structural induction.
 
 The denotational/operational model (`evalDataExpr`) is over **`Int`** only. The
 seven number systems are present in `JtvTypes` as the `JtvType` enum plus typing
-rules (`addRational` / `addComplex` / `addSymbolic` / …), but their *evaluation*
-is not modelled, and `type_preservation` is mechanised **only for `τ = int`**.
-So: addition-only Data totality/determinism/algebra and the Echo/reversibility
-layer are proved over the integer model; rational/float/complex/hex/binary/
-symbolic semantics are `stated-unproven` at the value level. (This is orthogonal
-to v2 — Echo is representation-agnostic.)
+rules (`addRational` / `addComplex` / `addSymbolic` / …), but the carrier-distinct
+systems' *evaluation* is not modelled. `type_preservation` is mechanised for the
+whole **integer-represented family `{int, hex, binary}`** — these three share the
+`Int` runtime carrier (hex/binary *are* int-represented), so the generalised
+theorem, guarded by `JtvType.isIntRepr`, covers all three; it depends on **zero
+axioms**. `type_preservation_int` recovers the original `τ = int` statement as a
+corollary. So: addition-only Data totality/determinism/algebra, int-represented-
+family type preservation, and the Echo/reversibility layer are proved over the
+integer model; `rational`/`float`/`complex`/`symbolic` semantics remain
+`stated-unproven` at the value level (they need distinct value carriers). (This is
+orthogonal to v2 — Echo is representation-agnostic.)
 
 == Believeme remediation (2026-06-04)
 
@@ -101,6 +109,7 @@ to v2 — Echo is representation-agnostic.)
 | `dataExpr_determinism` | JtvTheorems | `verified` | Data evaluation is a function.
 | `data_terminates` | JtvOperational | `verified` | Data reduction reaches a literal.
 | `data_is_pure` | JtvOperational | `verified` | Data steps preserve state (Harvard invariant).
+| `type_preservation` | JtvTypes | `verified` | Evaluated value inhabits its type, for the integer-represented family `{int, hex, binary}` (guarded by `isIntRepr`; zero axioms). `type_preservation_int` recovers `τ = int`.
 | `no_control_to_data_flow` | JtvSecurity | `verified` | Control cannot flow into Data.
 | `string_not_executable` | JtvSecurity | `verified` | Data is inert — evaluation yields an `Int` value, never a `ControlStmt` (injection impossibility, with `no_control_to_data_flow`).
 | `strong_normalization` | JtvExtended | `verified` | Data fragment strongly normalizing.
