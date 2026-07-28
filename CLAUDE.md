@@ -75,7 +75,7 @@ Specification in `docs/`:
 
 Must-read files for context:
 
-- `README_JTV.md` - Main project README
+- `README.adoc` - Main project README
 - `STATUS.adoc` - Current implementation status (canonical)
 - `docs/GRAMMAR_EVOLUTION.md` - v1 vs v2 separation rationale
 - `docs/QUANTUM_VISION.md` - Quantum computing abstraction
