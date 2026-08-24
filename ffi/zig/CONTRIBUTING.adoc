@@ -1,7 +1,7 @@
 == Clone the repository
 
-git clone https://github.com/hyperpolymath/jtv-playground.git cd
-jtv-playground
+git clone https://github.com/hyperpolymath/julia-zig-ffi.git cd
+julia-zig-ffi
 
 == Using Nix (recommended for reproducibility)
 
@@ -9,7 +9,7 @@ nix develop
 
 == Or using toolbox/distrobox
 
-toolbox create jtv-playground-dev toolbox enter jtv-playground-dev #
+toolbox create julia-zig-ffi-dev toolbox enter julia-zig-ffi-dev #
 Install dependencies manually
 
 == Verify setup
@@ -22,16 +22,16 @@ suite
 ### Repository Structure
 ....
 
-jtv-playground/ ├── src/ # Source code (Perimeter 1-2) ├── lib/ #
-Library code (Perimeter 1-2) ├── extensions/ # Extensions (Perimeter 2)
-├── plugins/ # Plugins (Perimeter 2) ├── tools/ # Tooling (Perimeter 2)
-├── docs/ # Documentation (Perimeter 3) │ ├── architecture/ # ADRs,
-specs (Perimeter 2) │ └── proposals/ # RFCs (Perimeter 3) ├── examples/
-# Examples (Perimeter 3) ├── spec/ # Spec tests (Perimeter 3) ├── tests/
-# Test suite (Perimeter 2-3) ├── .well-known/ # Protocol files
-(Perimeter 1-3) ├── .github/ # GitHub config (Perimeter 1) │ ├──
-ISSUE_TEMPLATE/ │ └── workflows/ ├── CHANGELOG.md ├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md # This file ├── GOVERNANCE.md ├── LICENSE ├──
+julia-zig-ffi/ ├── src/ # Source code (Perimeter 1-2) ├── lib/ # Library
+code (Perimeter 1-2) ├── extensions/ # Extensions (Perimeter 2) ├──
+plugins/ # Plugins (Perimeter 2) ├── tools/ # Tooling (Perimeter 2) ├──
+docs/ # Documentation (Perimeter 3) │ ├── architecture/ # ADRs, specs
+(Perimeter 2) │ └── proposals/ # RFCs (Perimeter 3) ├── examples/ #
+Examples (Perimeter 3) ├── spec/ # Spec tests (Perimeter 3) ├── tests/ #
+Test suite (Perimeter 2-3) ├── .well-known/ # Protocol files (Perimeter
+1-3) ├── .github/ # GitHub config (Perimeter 1) │ ├── ISSUE_TEMPLATE/ │
+└── workflows/ ├── CHANGELOG.md ├── CODE_OF_CONDUCT.md ├──
+CONTRIBUTING.md # This file ├── GOVERNANCE.md ├── LICENSE ├──
 MAINTAINERS.md ├── README.adoc ├── SECURITY.md ├── flake.nix # Nix flake
 (Perimeter 1) └── Justfile # Task runner (Perimeter 1)
 
@@ -78,10 +78,10 @@ Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md) an
 
 Look for issues labelled:
 
-- [`good first issue`](https://github.com/hyperpolymath/jtv-playground/labels/good%20first%20issue) — Simple Perimeter 3 tasks
-- [`help wanted`](https://github.com/hyperpolymath/jtv-playground/labels/help%20wanted) — Community help needed
-- [`documentation`](https://github.com/hyperpolymath/jtv-playground/labels/documentation) — Docs improvements
-- [`perimeter-3`](https://github.com/hyperpolymath/jtv-playground/labels/perimeter-3) — Community sandbox scope
+- [`good first issue`](https://github.com/hyperpolymath/julia-zig-ffi/labels/good%20first%20issue) — Simple Perimeter 3 tasks
+- [`help wanted`](https://github.com/hyperpolymath/julia-zig-ffi/labels/help%20wanted) — Community help needed
+- [`documentation`](https://github.com/hyperpolymath/julia-zig-ffi/labels/documentation) — Docs improvements
+- [`perimeter-3`](https://github.com/hyperpolymath/julia-zig-ffi/labels/perimeter-3) — Community sandbox scope
 
 ---
 

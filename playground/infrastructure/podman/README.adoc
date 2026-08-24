@@ -1,0 +1,646 @@
+== Podman Containerization Setup
+
+Rootless container orchestration with Podman (Docker alternative).
+
+=== Why Podman?
+
+* *Daemonless*: No central daemon, more secure
+* *Rootless*: Run containers without root privileges
+* *Docker-compatible*: Drop-in replacement for Docker
+* *Pod support*: Native Kubernetes pod concepts
+* *Systemd integration*: Better service management
+
+=== Prerequisites
+
+[source,bash]
+----
+# Install Podman (Fedora/RHEL)
+sudo dnf install podman podman-compose
+
+# Install Podman (Ubuntu/Debian)
+sudo apt install podman podman-compose
+
+# Install Podman (macOS)
+brew install podman
+podman machine init
+podman machine start
+----
+
+=== Project Structure
+
+....
+infrastructure/
+├── containers/
+│   ├── web/
+│   │   └── Containerfile
+│   ├── api/
+│   │   └── Containerfile
+│   ├── arangodb/
+│   │   └── Containerfile
+│   └── julia/
+│       └── Containerfile
+├── pods/
+│   └── app-pod.yaml
+├── compose/
+│   └── podman-compose.yml
+└── scripts/
+    ├── build.sh
+    ├── deploy.sh
+    └── cleanup.sh
+....
+
+=== Containerfiles
+
+==== Web Application (Svelte)
+
+[source,dockerfile]
+----
+# Containerfile for Svelte frontend
+FROM docker.io/library/node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Expose port
+EXPOSE 5173
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:5173 || exit 1
+
+# Start application
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0"]
+----
+
+==== API Service (Deno)
+
+[source,dockerfile]
+----
+# Containerfile for Deno API
+FROM docker.io/denoland/deno:alpine
+
+WORKDIR /app
+
+# Copy application
+COPY . .
+
+# Cache dependencies
+RUN deno cache --lock=deno.lock src/main.ts
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD deno run --allow-net health_check.ts || exit 1
+
+# Run application
+CMD ["deno", "run", "--allow-net", "--allow-read", "--allow-env", "src/main.ts"]
+----
+
+==== ArangoDB
+
+[source,dockerfile]
+----
+# Containerfile for ArangoDB
+FROM docker.io/arangodb/arangodb:latest
+
+# Environment variables
+ENV ARANGO_ROOT_PASSWORD=rootpassword
+ENV ARANGO_NO_AUTH=0
+
+# Expose ports
+EXPOSE 8529
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8529/_api/version || exit 1
+
+# Volume for data persistence
+VOLUME ["/var/lib/arangodb3"]
+----
+
+==== Julia Worker
+
+[source,dockerfile]
+----
+# Containerfile for Julia worker
+FROM docker.io/library/julia:1.9-alpine
+
+WORKDIR /app
+
+# Copy Project.toml and Manifest.toml
+COPY Project.toml Manifest.toml ./
+
+# Install dependencies
+RUN julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+# Copy application
+COPY . .
+
+# Precompile
+RUN julia --project=. -e 'using Pkg; Pkg.precompile()'
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD julia health_check.jl || exit 1
+
+# Run application
+CMD ["julia", "--project=.", "src/worker.jl"]
+----
+
+=== Podman Compose
+
+[source,yaml]
+----
+version: '3'
+
+services:
+  web:
+    build:
+      context: ../experiments/frontend-demos/svelte-app
+      dockerfile: Containerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  api:
+    build:
+      context: ../src/backend/deno-api
+      dockerfile: Containerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ARANGO_URL=http://arangodb:8529
+      - ARANGO_DB=playground
+      - ARANGO_USER=root
+      - ARANGO_PASSWORD=rootpassword
+    depends_on:
+      - arangodb
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - api-logs:/app/logs
+
+  arangodb:
+    build:
+      context: ./containers/arangodb
+      dockerfile: Containerfile
+    ports:
+      - "8529:8529"
+    environment:
+      - ARANGO_ROOT_PASSWORD=rootpassword
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - arango-data:/var/lib/arangodb3
+      - arango-apps:/var/lib/arangodb3-apps
+
+  julia-worker:
+    build:
+      context: ../experiments/julia-demos/worker
+      dockerfile: Containerfile
+    environment:
+      - ARANGO_URL=http://arangodb:8529
+      - WORKER_THREADS=4
+    depends_on:
+      - arangodb
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  arango-data:
+  arango-apps:
+  api-logs:
+----
+
+=== Podman Pod (Kubernetes-style)
+
+[source,yaml]
+----
+# app-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+  labels:
+    app: playground
+spec:
+  containers:
+    - name: web
+      image: localhost/playground-web:latest
+      ports:
+        - containerPort: 5173
+          hostPort: 5173
+      env:
+        - name: API_URL
+          value: "http://localhost:8000"
+
+    - name: api
+      image: localhost/playground-api:latest
+      ports:
+        - containerPort: 8000
+          hostPort: 8000
+      env:
+        - name: ARANGO_URL
+          value: "http://localhost:8529"
+
+    - name: arangodb
+      image: docker.io/arangodb/arangodb:latest
+      ports:
+        - containerPort: 8529
+          hostPort: 8529
+      env:
+        - name: ARANGO_ROOT_PASSWORD
+          value: "rootpassword"
+      volumeMounts:
+        - name: arango-data
+          mountPath: /var/lib/arangodb3
+
+  volumes:
+    - name: arango-data
+      persistentVolumeClaim:
+        claimName: arango-pvc
+----
+
+=== Build Scripts
+
+==== build.sh
+
+[source,bash]
+----
+#!/bin/bash
+
+set -e
+
+echo "Building Podman containers..."
+
+# Build web container
+echo "Building web container..."
+podman build -t playground-web:latest \
+  -f containers/web/Containerfile \
+  ../experiments/frontend-demos/svelte-app
+
+# Build API container
+echo "Building API container..."
+podman build -t playground-api:latest \
+  -f containers/api/Containerfile \
+  ../src/backend/deno-api
+
+# Build ArangoDB container (if custom)
+echo "Building ArangoDB container..."
+podman build -t playground-arangodb:latest \
+  -f containers/arangodb/Containerfile \
+  ./containers/arangodb
+
+# Build Julia worker
+echo "Building Julia worker..."
+podman build -t playground-julia:latest \
+  -f containers/julia/Containerfile \
+  ../experiments/julia-demos/worker
+
+echo "All containers built successfully!"
+
+# List images
+podman images | grep playground
+----
+
+==== deploy.sh
+
+[source,bash]
+----
+#!/bin/bash
+
+set -e
+
+echo "Deploying with Podman..."
+
+# Option 1: Using podman-compose
+if command -v podman-compose &> /dev/null; then
+    echo "Using podman-compose..."
+    podman-compose -f compose/podman-compose.yml up -d
+else
+    echo "podman-compose not found, using pod..."
+
+    # Option 2: Using Podman pod
+    podman play kube pods/app-pod.yaml
+fi
+
+echo "Deployment complete!"
+
+# Show running containers
+podman ps
+
+# Show pod status (if using pod)
+podman pod ps
+----
+
+==== cleanup.sh
+
+[source,bash]
+----
+#!/bin/bash
+
+echo "Cleaning up Podman resources..."
+
+# Stop and remove containers
+podman-compose -f compose/podman-compose.yml down 2>/dev/null || true
+
+# Or stop pod
+podman pod stop app-pod 2>/dev/null || true
+podman pod rm app-pod 2>/dev/null || true
+
+# Remove containers
+podman rm -f $(podman ps -aq) 2>/dev/null || true
+
+# Remove images
+podman rmi -f playground-web playground-api playground-arangodb playground-julia 2>/dev/null || true
+
+# Prune system
+podman system prune -f
+
+# Remove volumes (careful!)
+# podman volume prune -f
+
+echo "Cleanup complete!"
+----
+
+=== Usage
+
+==== Basic Operations
+
+[source,bash]
+----
+# Build all containers
+./scripts/build.sh
+
+# Deploy application
+./scripts/deploy.sh
+
+# View logs
+podman-compose logs -f
+
+# Or for specific service
+podman logs -f playground-api
+
+# Stop everything
+podman-compose down
+
+# Cleanup
+./scripts/cleanup.sh
+----
+
+==== Rootless Podman
+
+[source,bash]
+----
+# Run as non-root user
+podman run --rm -d \
+  --name my-web \
+  -p 8080:8080 \
+  playground-web:latest
+
+# Check rootless status
+podman info | grep rootless
+
+# Manage as systemd user service
+mkdir -p ~/.config/systemd/user
+podman generate systemd --new --name my-web > ~/.config/systemd/user/my-web.service
+systemctl --user enable my-web
+systemctl --user start my-web
+----
+
+==== Pod Management
+
+[source,bash]
+----
+# Create pod
+podman pod create --name app-pod -p 8000:8000 -p 5173:5173 -p 8529:8529
+
+# Run containers in pod
+podman run -d --pod app-pod --name api playground-api
+podman run -d --pod app-pod --name web playground-web
+podman run -d --pod app-pod --name db playground-arangodb
+
+# Inspect pod
+podman pod inspect app-pod
+
+# Stop pod
+podman pod stop app-pod
+
+# Remove pod
+podman pod rm app-pod
+----
+
+==== Networking
+
+[source,bash]
+----
+# Create custom network
+podman network create app-network
+
+# Run with custom network
+podman run -d --network app-network --name api playground-api
+
+# Inspect network
+podman network inspect app-network
+
+# Connect container to network
+podman network connect app-network my-container
+----
+
+==== Volumes
+
+[source,bash]
+----
+# Create named volume
+podman volume create arango-data
+
+# Use volume
+podman run -d \
+  -v arango-data:/var/lib/arangodb3 \
+  playground-arangodb
+
+# Backup volume
+podman run --rm \
+  -v arango-data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/arango-backup.tar.gz /data
+
+# Restore volume
+podman run --rm \
+  -v arango-data:/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/arango-backup.tar.gz -C /data
+----
+
+=== Systemd Integration
+
+==== Generate systemd units
+
+[source,bash]
+----
+# Generate for container
+podman generate systemd --new --name my-api > my-api.service
+
+# Generate for pod
+podman generate systemd --new --name app-pod > app-pod.service
+
+# Install as user service
+cp app-pod.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable app-pod
+systemctl --user start app-pod
+
+# Check status
+systemctl --user status app-pod
+----
+
+==== Auto-start on boot
+
+[source,bash]
+----
+# Enable linger for user
+loginctl enable-linger $USER
+
+# Now user services start at boot without login
+----
+
+=== Health Checks & Monitoring
+
+[source,bash]
+----
+# Check health status
+podman healthcheck run my-api
+
+# View health status
+podman ps --format "{{.Names}} {{.Status}}"
+
+# Monitor resources
+podman stats
+
+# Inspect container
+podman inspect my-api
+
+# View events
+podman events
+----
+
+=== Security
+
+==== Rootless containers
+
+[source,bash]
+----
+# Already rootless by default for non-root users
+podman run --rm alpine id
+# uid=0(root) gid=0(root) groups=0(root)
+# But this is namespaced root, not host root!
+----
+
+==== SELinux
+
+[source,bash]
+----
+# Enable SELinux labels
+podman run --security-opt label=type:container_runtime_t my-image
+
+# Disable SELinux (not recommended)
+podman run --security-opt label=disable my-image
+----
+
+==== Secrets management
+
+[source,bash]
+----
+# Create secret
+echo "my-secret-value" | podman secret create my-secret -
+
+# Use secret
+podman run --secret my-secret my-image
+
+# Access in container
+cat /run/secrets/my-secret
+----
+
+=== Migration from Docker
+
+[source,bash]
+----
+# Alias podman as docker
+alias docker=podman
+alias docker-compose=podman-compose
+
+# Or symlink
+sudo ln -s /usr/bin/podman /usr/local/bin/docker
+
+# Most docker commands work as-is
+podman run -d -p 8080:80 nginx
+podman ps
+podman logs <container>
+podman exec -it <container> /bin/sh
+----
+
+=== Best Practices
+
+[arabic]
+. *Use rootless when possible*
+. *Implement health checks*
+. *Use multi-stage builds*
+. *Pin image versions*
+. *Minimize layers*
+. *Use .containerignore*
+. *Set resource limits*
+. *Use systemd for production*
+
+=== Troubleshooting
+
+[source,bash]
+----
+# Check Podman info
+podman info
+
+# Debug networking
+podman network ls
+podman port <container>
+
+# Check logs
+podman logs --tail 100 -f <container>
+
+# Enter container
+podman exec -it <container> /bin/sh
+
+# Check resource usage
+podman stats --no-stream
+
+# Reset Podman
+podman system reset
+----
+
+=== License
+
+MIT License

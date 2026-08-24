@@ -1,128 +1,78 @@
-// SPDX-License-Identifier: CC-BY-SA-4.0
-= Changelog
+== Changelog
 
-All notable changes to JtV will be documented in this file.
+All notable changes to `+jtv+` will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+This file is generated from conventional commits by the
+https://github.com/hyperpolymath/standards/blob/main/.github/workflows/changelog-reusable.yml[`+changelog-reusable.yml+`]
+workflow (`+hyperpolymath/standards#206+`). Adopt the workflow in this
+repo’s CI to keep this file in sync automatically — see
+https://github.com/hyperpolymath/standards/blob/main/templates/cliff.toml[`+templates/cliff.toml+`]
+for the canonical config.
 
-== [Unreleased]
+The format follows https://keepachangelog.com/en/1.1.0/[Keep a
+Changelog]; this project aims to follow
+https://semver.org/spec/v2.0.0.html[Semantic Versioning].
 
-=== Planned for v0.2.0
-- WASM code generation completion
-- LSP server for editor support
-- Type inference
-- Performance optimizations
+=== [Unreleased]
 
-== [0.1.0] - 2025-01-22
+==== Added
 
-=== Added
-- **Core Language**
-  - Complete Pest parser for Harvard Architecture (Control + Data languages)
-  - Full AST implementation with all node types
-  - Interpreter with execution engine
-  - 7 number systems: Int, Float, Rational, Complex, Hex, Binary, Symbolic
-  - Control flow: if/else, while, for, return
-  - Function declarations with purity markers (@pure, @total)
-  - Module system (basic)
-  - Import statements
-  - Error handling with detailed messages
+* feat(jtv-cli): add `+jtv fmt+` subcommand
+* feat(wasm): WASM extern-coproc JS bridge — register_coproc_impl +
+list_coproc_decls
+* feat(jtv-core): complete C2 reversibility — token-passing
+reverse/abandon
+* feat(jtv): v2 reversibility C1 Phase 1 — execute_inverse + 7 RV tests
+* feat(jtv): Phase A — Zig FFI + Idris2 ABI lowering pass for live
+coproc decls
+* feat(coproc): Phase 4 conformance corpus + jtv-cli fix
+* feat(jtv): Phase 2 — PataCL coproc integration (12/12 tests)
+* feat(crg): add crg-grade and crg-badge justfile recipes
+* feat: add comprehensive test suite (339 tests),
+property/mutation/compat tests
+* feat(v2): wire ReversibleInterpreter into main eval_reverse_block
 
-- **Standard Library** (4 modules, 105+ functions)
-  - `prelude.jtv`: Basic operations (abs, max, min, list ops)
-  - `safe_math.jtv`: Checked arithmetic, GCD, primes, factorial
-  - `collections.jtv`: List operations, sorting, searching, statistics
-  - `result.jtv`: Error handling without exceptions
+==== Fixed
 
-- **Examples** (17 programs)
-  - 5 basic: hello addition, number systems, functions, loops, conditionals
-  - 5 advanced: fibonacci, matrices, state machines, sorting, reversible computing
-  - 5 smart contracts: NFT marketplace, DEX, DAO, multisig wallet, ERC-20 token
-  - 2 integrations: Python and JavaScript examples
+* fix(ci): pin upload-artifact to valid SHA in hypatia-scan.yml (Refs
+standards#48) (#16)
+* fix(ci): bump a2ml/k9-validate-action pins to canonical (#14)
+* fix(ci): sync hypatia-scan.yml to canonical (#13)
+* fix(ci): adopt canonical hypatia-scan.yml (#11)
+* fix(ci): Phase-2 fleet submission must not fail the security gate
+(#10)
+* fix(ci): hypatia-scan workdir ($\{\{ env.HOME }} resolves empty) (#9)
+* fix(ci): hypatia-scan.yml – –exit-zero + GITHUB_TOKEN
+(hyperpolymath/hypatia#213) (#6)
+* fix(ci): rsr-antipattern duplicate heredoc + setup-beam ubuntu24 (#7)
+* fix(jtv): sweep .expect("`TODO: handle error`") — 108 sites cleared
+* fix: replace Obj.magic with type-safe Vscode.get binding
 
-- **Tooling**
-  - VS Code extension (syntax highlighting, 10+ snippets)
-  - CLI tool (`jtv run`, `parse`, `check`, `analyze`)
-  - TypeScript/Deno analyzer for legacy code analysis
-  - Justfile with 25+ build commands
+==== Documentation
 
-- **Testing**
-  - 25+ parser tests
-  - 10+ interpreter integration tests
-  - Parser performance benchmarks
-  - Interpreter performance benchmarks
+* docs(6a2): update STATE.a2ml — coproc implementation unblocked + done
+* docs(readme): add SPDX header, OSSF and GWF badges
+* docs: add post-audit status report for M5 sweep
+* docs(crg): add Current Grade badge anchor to READINESS.md
+* docs: add TOPOLOGY.md
+* docs: add TEST-NEEDS.md (CRG C)
 
-- **Documentation** (15,000+ words)
-  - README_JTV.md (comprehensive overview)
-  - QUICK_START.md (getting started guide)
-  - ROADMAP.md (development plan)
-  - GRAMMAR_EVOLUTION.md (v1 vs v2 separation)
-  - QUANTUM_VISION.md (reversible computing vision)
-  - CONTRIBUTING.md (contribution guidelines)
-  - STATUS.md (implementation tracking)
-  - CLAUDE.md (AI assistant handover)
+==== CI
 
-- **WASM Support**
-  - wasm-bindgen integration
-  - Browser and Node.js compatible bindings
-  - JavaScript API (run, parse, get_variable, enable_trace)
+* ci: redistribute concurrency-cancel guard to read-only check workflows
+(#17)
+* ci: bump actions/upload-artifact SHA to current v4 (#5)
+* ci: SHA-pin hyperpolymath validate-actions in dogfood-gate
+* ci: fix workflow-linter YAML parse error + self-flag bug
+* ci(antipattern): fix top-level dir + benchmark/lsp filename matching
+(#4)
 
-- **RSR Compliance**
-  - SECURITY.md (security policy)
-  - CODE_OF_CONDUCT.md (Contributor Covenant 2.1)
-  - MAINTAINERS.md (governance structure)
-  - CHANGELOG.md (this file)
-  - .well-known/ directory (security.txt, ai.txt, humans.txt)
-  - Dual licensing (GPL-3.0 + MIT)
-  - TPCF perimeter definitions
+=== Pre-history
 
-=== Security
-- Code injection grammatically impossible (Harvard Architecture enforcement)
-- No integer overflow in Data Language (checked arithmetic)
-- No reentrancy attacks (atomic operations)
-- Guaranteed termination for pure functions (provable Totality)
+Prior commits to this file’s introduction are recorded in git history
+but not formally classified into Keep-a-Changelog sections. To backfill,
+run `+git cliff -o CHANGELOG.md+` locally using the canonical
+https://github.com/hyperpolymath/standards/blob/main/templates/cliff.toml[`+cliff.toml+`]
+— this is one-shot mechanical work.
 
-=== Performance
-- Target: 5-10x faster than Python for math-heavy functions
-- Target: 3-5x faster than JavaScript for pure computations
-- WASM compilation for near-native speed
-- Parallel execution of pure functions
-
-== [0.0.1] - 2025-01-21
-
-=== Added
-- Initial project structure
-- Basic README
-- GPL-3.0 LICENSE
-- Pseudocode prototype (`julia-viper` file)
-
----
-
-== Version History
-
-- **v0.1.0**: First public release with working parser, interpreter, examples
-- **v0.0.1**: Project inception
-
-== Upgrade Guide
-
-=== From v0.0.1 to v0.1.0
-
-This is the first functional release. Migration not applicable.
-
-== Breaking Changes
-
-None yet (first release).
-
-== Deprecations
-
-None yet (first release).
-
-== Security Advisories
-
-None yet. See SECURITY.md for reporting vulnerabilities.
-
----
-
-For older versions, see [GitHub Releases](https://github.com/Hyperpolymath/jtv/releases).
-
-Last updated: 2025-01-22
+'''''
