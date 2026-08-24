@@ -1,497 +1,60 @@
-= Governance Model
-:toc: left
-:toclevels: 3
-:icons: font
+== Governance
 
-== Overview
+=== Overview
 
-JtV follows a meritocratic governance model based on the Tri-Perimeter Contribution Framework (TPCF). This document describes decision-making processes, roles, and responsibilities.
+This project is governed by the following principles and structures to
+ensure transparent, inclusive, and effective decision-making.
 
-== Current State
+=== Roles and Responsibilities
 
-[IMPORTANT]
-====
-*JtV v0.1.0* is currently in *Perimeter 3 (Community Sandbox)* mode.
+==== Maintainers
 
-We are actively seeking founding maintainers and trusted contributors.
-====
+Maintainers are responsible for: - Reviewing and merging pull requests -
+Managing releases and versioning - Ensuring code quality and standards -
+Triaging issues and bug reports - Community engagement and support
 
-== Governance Structure
+==== Contributors
 
-=== Three-Tiered Model
+Contributors are expected to: - Follow the code of conduct - Submit
+well-documented pull requests - Write tests for new functionality -
+Maintain existing tests - Update documentation as needed
 
-JtV uses graduated trust perimeters to balance security with community participation:
+=== Decision Making
 
-[cols="1,2,2,2"]
-|===
-| Perimeter | Access Level | Write Permissions | Current Status
+==== Minor Changes
 
-| P1 (Core)
-| Maintainers only
-| Direct commit to `main`
-| Not yet established
+* Can be made by any maintainer
+* Include bug fixes, documentation updates, dependency updates
 
-| P2 (Trusted)
-| Vetted contributors
-| Feature branches, requires review
-| Not yet established
+==== Major Changes
 
-| P3 (Community)
-| Anyone
-| Fork and PR workflow
-| *CURRENT*
-|===
+* Require discussion in issues or pull requests
+* Include new features, architectural changes, API changes
+* Need approval from at least 2 maintainers
 
-See link:TPCF.md[TPCF.md] for complete perimeter definitions and requirements.
+==== Breaking Changes
 
-== Roles & Responsibilities
+* Require RFC (Request for Comments) process
+* Need approval from majority of maintainers
+* Must include migration guide
 
-=== Perimeter 1: Core Maintainers
+=== Code of Conduct
 
-*Requirements*:
+All participants are expected to follow our Code of Conduct. Violations
+can be reported to the maintainers.
 
-* 6+ months as P2 contributor
-* 50+ merged PRs with significant impact
-* Demonstrated security awareness
-* Unanimous approval from existing P1 maintainers
-* Background discussion with existing team
+=== Communication
 
-*Responsibilities*:
+* *Issues*: For bug reports and feature requests
+* *Discussions*: For questions and general discussion
+* *Pull Requests*: For code contributions
 
-* Code review for all PRs
-* Security vulnerability triage
-* Release creation and signing
-* Infrastructure management
-* Conflict resolution
-* Strategic direction
-* Grant/funding applications
+=== Licensing
 
-*Permissions*:
+All contributions are made under the terms of the repository’s LICENSE
+file. By submitting a pull request, you agree to license your
+contributions accordingly.
 
-* Direct commit to `main` (emergency only)
-* Merge PRs after approval
-* Create releases and tags
-* Manage CI/CD secrets
-* Access to domain/infrastructure
+'''''
 
-*Time Commitment*: 10+ hours/week
-
-*Current Members*: None (seeking founding maintainers)
-
-=== Perimeter 2: Trusted Contributors
-
-*Requirements*:
-
-* 3+ months active contribution
-* 10+ merged PRs
-* Positive code review history
-* Demonstrated understanding of project values
-* Nomination by P1 maintainer
-* Simple majority approval from P1
-
-*Responsibilities*:
-
-* Review community PRs
-* Triage issues
-* Mentor new contributors
-* Maintain component quality
-* Attend monthly syncs (optional)
-
-*Permissions*:
-
-* Approve PRs (cannot merge to `main` without P1 review)
-* Triage and label issues
-* Access to trusted contributors Discord
-
-*Time Commitment*: 5+ hours/week
-
-*Current Members*: None (seeking founding trusted contributors)
-
-=== Perimeter 3: Community Contributors
-
-*Requirements*:
-
-* GitHub account
-* Agree to link:CODE_OF_CONDUCT.adoc[Code of Conduct]
-* Read link:CONTRIBUTING.adoc[CONTRIBUTING.adoc]
-
-*Responsibilities*:
-
-* Follow Code of Conduct
-* Provide constructive feedback
-* Test and report bugs
-* Suggest improvements
-* Help other community members
-
-*Permissions*:
-
-* Fork and submit PRs
-* File issues
-* Participate in discussions
-* Suggest documentation edits
-
-*Time Commitment*: No minimum
-
-*Current Members*: Open to all
-
-== Decision-Making Process
-
-=== Everyday Decisions
-
-*Scope*: Bug fixes, documentation, code style, minor features
-
-*Process*:
-
-. Contributor submits PR
-. Automated checks run
-. P2 or P1 reviewer provides feedback
-. Contributor addresses feedback
-. P1 maintainer approves and merges
-
-*Timeline*: 2-7 days
-
-=== Feature Decisions
-
-*Scope*: New language features, API changes, architectural decisions
-
-*Process*:
-
-. Proposal submitted as GitHub Issue with "RFC" label
-. Community discussion (1-2 weeks)
-. P1 maintainers discuss in private meeting
-. Decision announced publicly with rationale
-. Implementation PRs proceed
-
-*Timeline*: 2-4 weeks
-
-=== Strategic Decisions
-
-*Scope*: Roadmap, funding, partnerships, major refactoring
-
-*Process*:
-
-. P1 maintainer proposes in maintainers mailing list
-. Discussion period (2-4 weeks)
-. Simple majority vote of P1 maintainers
-. Public announcement with rationale
-
-*Timeline*: 1-2 months
-
-=== Emergency Decisions
-
-*Scope*: Security vulnerabilities, critical bugs, infrastructure outages
-
-*Process*:
-
-. Any P1 maintainer can invoke emergency mode
-. Fix implemented immediately
-. Other P1 maintainers notified within 24 hours
-. Retrospective held within 1 week
-. Process improvements documented
-
-*Timeline*: Immediate
-
-== Voting Procedures
-
-=== Voting Eligibility
-
-* *P1 Decisions*: Only P1 maintainers vote
-* *P2 Decisions*: P2 contributors have advisory vote, P1 decides
-* *P3 Input*: Community input via discussions, no formal vote
-
-=== Voting Thresholds
-
-[cols="2,1,1"]
-|===
-| Decision Type | Threshold | Quorum
-
-| Everyday (PRs)
-| 1 approval (P1)
-| N/A
-
-| Feature proposals
-| Simple majority (P1)
-| 50% of P1
-
-| Strategic changes
-| Simple majority (P1)
-| 66% of P1
-
-| P1 membership
-| Unanimous (P1)
-| 100% of P1
-
-| Emergency actions
-| 1 P1 can act
-| Ratified within 1 week
-|===
-
-=== Voting Process
-
-. Proposal clearly documented
-. Discussion period (varies by type)
-. Vote called by any P1 maintainer
-. Voting window: 7 days for normal, 72 hours for urgent
-. Results announced publicly with rationale
-
-=== Conflicts of Interest
-
-Maintainers must recuse themselves from votes where they have conflicts:
-
-* Financial interest in outcome
-* Employer relationship
-* Close personal relationship with proposer
-* Prior public commitment to position
-
-== Trust Escalation
-
-=== P3 → P2 (Community → Trusted)
-
-*Process*:
-
-. Self-nomination or P1/P2 nomination
-. Evidence: Link to 10+ quality PRs
-. Interview: 30-minute video call with P1 maintainer
-. Vote: Simple majority of P1 maintainers
-. Announcement: Public recognition
-. Access: Added to `trusted-contributors` team
-. Onboarding: 2-week mentorship
-
-*Timeline*: 2-4 weeks from nomination to decision
-
-=== P2 → P1 (Trusted → Core)
-
-*Process*:
-
-. Nomination: Must be from existing P1 maintainer
-. Evidence: 50+ quality PRs, 6+ months P2 tenure
-. Background: Private discussion of long-term commitment
-. Vote: Unanimous approval required
-. Announcement: Public recognition
-. Access: Added to `maintainers` team, granted signing keys
-. Onboarding: 1-month mentorship
-
-*Timeline*: 1-2 months from nomination to decision
-
-== Trust De-Escalation
-
-=== Inactive Contributors
-
-* *P2 Inactive*: No activity for 6 months → moved to P3
-* *P1 Inactive*: No activity for 12 months → moved to emeritus
-* *Re-activation*: Can re-apply with simplified process
-
-=== Code of Conduct Violations
-
-* *Minor*: Warning, temporary P3-only access (1-4 weeks)
-* *Moderate*: Suspension from P2/P1, moved to P3 (1-6 months)
-* *Severe*: Permanent ban from all perimeters
-
-See link:CODE_OF_CONDUCT.adoc[CODE_OF_CONDUCT.adoc] for enforcement procedures.
-
-=== Performance Issues
-
-If a P1/P2 member consistently:
-
-* Misses review deadlines
-* Makes poor technical decisions
-* Causes interpersonal conflicts
-
-*Process*:
-
-. Private discussion with individual
-. Performance improvement plan (30-90 days)
-. Re-evaluation
-. De-escalation or retention decision
-
-== Release Process
-
-=== Version Numbering
-
-Semantic versioning (SemVer 2.0.0):
-
-* *Major* (X.0.0): Breaking changes
-* *Minor* (0.X.0): New features, backward compatible
-* *Patch* (0.0.X): Bug fixes only
-
-=== Release Cadence
-
-* *Patch releases*: As needed (1-4 weeks)
-* *Minor releases*: Every 2-3 months
-* *Major releases*: When ready (6-12 months)
-
-=== Release Procedure
-
-. P1 maintainer proposes release
-. Release branch created (`release/vX.Y.Z`)
-. Final testing and bug fixes
-. CHANGELOG.md updated
-. Version numbers bumped
-. Signed tag created
-. Binaries built and published
-. Announcement posted
-. Release notes published
-
-*Timeline*: 1-2 weeks from branch to publication
-
-=== Security Releases
-
-. Private fix developed by P1 maintainers
-. Coordinated disclosure timeline set
-. Patch release prepared
-. Security advisory published
-. Release deployed
-. Post-mortem conducted
-
-*Timeline*: 24-96 hours from disclosure to release
-
-== Funding & Resources
-
-=== Current Resources
-
-* GitHub repository (free tier)
-* GitHub Actions CI/CD (free tier)
-* Domain registration (future)
-* Hosting (future)
-
-=== Funding Principles
-
-. *Transparency*: All funding sources and expenditures public
-. *Independence*: No single funder >50% of budget
-. *Mission alignment*: Funders must not compromise security mission
-. *Community benefit*: Funds used for infrastructure, not individual compensation
-
-=== Funding Sources (Future)
-
-* GitHub Sponsors
-* Open Collective
-* Research grants
-* Corporate sponsorships (with approval)
-* Conference sponsorships
-
-=== Spending Authority
-
-[cols="1,2,2"]
-|===
-| Amount | Approver | Process
-
-| <$100
-| Any P1
-| Post to transparency log
-
-| $100-$1000
-| Simple majority P1
-| Proposal + vote
-
-| >$1000
-| 2/3 majority P1
-| Detailed proposal + vote + public announcement
-|===
-
-== Communication Channels
-
-=== Public (P3+)
-
-* GitHub Issues: Bug reports, feature requests
-* GitHub Discussions: General questions, ideas
-* Public Discord (when available): Real-time chat
-
-=== Semi-Private (P2+)
-
-* Trusted contributors Discord
-* Monthly sync calls (recorded, summarized publicly)
-* Design docs review
-
-=== Private (P1)
-
-* Maintainers email list
-* Security discussions
-* Infrastructure access
-* Funding decisions
-
-== Trademarks & Assets
-
-=== Project Trademarks
-
-* "JtV" (name)
-* JtV logo (design)
-* Project mascot (when created)
-
-*Policy*:
-
-* Free use for project promotion
-* Requires permission for commercial use
-* Cannot imply endorsement without approval
-
-=== Digital Assets
-
-* Domain names: julia-viper.dev (future)
-* Social media accounts (future)
-* Package registry names (crates.io, npm)
-
-*Control*: Shared among P1 maintainers with documented recovery procedures
-
-== Amendments to Governance
-
-=== Process
-
-. Proposal submitted as GitHub Issue
-. Discussion period (4 weeks minimum)
-. Vote: 2/3 majority of P1 maintainers
-. Public announcement
-. Update GOVERNANCE.adoc
-. Effective date (2 weeks after approval)
-
-=== Historical Changes
-
-[cols="1,2,1"]
-|===
-| Version | Change | Date
-
-| 1.0
-| Initial governance model
-| 2025-01-22
-|===
-
-== Succession Planning
-
-=== Maintainer Departure
-
-When a P1 maintainer leaves:
-
-. Access revoked immediately (security)
-. Knowledge transfer to remaining P1s (2 weeks)
-. Responsibilities redistributed
-. New P1 recruitment if needed
-
-=== Project Continuity
-
-In the event all P1 maintainers become unavailable:
-
-. P2 contributors can nominate emergency maintainer
-. 2/3 vote of active P2 contributors
-. Temporary P1 access granted (3 months)
-. Permanent governance re-established
-
-== Contact
-
-For governance questions:
-
-* Email: governance@julia-viper.dev
-* See link:MAINTAINERS.md[MAINTAINERS.md] for current maintainer list
-
-== Acknowledgments
-
-This governance model draws inspiration from:
-
-* Rust Foundation governance
-* Python PEP process
-* Node.js governance model
-* Apache Software Foundation
-* TPCF framework
-
-'''
-
-Last updated: 2025-01-22 +
-Version: 1.0 +
-SPDX-License-Identifier: CC-BY-SA-4.0
+_Last updated: 2026-07-18_

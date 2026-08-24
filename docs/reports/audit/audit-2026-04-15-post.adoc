@@ -1,0 +1,49 @@
+== Post-audit Status Report: jtv
+
+* *Date:* 2026-04-15
+* *Status:* Complete (M5 Sweep)
+* *Repo:* /var/mnt/eclipse/repos/jtv
+
+=== Actions Taken
+
+[arabic]
+. Standard CI/Workflow Sweep: Added blocker workflows
+(`+ts-blocker.yml+`, `+npm-bun-blocker.yml+`) and updated `+Justfile+`.
+. SCM-to-A2ML Migration: Staged and committed deletions of legacy
+`+.scm+` files.
+. Lockfile Sweep: Generated and tracked missing lockfiles where
+manifests were present.
+. Static Analysis: Verified with `+panic-attack assail+`.
+
+=== Findings Summary
+
+* 1 unsafe blocks in crates/jtv-cli/src/rsr_check.rs
+* 10 unwrap/expect calls in crates/jtv-core/benches/interpreter_bench.rs
+* 6 unwrap/expect calls in crates/jtv-core/benches/parser_bench.rs
+* 8 unwrap/expect calls in crates/jtv-core/src/number.rs
+* 17 unwrap/expect calls in crates/jtv-core/src/wasm.rs
+* 9 unwrap/expect calls in crates/jtv-core/src/formatter.rs
+* 11 unwrap/expect calls in crates/jtv-core/src/interpreter.rs
+* 47 unwrap/expect calls in crates/jtv-core/src/parser.rs
+* 6 unwrap/expect calls in crates/jtv-core/src/purity.rs
+* 6 unwrap/expect calls in crates/jtv-core/src/reversible.rs
+* 18 unwrap/expect calls in crates/jtv-core/tests/parser_tests.rs
+* 11 unwrap/expect calls in crates/jtv-core/tests/pest_rule_tests.rs
+* 43 unwrap/expect calls in crates/jtv-core/tests/property_tests.rs
+* 10 unwrap/expect calls in crates/jtv-core/tests/contract_tests.rs
+* 26 unwrap/expect calls in crates/jtv-core/tests/compatibility_tests.rs
+* 7 unwrap/expect calls in crates/jtv-core/tests/conformance_tests.rs
+* 157 unwrap/expect calls in crates/jtv-core/tests/mutation_killers.rs
+* 1 ccall/FFI calls in ffi/zig/src/ZigFFI.jl
+* flake.nix declares inputs without narHash, rev pinning, or sibling
+flake.lock — dependency revision is unpinned in flake.nix
+* 4 ignore() calls in packages/jtv-analyzer/src/Main.res (may discard
+important results)
+* Possible hardcoded secret in
+playground/experiments/_attic/database-demos/arangodb-demo/queries.js
+* Possible hardcoded secret in
+playground/experiments/_attic/utilities/form-validation/validator.js
+
+=== Final Grade
+
+* *CRG Grade:* D (Promoted from E/X) - CI and lockfiles are in place.
