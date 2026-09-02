@@ -136,20 +136,7 @@ impl RsrChecker {
 
         self.check_file("LICENSE", "Primary License");
         self.check_file("LICENSE-MIT", "MIT License");
-        self.check_file("LICENSE-PALIMPSEST", "Palimpsest License");
         self.check_file("LICENSING.md", "Licensing Guide");
-
-        // Check dual licensing
-        if Path::new("LICENSE-MIT").exists() && Path::new("LICENSE-PALIMPSEST").exists() {
-            self.score += 1;
-            self.max_score += 1;
-            self.passed
-                .push("Dual licensing: MIT + Palimpsest".to_string());
-        } else {
-            self.max_score += 1;
-            self.warnings
-                .push("Dual licensing not fully implemented".to_string());
-        }
 
         println!();
     }
