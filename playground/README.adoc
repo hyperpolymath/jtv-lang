@@ -135,7 +135,7 @@ This is a controlled workbench. Before contributing:
 3. All new code goes in `jtv/` directory
 4. Route all operations through `just` recipes
 
-See link:CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
+See link:../.github/CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
 
 == License
 
