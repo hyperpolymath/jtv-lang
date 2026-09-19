@@ -315,7 +315,7 @@ Named after Julia Robinson (1919–1985), who proved that Hilbert's 10th problem
 * `docs/language/DESIGN-JTV-V2-REVERSIBILITY.md` — v2 reversibility design
 * `docs/design-decisions/0006-patacl-pivot.adoc` — coprocessor ADR
 * `ALIGNMENT-AFFINESCRIPT.adoc` — Echo / AffineScript alignment decisions
-* `CONTRIBUTING.adoc` — how to contribute
+* `.github/CONTRIBUTING.md` — how to contribute
 * `GOVERNANCE.adoc` — project governance
 
 ---

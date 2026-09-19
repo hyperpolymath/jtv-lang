@@ -81,7 +81,7 @@
 - `CLAUDE.md`           - Project overview and handover
 - `README.adoc`         - Main README
 - `SECURITY.md`         - Security policy
-- `CONTRIBUTING.adoc`   - Contribution guidelines
+- `.github/CONTRIBUTING.md`   - Contribution guidelines
 - `REVERSIBILITY.md`    - Reversible computing design
 - `DEVELOPMENT_PLAN.md` - Roadmap
 
