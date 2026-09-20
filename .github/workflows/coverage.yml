@@ -5,7 +5,6 @@
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # coverage.yml — Code coverage reporting via cargo-tarpaulin.
-# Generates coverage report and uploads to Codecov.
 name: Coverage
 
 on:
@@ -50,12 +49,6 @@ jobs:
             --output-dir coverage/ \
             --skip-clean \
             --timeout 120
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v7.0.0
-        with:
-          files: coverage/cobertura.xml
-          fail_ci_if_error: false
 
       - name: Write summary
         if: always()
