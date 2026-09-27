@@ -32,7 +32,7 @@ jobs:
           sanitizer: ${{ matrix.sanitizer }}
           mode: code-change
           output-sarif: true
-      - uses: github/codeql-action/upload-sarif@v4.38.0
+      - uses: github/codeql-action/upload-sarif@v4.38.2
         if: always() && hashFiles('vulnerabilities.sarif') != ''
         with:
           sarif_file: vulnerabilities.sarif
