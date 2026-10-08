@@ -1,7 +1,7 @@
 name = "ViperPkg"
-uuid = "d7e4f8a0-5c3b-4d9e-8f2a-1b3c4d5e6f7a"
+uuid = "01a11d29-d892-8715-80a7-7aa80ffa7099"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
