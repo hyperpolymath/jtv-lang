@@ -10,6 +10,8 @@ image:https://api.thegreenwebfoundation.org/greencheckimage/github.com[Green Web
 
 A Harvard-architecture programming language that makes code injection *grammatically impossible* — not as a runtime check, but as a structural guarantee.
 
+_Status: mechanised for the core model in Lean (`JtvSecurity`); interpreter not yet wired to the proofs — see STATUS._
+
 Named after mathematician **Julia Robinson** (Hilbert's 10th problem) with a playful nod to "adder": a snake, and the fundamental operation the language builds everything from.
 
 [NOTE]
