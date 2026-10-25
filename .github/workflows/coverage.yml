@@ -35,7 +35,7 @@ jobs:
           toolchain: stable
 
       - name: Cache cargo registry and build
-        uses: Swatinem/rust-cache@v2.9.2
+        uses: Swatinem/rust-cache@v2.9.3
 
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
