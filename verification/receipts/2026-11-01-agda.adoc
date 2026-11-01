@@ -13,8 +13,8 @@ receipts establish those separately, and this is one such receipt.
 | Field | Value
 
 | Date (UTC) | 2026-11-01T16:53:58Z
-| Commit checked out | `384d91f` (working tree carries the modules added in the
-  following commit; receipt re-run after the commit is recorded below)
+| Commit checked out | `2f54c28` (the commit that lands `theory/agda/`; the
+  module set was also checked pre-commit at `384d91f`+working tree, same result)
 | Checker | `Agda version 2.7.0.1-cf6e2d9`
 | Library | `standard-library-2.4` (tag `v2.4`)
 | Invocation | `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch src/Jtv/<Module>.agda`
@@ -51,6 +51,11 @@ rewrites are `re-proved` and are recorded per theorem in
 any statement-level comparison against `echo-types`; or any refinement of
 the Rust interpreter (`gap-001`). It is not a Grade 1 receipt: no AXLE,
 coq-lsp, or Isabelle-server API was invoked.
+
+== Re-run (post-commit, recorded)
+
+`./check.sh` at `2f54c28`, 2026-11-01T16:56:13Z: `Core`, `Reversal`, `Echo`,
+`Conditional` all `TYPECHECKED`; hole/postulate scan clean.
 
 == Re-run
 
