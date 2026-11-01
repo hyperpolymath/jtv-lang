@@ -12,13 +12,13 @@ receipts establish those separately, and this is one such receipt.
 |===
 | Field | Value
 
-| Date (UTC) | 2026-11-01T18:26:00Z
-| Commit checked out | `e6cc78d` (`e6cc78d`), a reachable commit on
+| Date (UTC) | 2026-11-01T18:16:33Z
+| Commit checked out | `e33b29b` (`e33b29b`), a reachable commit on
   `arena/06c0481f-jtv-lang` that contains all four modules, including the
   `reversible-if-with-residue` repair theorem and the
   `tokenless-conditional-not-identity` declaration under the name the
   documentation cites. Earlier revisions of this receipt cited `2f54c28`
-  (unreachable after a rebase), `e34feda`, `c46ddf2`, `c622ddc` and `3fbbb59`; each
+  (unreachable after a rebase), `e34feda`, `c46ddf2`, `c622ddc`, `3fbbb59` and `e6cc78d`; each
   citation was superseded when the checked sources changed.
 | Checker | `Agda version 2.7.0.1-cf6e2d9`
 | Library | `standard-library-2.4` (tag `v2.4`)
@@ -45,9 +45,10 @@ Within `Jtv.Echo`, both block theorems are checked: `blockEcho-admissible`
 Within `Jtv.Conditional`: `tokenless-conditional-not-identity` and the
 recorded-branch repair `reversible-if-with-residue` — the latter for the
 additive step `x += v`, where the recorded branch bit is the whole residue; an
-overwriting branch needs a `Snapshot` residue and is not covered. Module discovery is dynamic —
-`check.sh` typechecks every `src/Jtv/*.agda` — so a newly added module cannot
-pass the gate unbuilt.
+overwriting branch needs a `Snapshot` residue and is not covered. Module discovery is dynamic and recursive — `check.sh` typechecks every
+`src/**/*.agda` and scans it for escape hatches — so a newly added module, at any
+namespace depth, cannot pass the gate unbuilt. (Checked by planting
+`src/Jtv/Test/Nested.agda` with a hole: it was discovered and reported FAILED.)
 
 The receipt is written to `theory/agda/_build/check.log` by `check.sh`, and
 that file is what the CI artifact uploads (it previously pointed at a
