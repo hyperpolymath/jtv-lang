@@ -13,12 +13,12 @@ receipts establish those separately, and this is one such receipt.
 | Field | Value
 
 | Date (UTC) | 2026-11-01T18:16:33Z
-| Commit checked out | `e33b29b` (`e33b29b`), a reachable commit on
+| Commit checked out | `33116f6` (`33116f6`), a reachable commit on
   `arena/06c0481f-jtv-lang` that contains all four modules, including the
   `reversible-if-with-residue` repair theorem and the
   `tokenless-conditional-not-identity` declaration under the name the
   documentation cites. Earlier revisions of this receipt cited `2f54c28`
-  (unreachable after a rebase), `e34feda`, `c46ddf2`, `c622ddc`, `3fbbb59` and `e6cc78d`; each
+  (unreachable after a rebase), `e34feda`, `c46ddf2`, `c622ddc`, `3fbbb59`, `e6cc78d` and `e33b29b`; each
   citation was superseded when the checked sources changed.
 | Checker | `Agda version 2.7.0.1-cf6e2d9`
 | Library | `standard-library-2.4` (tag `v2.4`)
