@@ -225,8 +225,15 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 
 | Tokenless reversible `if` is **not** an identity
 | `proven`
-| `Jtv/Conditional.agda:counterexample`
-| Mechanises finding F3; models the strategy, not the Rust code
+| `Jtv/Conditional.agda:tokenless-conditional-not-identity`
+| Mechanises finding F3 at the model level; models the strategy, not the Rust
+  code — no refinement connects the two (see §4)
+
+| Recorded branch restores the state (the repair)
+| `proven`
+| `Jtv/Conditional.agda:reversible-if-with-residue`
+| For an arbitrary guard, pointwise (`∀ y`); the runtime's `RecordedOp::If`
+  recording path is not modelled
 |===
 
 === 2.2 Theory obligations — estate legs (who must carry them)

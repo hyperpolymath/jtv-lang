@@ -74,9 +74,12 @@ forward-if g x v σ = if g σ then update σ x (σ x + v) else σ
 -- and sets x to 1; the reversed state no longer satisfies the guard, so
 -- the re-checking strategy skips the undo and the value stays 1.
 
-counterexample :
+-- Named as the documents cite it (`theory/agda/README.adoc` §1, §4;
+-- PROOF-STATUS §4; audit §V3): an earlier revision declared this
+-- `counterexample`, so every reference was uncheckable.
+tokenless-conditional-not-identity :
   Σ State (λ σ → reverse-if-recheck guard zero oneℤ (forward-if guard zero oneℤ σ) ≢ σ)
-counterexample = σ , not-identity
+tokenless-conditional-not-identity = σ , not-identity
   where
     σ : State
     σ _ = zeroℤ

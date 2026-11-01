@@ -197,7 +197,7 @@ Per §2.2 the transport route would be preferable and is open work.
   cross-project side is `open` here. This directory does **not** import or
   transport from `echo-types`, and no dependency is introduced.
 
-| `counterexample` (`Jtv.Conditional`), `reversible-if-with-residue`
+| `tokenless-conditional-not-identity` (`Jtv.Conditional`), `reversible-if-with-residue`
 | —
 | new
 | No Lean counterpart: these statements are about the *runtime* reversal

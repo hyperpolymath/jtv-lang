@@ -195,9 +195,15 @@ a `ReverseTrace`; the trace is moved out (`take_recorded_ops`) into
 `Interpreter::token_store: HashMap<u64, Vec<RecordedOp>>` keyed by a monotonic
 `next_token_id`, and `tok` is bound to `Value::ReversalToken(id)`
 (`interpreter.rs:452-482`). `reverse tok` removes the log and applies each op's
-*inverse* last-to-first (`apply_inverse_ops`); `abandon tok` drops the log. The
-token is consumed by removal, so `reverse`/`abandon` twice errors at runtime
-(`reversibility_c2_tests.rs` C2-3/C2-4).
+*inverse* last-to-first (`apply_inverse_ops`); `abandon tok` drops the log. On
+the same *name*, a second `reverse` errors at runtime — the log is gone
+(`reversibility_c2_tests.rs` C2-3/C2-4). A second `abandon` does **not**: the
+tests cover reusing the name, but `eval_abandon_token` discards the result of
+`token_store.remove(&id)`, so once a token value has been copied to an alias,
+abandoning that alias still returns `Ok(())`. Linearity is therefore a runtime
+convention on names, not a guarantee about token values — this is the
+implementation-level half of F2, and it is why the `+ReversalToken<S>+` /
+static-linearity design items matter.
 
 `RecordedOp` has four variants (`reversible.rs:11-28`):
 
