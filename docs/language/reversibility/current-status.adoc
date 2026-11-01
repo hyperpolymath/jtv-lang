@@ -28,7 +28,8 @@ Authoritative sources, in order:
   (per-operation inverse log; residue for Neutral steps).
 . `verification/PROOF-CAPABILITY-MATRIX.adoc` — what is mechanised.
 . `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` — per-layer
-  semantics, the proof-to-interpreter gap, and open findings F1–F7.
+  semantics, the proof-to-interpreter gap, and open findings F1–F6 (F7 closed
+  by this documentation change).
 ====
 
 == Historical body (pre-C1/C2, do not cite)

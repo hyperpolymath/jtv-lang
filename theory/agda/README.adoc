@@ -47,8 +47,11 @@ assignable at all.
 | `Jtv.Conditional`
 | **New** (not in Lean): the reversible `if`. Proves that the tokenless
   strategy — re-evaluating the guard on the reversed state — is *not* an
-  identity, and models the repair (record which branch was taken). This
-  mechanises finding **F3** of
+  identity (`tokenless-conditional-not-identity`), and *proves* the repair
+  rather than modelling it: `reversible-if-with-residue` shows that
+  re-playing the recorded branch (`reverse-if-recorded`) restores the state
+  for an arbitrary guard, including one whose truth changes under the step.
+  This mechanises finding **F3** of
   `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1.
 | —
 |===
@@ -187,11 +190,12 @@ Per §2.2 the transport route would be preferable and is open work.
   cross-project side is `open` here. This directory does **not** import or
   transport from `echo-types`, and no dependency is introduced.
 
-| `counterexample` (`Jtv.Conditional`)
+| `counterexample` (`Jtv.Conditional`), `reversible-if-with-residue`
 | —
 | new
-| No Lean counterpart: this statement is about the *runtime* reversal
-  strategy the Lean model does not cover.
+| No Lean counterpart: these statements are about the *runtime* reversal
+  strategies (tokenless re-check vs. recorded branch) that the Lean model
+  does not cover.
 |===
 
 === 4.1 What is deliberately not modelled

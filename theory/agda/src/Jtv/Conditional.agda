@@ -17,9 +17,10 @@
 -- at which forward-then-reverse differs. That is what
 -- `tokenless-conditional-not-identity` below does.
 --
--- The repair is also modelled (`reversible-if-with-residue`): record
--- which branch was taken, exactly as `RecordedOp.If { condition_was_true
--- }` does at runtime, and the round trip *is* the identity.
+-- The repair is proved, not merely modelled (`reversible-if-with-residue`):
+-- record which branch was taken, exactly as `RecordedOp.If
+-- { condition_was_true }` does at runtime, and the round trip *is* the
+-- identity — for any guard, not only one that stays true.
 ------------------------------------------------------------------------
 
 module Jtv.Conditional where
@@ -29,12 +30,13 @@ open import Data.Empty using (⊥; ⊥-elim)
 open import Data.Integer using (ℤ; _+_; -_; +_)
 open import Data.Integer.Properties using (_≟_; +-injective)
 open import Data.Nat using (ℕ; zero)
-open import Data.Nat.Properties using ()
+open import Data.Nat.Properties using () renaming (_≟_ to _≟ℕ_)
 open import Data.Product using (Σ; _,_; _×_)
-open import Jtv.Core using (State; Var; update; update-same)
+open import Jtv.Core using (State; Var; update; update-same; update-diff)
+open import Jtv.Reversal using (+-minus)
 open import Relation.Binary.PropositionalEquality
   using (_≡_; _≢_; refl; sym; trans; cong; subst)
-open import Relation.Nullary using (yes; no; ¬_)
+open import Relation.Nullary using (Dec; yes; no; ¬_)
 open import Relation.Nullary.Decidable.Core using (does)
 
 zeroℤ : ℤ
@@ -58,10 +60,11 @@ reverse-if-recheck : (State → Bool) → Var → ℤ → State → State
 reverse-if-recheck g x v σ = if g σ then update σ x (σ x + (- v)) else σ
 
 -- (b) residue: replay the branch that was actually taken. This is the
--- `RecordedOp.If condition_was_true` discipline.
+-- `RecordedOp.If { condition_was_true }` discipline at runtime — the
+-- Bool *is* the residue.
 reverse-if-recorded : Bool → Var → ℤ → State → State
-reverse-if-recorded taken x v σ =
-  if taken ∧ not taken then σ else if taken then update σ x (σ x + (- v)) else σ
+reverse-if-recorded true  x v σ = update σ x (σ x + (- v))
+reverse-if-recorded false _ _ σ = σ
 
 forward-if : (State → Bool) → Var → ℤ → State → State
 forward-if g x v σ = if g σ then update σ x (σ x + v) else σ
@@ -90,3 +93,55 @@ counterexample = σ , not-identity
       where
         nat-absurd : 1 ≡ 0 → ⊥
         nat-absurd = λ ()
+
+------------------------------------------------------------------------
+-- The repair, proved: recording which branch was taken restores the
+-- state for *any* guard, including one whose truth changes under the
+-- step. (This is the theorem the module's header advertises; it was
+-- missing in the first revision of this file and is the reason
+-- `reverse-if-recorded` takes a Bool rather than re-running the guard.)
+
+update-at : ∀ σ z v y → y ≡ z → update σ z v y ≡ v
+update-at σ z v y p = subst (λ q → update σ z v q ≡ v) (sym p) (update-same σ z v)
+
+update-away : ∀ σ z v y → y ≢ z → update σ z v y ≡ σ y
+update-away = Jtv.Core.update-diff
+
+
+-- Generic full-state undo of one addition, stated over an abstract
+-- post-state so that no `update` needs to reduce at an open index.
+-- (Same technique as Jtv.Reversal; kept local to avoid a module cycle.)
+undo-add-general :
+  ∀ (x : Var) (v : ℤ) (σ τ : State)
+  → τ x ≡ σ x + v
+  → (∀ y → y ≢ x → τ y ≡ σ y)
+  → ∀ y → update τ x (τ x + (- v)) y ≡ σ y
+undo-add-general x v σ τ at-x off-x = go
+  where
+    case : ∀ y → Dec (y ≡ x) → update τ x (τ x + (- v)) y ≡ σ y
+    case y (yes p) =
+      trans (update-at τ x (τ x + (- v)) y p)
+        (trans (cong (λ q → q + (- v)) at-x)
+          (trans (+-minus (σ x) v) (cong σ (sym p))))
+    case y (no p) = trans (update-away τ x (τ x + (- v)) y p) (off-x y p)
+
+    go : ∀ y → update τ x (τ x + (- v)) y ≡ σ y
+    go y = case y (y ≟ℕ x)
+
+-- **The repair is correct.** Recording the branch taken by the forward pass
+-- and replaying it makes forward-then-reverse the identity, for an arbitrary
+-- guard g — not merely one that stays true. Stated pointwise (∀ y), matching
+-- Jtv.Reversal: a `State`-level equality would need function extensionality,
+-- which the stdlib supplies only as an axiom, and postulating an axiom to
+-- prove a reversibility lemma would put an escape hatch in a Grade 3 module.
+reversible-if-with-residue :
+  ∀ (g : State → Bool) (x : Var) (v : ℤ) (σ : State) → ∀ y
+  → reverse-if-recorded (g σ) x v (forward-if g x v σ) y ≡ σ y
+reversible-if-with-residue g x v σ = go
+  where
+    go : ∀ y → reverse-if-recorded (g σ) x v (forward-if g x v σ) y ≡ σ y
+    go y with g σ
+    ... | true  = undo-add-general x v σ (update σ x (σ x + v))
+                    (update-same σ x (σ x + v))
+                    (λ z p → update-diff σ x (σ x + v) z p) y
+    ... | false = refl

@@ -112,9 +112,12 @@ or `+abandon tok+` (explicit commit). Linearity guarantees exactly one
 `Value::ReversalToken(u64)` indexing an in-process log; the type parameter
 `+ReversalToken<S>+` and the path-sensitive `Option<ReversalToken<S>>` promotion
 at asymmetric branch joins are *designed, not implemented*. Linearity is enforced
-by consumption at runtime (the id is removed from the store, so a second
-`reverse`/`abandon` errors) — not by the type system, which accepts
-`reverse tok` / `abandon tok` unconditionally. Also note the log is
+by convention at runtime, and only partly: `reverse` reports a missing log
+after the id is removed from the store, but `eval_abandon_token` discards the
+result of `token_store.remove(&id)`, so abandoning an already-consumed token
+still returns `Ok(())`. A second `reverse` errors; a second `abandon` does not.
+The type system accepts `reverse tok` / `abandon tok` unconditionally, so this
+is a convention, not a guarantee. Also note the log is
 *per-operation with recorded values*, with a saved-value residue only for Neutral
 steps: describing the mechanism as "snapshot restore" is wrong at this layer.
 See `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §2 and §4.

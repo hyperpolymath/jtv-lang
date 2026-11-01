@@ -251,10 +251,16 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | T-LEAN
 | Lean recheck of the Agda witness
 | `open` (leg) / `proven` (evidence)
-| The Lean proofs exist and are the strongest artefact in this repository, but a
-  leg is only a leg once the Agda source is `proven` and the Lean statement has
-  been **compared** with it and the comparison recorded (PROOF-POLICY §2.2,
-  §3). Recording the comparison is a separate obligation and is `open`.
+| The Lean proofs exist and are the strongest artefact in this repository. The
+  statement-level comparison is **recorded**: `theory/agda/README.adoc` §4 gives
+  the per-theorem correspondence between the Lean and Agda developments. The leg
+  is nevertheless `open`, and not because the comparison is missing: the Lean
+  `rev_forward_backward` concludes the round trip only *at* `x`, while the Agda
+  reversal theorems conclude it for all `y` (`∀ y`), so the Agda witness is
+  strictly stronger than the Lean statement it would be checked against. Closing
+  the leg needs either a Lean statement strengthened to full-state equality or
+  an explicitly weakened Agda corollary — a real proof obligation, not
+  bookkeeping (PROOF-POLICY §2.2, §3).
 
 | T-GRADE
 | Mathesis verification grade
@@ -375,8 +381,9 @@ idris2 --check src/abi/Types.idr
 # Engineering (Rust behaviour — tested-only)
 cargo test --all
 
-# Estate legs not yet runtime-checkable here
-agda --safe --without-K --cubical-compatible <module>.agda   # no modules exist
+# Theory (Agda) — the canonical invocation is the script, not a bare agda call:
+# it supplies the library configuration and the hole/postulate scan.
+(cd theory/agda && ./check.sh)
 ----
 
 *Toolchain honesty (PROOF-POLICY §6).* A session without Agda, Rocq/Lambdapi, or

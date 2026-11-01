@@ -81,5 +81,5 @@ jobs:
         with:
           name: agda-proof-receipt
           path: theory/agda/_build/**
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30

@@ -21,6 +21,15 @@
 set -uo pipefail
 
 cd "$(dirname "$0")"
+
+# The receipt is a *file* as well as terminal output: CI uploads
+# _build/check.log as the run's artifact, and the ledger cites exactly that
+# path. Create it here, so the artifact step can never point at a directory
+# nothing writes (it once did — the receipt was silently absent).
+BUILD="_build"
+mkdir -p "$BUILD"
+exec > >(tee "$BUILD/check.log") 2>&1
+
 AGDA="${AGDA:-agda}"
 MODULES=("$@")
 if [ ${#MODULES[@]} -eq 0 ]; then

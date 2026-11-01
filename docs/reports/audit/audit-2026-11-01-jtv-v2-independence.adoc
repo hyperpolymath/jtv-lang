@@ -52,7 +52,13 @@ at block boundaries. See §2.
 | No extraction or refinement proof exists; the Lean model and the Rust
 interpreter are independent implementations. The *token itself* is modelled in
 one as `Int` and implemented in the other as `Vec<RecordedOp>`. Conditional
-reversal is *not modelled at all*. See §3.
+reversal is modelled only in part: `theory/agda/src/Jtv/Conditional.agda`
+models the tokenless guard-recheck strategy, exhibits the state at which it
+fails (`tokenless-conditional-not-identity`), and proves the recorded-branch
+repair (`reversible-if-with-residue`). It does **not** model the Rust
+recording path (`RecordedOp::If`) or the runtime log, and no Lean statement
+covers conditions — so the gap in §3 stands, but the blanket claim that
+conditional reversal is unmodelled no longer does. See §3.
 
 | V4
 | Is "v2" delivered?
