@@ -254,21 +254,39 @@ marshalling), *not* the semantic mechanism — worth stating plainly, because it
 the most likely reason a reader describes JtV's tokens as "snapshot-based".
 
 Note the tokenless conditional is the one place where re-evaluation can *fail to
-undo*. The grammar allows only a plain assignment inside a reversible `if` branch
-(`reversible_stmt = reversible_assignment | if_stmt`, and the branch body is a
-control `block`), so the demonstration has to use `=`:
+undo*. Three grammar/implementation facts fix the shape of any demonstration,
+and two earlier drafts of this paragraph got them wrong:
+
+* `reversible_stmt = reversible_assignment | if_stmt`, but an `if` branch body is
+  a plain control `block` (`grammar.pest:38,48`), so **any** control statement
+  parses in the branch — the `+=`-only restriction applies to statements directly
+  in a reversible block, not inside its `if` branches;
+* `reverse { ... }` does **not** run anything forward first: `execute_inverse`
+  walks the block applying inverses (`reversible.rs:177-182`);
+* within an `if`, `execute_inverted_stmt` only descends into nested
+  `ControlStmt::ReverseBlock` items and **silently ignores every other statement
+  in the branch** (`reversible.rs:203-221`).
+
+So a safe-branch-overwrite demonstration has to be a forward run followed by a
+tokenless reverse, with the branch content being something the inverse walker
+actually descends into:
 
 [source,jtv]
 ----
 x = 4
-reverse { if x < 5 { x = 5 } }
+reverse { if x < 5 { reverse { y += 1 } } }
 ----
 
-Forward: the guard holds, the branch assigns `x = 5` - and records nothing.
-Reverse: the guard is re-evaluated at `x = 5` => false => the undo is skipped, so
-`x` stays `5`. The block is not the identity. (This program is syntactically
-valid; an earlier draft showed `x += 1` inside the branch, which the parser
-rejects - corrected after review.)
+The inverse re-evaluates `x < 5` **on the current state**. If the forward run left
+`x >= 5`, the guard is false and the nested inverse is skipped, so the `y`
+adjustment made forward is never undone and the composite is not the identity.
+That is finding F3, and it is why the runtime requires a Janus-style "the
+condition must hold in the same direction" discipline
+(`reversible.rs:204-205`) that JtV has no check for.
+
+The counterexample is *proved* only in the model
+(`Jtv/Conditional.agda:tokenless-conditional-not-identity`); nothing above is an
+executed trace. **[not executed]**
 in the reverse direction (the comment at `reversible.rs:204` invokes exactly that
 requirement) — but JtV has no check for it. See F3 in §8. **[not executed]**
 

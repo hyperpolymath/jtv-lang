@@ -21,6 +21,18 @@
 -- record which branch was taken, exactly as `RecordedOp.If
 -- { condition_was_true }` does at runtime, and the round trip *is* the
 -- identity — for any guard, not only one that stays true.
+--
+-- SCOPE of the repair theorem — read it before citing it. `forward-if` adds
+-- a *known* `v`, so the recorded bit is the whole residue: undoing `x += v`
+-- needs nothing but the branch decision and `v`. For an overwriting
+-- assignment (`x = 5`, the form a reversible-`if` branch actually parses —
+-- see `crates/jtv-core/src/grammar.pest:48`, where the branch body is a
+-- plain control block) the branch bit is *not* sufficient: the old value of
+-- `x` is gone, so no branch record can restore it. That case needs the
+-- saved value — the `Snapshot` residue — and is not what this theorem
+-- proves. This is the model's counterpart of the runtime's division between
+-- `RecordedOp::If` (branch bookkeeping) and `RecordedOp::Snapshot` (value
+-- bookkeeping).
 ------------------------------------------------------------------------
 
 module Jtv.Conditional where

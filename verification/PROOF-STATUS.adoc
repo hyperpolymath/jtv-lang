@@ -232,8 +232,11 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | Recorded branch restores the state (the repair)
 | `proven`
 | `Jtv/Conditional.agda:reversible-if-with-residue`
-| For an arbitrary guard, pointwise (`∀ y`); the runtime's `RecordedOp::If`
-  recording path is not modelled
+| For an arbitrary guard, pointwise (`∀ y`), **for the additive step
+  `x += v` only**. The runtime's `RecordedOp::If` recording path is not
+  modelled, and an overwriting branch (`x = 5`) is out of scope: the branch bit
+  cannot restore a value that was not recorded, so that case needs the
+  `Snapshot` residue and is not proved
 |===
 
 === 2.2 Theory obligations — estate legs (who must carry them)
@@ -267,11 +270,21 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
   strictly stronger than the Lean statement it would be checked against. Closing
   the leg needs either a Lean statement strengthened to full-state equality or
   an explicitly weakened Agda corollary — a real proof obligation, not
-  bookkeeping (PROOF-POLICY §2.2, §3). A second, independent gap: the Lean
-  `rev_forward_backward` carries `hop : op = RevOp.addAssign x e`, so the Lean
-  leg has **no subtraction round-trip theorem at all**; the Agda
-  `rev-forward-backward-sub` therefore has no Lean counterpart and is recorded
-  `open` rather than `re-proved` in `theory/agda/README.adoc` §4.
+  bookkeeping (PROOF-POLICY §2.2, §3). That is **not the only blocker**, and
+  strengthening one theorem would not close the leg. Three Agda statements have
+  no Lean counterpart *at all*:
+
+  * `rev-forward-backward-sub` — the Lean `rev_forward_backward` carries
+    `hop : op = RevOp.addAssign x e`, so there is no Lean subtraction round-trip
+    theorem (recorded `open` in `theory/agda/README.adoc` §4);
+  * `blockEcho-admissible` — the Safe-only block theorem exists in Lean as
+    `blockEcho_admissible`, but the Agda statement has not been compared against
+    it since it was added late;
+  * the two `Jtv.Conditional` theorems (`tokenless-conditional-not-identity`,
+    `reversible-if-with-residue`) — no Lean statement covers conditionals.
+
+  Grade 2i therefore needs the reconciliation of *all* of these, of which the
+  full-state strengthening is one item.
 
 | T-GRADE
 | Mathesis verification grade
@@ -444,8 +457,13 @@ No percentages — the estate forbids flattening confidence (mathesis §6).
   restored and rechecked.
 
 | Reversibility (Safe step, Neutral residue step) | `Grade 3` | Ported to Agda
-  and rechecked under the canonical invocation; receipt filed. Per-operation
-  model only — no log semantics, and the runtime diverges from it (F1–F3).
+  and rechecked under the canonical invocation; receipt filed. **The token
+  theorem is addition-only:** `rev-forward-backward-with-token` is specialised to
+  `addAssign` on both sides of the composition, so although
+  `execBackwardWithToken` has a `subAssign` arm, no theorem exercises it — the
+  Neutral tier is proved for addition, and subtraction's token path is untested
+  and unproved. Per-operation model only — no log semantics, and the runtime
+  diverges from it (F1–F3).
 
 | Reversibility (runtime, token/log semantics) | `Open` | Untested end-to-end for
   the Neutral tier; findings F1–F3 open. `Jtv/Conditional.agda` proves that the

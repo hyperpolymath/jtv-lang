@@ -226,6 +226,11 @@ Stated so no reader infers more coverage than exists:
 * **conditional reversal at the runtime level** beyond the one
   counterexample — `Jtv.Conditional` proves the tokenless strategy is
   unsound, it does not mechanise the runtime's actual recording path;
+* **the repair for an overwriting branch.** `reversible-if-with-residue` is
+  about `x += v`, where the recorded branch bit really is the whole residue.
+  A branch that overwrites (`x = 5`) loses the old value, so the branch bit
+  cannot restore it and the `Snapshot` residue would be needed instead — that
+  statement is not proved here;
 * the **carrier-distinct number systems** (float/rational/complex/symbolic
   value models, `gap-005`) — everything here is over `ℤ`. This bound now matters
   more than it did: the owner's refinement of `spec/jtv_v2_type_system_corrected.adoc`
