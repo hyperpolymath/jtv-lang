@@ -15,8 +15,12 @@
 --       step) recovery is unconditional, even for self-referential
 --       `x += x`.
 --   * naive-backward-fails-self-ref
---       and the residue is *necessary*: the naive inverse provably fails
---       there.
+--       an *existential* counterexample: for the specified naive inverse
+--       (`execBackward`, which recomputes the operand from the current
+--       state) there is a self-referential `x += x` at which it fails to
+--       recover `σ x`. This shows the residue is necessary *for that
+--       inverse in that case*; it is not a proof that no other
+--       residue-free strategy could work.
 --
 -- Scope (see theory/agda/README.adoc): one operation, one token. The
 -- multi-operation log, the reversible `if`, and the Rust interpreter are

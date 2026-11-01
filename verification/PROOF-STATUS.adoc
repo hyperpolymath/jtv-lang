@@ -260,7 +260,11 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
   strictly stronger than the Lean statement it would be checked against. Closing
   the leg needs either a Lean statement strengthened to full-state equality or
   an explicitly weakened Agda corollary — a real proof obligation, not
-  bookkeeping (PROOF-POLICY §2.2, §3).
+  bookkeeping (PROOF-POLICY §2.2, §3). A second, independent gap: the Lean
+  `rev_forward_backward` carries `hop : op = RevOp.addAssign x e`, so the Lean
+  leg has **no subtraction round-trip theorem at all**; the Agda
+  `rev-forward-backward-sub` therefore has no Lean counterpart and is recorded
+  `open` rather than `re-proved` in `theory/agda/README.adoc` §4.
 
 | T-GRADE
 | Mathesis verification grade
@@ -392,6 +396,17 @@ passing. The session that wrote this ledger had none of them. Adding them belong
 in `setup.sh` (agent sessions) and the Guix manifest/container (CI) per
 `standards/LANGUAGE-POLICY.adoc` §2.
 
+*Recorded deviation — CI install route.* `.github/workflows/agda-proof-policy.yml`
+builds Agda 2.7.0.1 and agda-stdlib 2.4 from upstream tagged sources rather than
+through a Guix manifest or container, because this repository has no such
+manifest or Agda image (the only `Containerfile` is ClusterFuzzLite's). The job
+compensates by asserting the *installed* stdlib library name against this
+project's `depend: standard-library-2.4`, so a silent substitution fails rather
+than passes. This is a documented exception, not compliance; the remediation is
+an Agda entry in the estate manifest. The same workflow notes why its action
+references stay version-tagged (the repository's `actions.lock` is generated from
+tags) and takes the credential half of that fix (`persist-credentials: false`).
+
 ''''
 
 == 4. Grade status by topic (mathesis §6 vocabulary)
@@ -421,9 +436,13 @@ No percentages — the estate forbids flattening confidence (mathesis §6).
   model only — no log semantics, and the runtime diverges from it (F1–F3).
 
 | Reversibility (runtime, token/log semantics) | `Open` | Untested end-to-end for
-  the Neutral tier; findings F1–F3 open. F3 is now *proved* at the model level
-  (`Jtv/Conditional.agda`), which is evidence the runtime path is unsound as
-  currently written, not a discharge of it.
+  the Neutral tier; findings F1–F3 open. `Jtv/Conditional.agda` proves that the
+  *model's* tokenless strategy (re-check the guard on the reversed state) is
+  unsound. That is model-level evidence, and it discharges nothing about the
+  runtime: no refinement proof connects the two (`gap-001`). The runtime claim
+  rests on reading `execute_inverted_stmt` in `crates/jtv-core/src/reversible.rs`,
+  which is the independent audit finding F3 — cite that, not the Agda module, for
+  any statement about the interpreter.
 
 | Interpreter ↔ model refinement (`gap-001`) | `Open` | `tested-only` at the
   integer-fragment level; no refinement.
@@ -455,7 +474,9 @@ replacing them. *Progress 2026-11-01: steps 1–2 done, step 3 next.*
   `JtvExtended`.
 . *Then the Rocq leg* for that same statement (Dedukti transport via echidna's
   exchange layer, or hand re-proof — PROOF-POLICY §2 lets either stand, provided
-  the route is recorded per theorem). That is Grade 2i.
+  the route is recorded per theorem). *This supplies the Rocq leg required for
+  Grade 2i — it does not by itself award the grade:* the reconciliation in the
+  next step is what makes 2i mean anything, and it is still outstanding.
 . *Reconcile statements, don't just compile both.* Record, per theorem: exact
   proposition, assumptions, type/universe discipline, source revision, versions,
   invocation, observed result, and the declared route (`transported` /

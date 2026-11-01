@@ -15,6 +15,26 @@
 # from their own release source trees at fixed tags. PROOF-POLICY §6 prefers
 # the repo's Guix manifest/container; this is the fallback until that exists,
 # and the versions below are the pin — do not "simplify" this to apt.
+#
+# RECORDED DEVIATIONS from PROOF-POLICY §6 / the SHA-pin hook (both reviewed;
+# both are repo-wide conditions, not choices made by this workflow):
+#
+#   1. INSTALL ROUTE. §6 wants CI toolchains installed through the repository's
+#      Guix manifest or container. This repository has neither — there is no
+#      guix/ manifest, no flake, and no Agda container image (the only
+#      Containerfile is ClusterFuzzLite's). Writing an untested manifest here
+#      would move the problem rather than solve it, so the deviation is
+#      recorded instead: the toolchain is built from upstream tags and the
+#      step below *asserts* the installed stdlib name against the project's
+#      `depend:`, so a silent substitution fails the job. Remediation: add an
+#      Agda entry to the estate manifest and switch this job to it.
+#   2. ACTION REFS. `hooks/validate-sha-pins.sh` wants 40-character commit
+#      SHAs, but every workflow in this repository pins by version tag and
+#      `actions.lock` is machine-generated from those tags; pinning one
+#      workflow would desynchronise the lockfile contract. Migrating to SHAs
+#      is a repo-wide change with its own lockfile regeneration, tracked
+#      separately. What is done here is the credential part of the same
+#      concern: checkout runs with `persist-credentials: false`.
 name: agda-proof-policy
 
 on:
@@ -37,7 +57,12 @@ jobs:
     name: Agda theory proofs (canonical invocation)
     runs-on: ubuntu-24.04
     steps:
+      # `persist-credentials: false`: this job only reads the tree, and one of
+      # its steps uploads an artifact, so leaving the token in .git/config
+      # would put repository credentials inside anything that step swept up.
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install pinned Agda + agda-stdlib
         run: |

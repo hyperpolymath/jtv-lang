@@ -29,8 +29,10 @@ assignable at all.
 
 | `Jtv.Reversal`
 | v2's reversal discipline: Safe tier (`+=` and `-=`), Neutral tier
-  (recovery from a retained residue), and the proof that the residue is
-  *necessary* (`naive-backward-fails-self-ref`). Also the two `ℤ`
+  (recovery from a retained residue), and an existential proof that the
+  specified naive inverse fails on self-referential `x += x`
+  (`naive-backward-fails-self-ref`) — necessity *for that inverse*, not a
+  claim that no residue-free strategy could ever work. Also the two `ℤ`
   cancellation lemmas, stated as `+ (- b)` because ADR-0007 D2 makes
   subtraction a non-primitive.
 | `jtv_proofs/JtvTheorems.lean` (the `RevOp` section)
@@ -143,12 +145,17 @@ Per §2.2 the transport route would be preferable and is open work.
   reconciliation item: strengthen the Lean theorem to `∀ y`.
 
 | `rev-forward-backward-sub`
-| `rev_forward_backward` (subAssign case)
-| re-proved
-| Same strengthening note. Also the `-` encoding: Lean writes `σ x - eval
-  e σ`; Agda writes `σ x + (- eval e σ)`, which is *definitionally* the
-  same in the stdlib (`i - j = i + (- j)`) and is the form ADR-0007 D2
-  requires (subtraction not a primitive).
+| *(none)* — **open**
+| — (Agda-only)
+| **Correction:** this row previously cited Lean's `rev_forward_backward`
+  as the `subAssign` case. That is wrong: the Lean theorem carries the
+  hypothesis `hop : op = RevOp.addAssign x e` and is therefore about
+  addition only — no Lean subtraction round-trip theorem exists. Nothing
+  in the Lean leg discharges this statement, so the correspondence is
+  `open` and this theorem is Agda-only evidence until a Lean
+  `rev_forward_backward_sub` is added and compared. (Rust subtracts via
+  `+ (- v)` per ADR-0007 D2, which is why the Agda statement is phrased
+  that way; that is a modelling note, not a Lean correspondence.)
 
 | `rev-forward-backward-with-token`
 | `rev_forward_backward_with_token`

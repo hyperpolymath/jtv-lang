@@ -126,13 +126,21 @@ JtV is backed by mechanised proofs:
 
 === Lean 4 (`jtv_proofs/`)
 
-Five libraries, all compiling cleanly under Lean 4 v4.12.0, zero `sorry`:
+Seven libraries, all compiling cleanly under Lean 4 v4.12.0, zero `sorry`
+(the aggregate `JtvAll` target is a root-list, not an eighth library):
 
 * `JtvCore` — denotational semantics; evaluation functions; termination
 * `JtvTheorems` — algebraic properties; state independence; totality
 * `JtvOperational` — small-step + big-step semantics; progress; preservation
 * `JtvTypes` — type system; purity lattice; type soundness
 * `JtvSecurity` — injection impossibility; Harvard separation guarantee; sandboxing
+* `JtvEcho` — Echo effect dimension: Safe/Neutral/Breaking lattice, retained-loss fibre
+* `JtvExtended` — extended metatheory: algebraic cancellation/distribution, expression lemmas
+
+Note on grading: these libraries are *not* what carries JtV's verification grade.
+The estate's Theory Path puts Agda first, so the graded evidence is the four Agda
+modules under `theory/agda/` (Grade 3); the Lean leg's reconciliation is the
+outstanding item for Grade 2i. See `verification/PROOF-STATUS.adoc`.
 
 === Idris2 (`src/abi/Types.idr`)
 

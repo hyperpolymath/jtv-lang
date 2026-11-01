@@ -892,10 +892,17 @@ and the prose that said otherwise is corrected here. JtV's Harvard Data/Control
 split and its independently stated reversibility obligations (ADR-0007 D1–D6,
 spec §9, ADR-0009, ADR-0010) are untouched. Vocabulary overlap with `epistemic-types`,
 *JanusKey* and *Absolute Zero* is recorded as related work with no mapping, and
-no dependency is introduced. On the estate's proof grading, JtV holds **no
-mathesis grade**: it mechanised in Lean while the Theory Path puts Agda first, so
-its seven `sorry`-free libraries are target-only evidence under
-`standards/3-practice/PROOF-POLICY.adoc` §3 — a strong artefact in the wrong
-prover for the leg, not a weak one — and its first-party Rust carries no Creusot
-contracts. Both are recorded, with the ordered path to Grade 3, in
+no dependency is introduced. On the estate's proof grading, JtV holds
+**Grade 3 for four Agda modules** — `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`,
+`Jtv.Conditional` — checked under the canonical invocation with a filed receipt
+(`verification/receipts/2026-11-01-agda.adoc`). Its seven `sorry`-free Lean
+libraries are retained, but under `standards/3-practice/PROOF-POLICY.adoc` §3
+they are not the leg that carries the grade (the Theory Path puts Agda first):
+they are a strong artefact in a neighbouring prover, and one theorem
+(`rev_forward_backward`) is weaker than its Agda counterpart, which is why
+**Grade 2i is pending** rather than held. Still open beside it: the unported
+theorems (`dataExpr_totality`, the `isIntRepr` family, `JtvSecurity`'s AOLD
+bundle, `JtvExtended`), the Rust/Creusot leg — JtV's first-party Rust carries no
+Creusot contracts — and the statement reconciliation that Grade 2i needs. All of
+this is recorded, with the ordered path, in
 `verification/PROOF-STATUS.adoc`.

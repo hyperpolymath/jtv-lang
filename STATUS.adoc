@@ -70,6 +70,14 @@ All seven libraries compile cleanly under Lean 4 v4.12.0, Mathlib-free, with zer
 | `JtvSecurity`
 | Injection impossibility, sandboxing, Harvard separation guarantees
 | ✅ Compiles
+
+| `JtvEcho`
+| Echo lattice (Safe/Neutral/Breaking), admissibility policies, retained-loss fibre
+| ✅ Compiles
+
+| `JtvExtended`
+| Extended metatheory: algebraic cancellation/distribution, expression lemmas
+| ✅ Compiles
 |===
 
 === Idris2 ABI (`src/abi/Types.idr`)
