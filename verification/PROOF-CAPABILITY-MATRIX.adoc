@@ -9,6 +9,30 @@
 elsewhere. If another document disagrees with this matrix, this matrix is right
 and the other document is a bug.
 
+[IMPORTANT]
+====
+*Relationship to the estate's proof policy (added 2026-11-01).* This matrix is
+authoritative for *what JtV has mechanised, and in which prover*. It is **not** a
+statement of verification grade. Grades follow
+`hyperpolymath/mathesis:estate-mathematical-architecture` §5, where the source of
+truth for a *theory* statement is **Agda**, and
+`hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §1–§3, where a Lean-only
+proof of a theory statement is **target-only evidence** ("the Agda row stays
+`OPEN`").
+
+Consequence, stated plainly: the `verified` marks below are true *as matrix
+statements* (mechanised, `sorry`-free, in Lean), and they confer **no mathesis
+grade**, because no Agda witness exists yet. JtV's proof ledger, the estate legs
+per obligation, and the ordered path to Grade 3 are in
+`verification/PROOF-STATUS.adoc` — read it before quoting a `verified` row
+externally.
+
+Vocabulary bridge: this file's `verified` / `partial` / `stated-unproven` /
+`absent` are *local* to the matrix. The estate's closed tokens
+(`proven`, `proven-with-postulates`, `tested-only`, `argued`, `open`) are reserved
+for `PROOF-STATUS.adoc` and for prose outside this file.
+====
+
 == Status vocabulary (proof-specialised)
 
 [cols="1,4"]

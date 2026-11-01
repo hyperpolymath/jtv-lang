@@ -268,7 +268,7 @@ jtv/
 │   ├── jtv-cli/          REPL and command-line interface
 │   ├── jtv-lsp/          LSP server (tower-lsp)
 │   └── jtv-debug/        Debug adapter
-├── jtv_proofs/           Lean 4 formal proofs (5 libraries)
+├── jtv_proofs/           Lean 4 formal proofs (7 libraries)
 ├── src/abi/              Idris2 ABI type verification
 ├── spec/                 Language specifications (EBNF, type system)
 ├── docs/                 Design decisions (ADRs), language docs

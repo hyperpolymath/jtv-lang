@@ -166,6 +166,37 @@ Maintain this lighthearted spirit while ensuring rigorous implementation.
 - **Integration Tests**: Router Visualization demos must work in PWA
 - **Security Tests**: Attempt code injection, verify grammatical rejection
 
+## Proofs: which prover carries which obligation
+
+*Normative source:*
+[`hyperpolymath/standards` → `3-practice/PROOF-POLICY.adoc`](https://github.com/hyperpolymath/standards/blob/main/3-practice/PROOF-POLICY.adoc)
+(owner ruling 2026-10-26). This section is a summary for agents arriving here; the
+policy file wins and changes in the same change as it.
+
+| Obligation | Prover |
+|---|---|
+| Theory (lattices, orders, soundness of a calculus — "true of any implementation") | **Agda**, rechecked in **Rocq** and **Lean** |
+| APIs, ABIs, wire formats, totality/dispatch/round-trip properties of *this* system | **Idris2** |
+| Contracts and proofs on first-party **Rust** | **Creusot** (plus Kani for `unsafe`/FFI, Aeneas only where Rust implements a proved theorem) |
+| Ada | SPARK (not applicable here) |
+
+Two rules with teeth for this repo:
+
+* **JtV's Lean proofs are not the theory source of truth.** Under PROOF-POLICY §3
+  a Lean-only proof of a theory statement is *target-only evidence*; the Agda row
+  stays `open`. JtV currently has **no Agda source**, hence **no mathesis grade**
+  however strong the Lean work is. Status detail:
+  `verification/PROOF-STATUS.adoc`.
+* **No Mathlib**, and no weakening flags to make a check green. Theory proofs must
+  be Mathlib-free (they currently are) and Agda entrypoints use
+  `agda --safe --without-K --cubical-compatible`.
+
+Ledger and grade vocabulary: `verification/PROOF-STATUS.adoc` (estate-closed
+status tokens) and `verification/PROOF-CAPABILITY-MATRIX.adoc` (per-library
+detail). Grades are `Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` /
+`Grade 1` per `hyperpolymath/mathesis:estate-mathematical-architecture` §5 — never
+a percentage.
+
 ## Contact & Contribution
 
 When extending JtV:

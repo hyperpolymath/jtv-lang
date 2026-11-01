@@ -1,0 +1,443 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= JtV — Proof Status
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-01
+:revnumber: 1.0
+:toc: left
+:sectnums:
+
+[.lead]
+The proof-status file for this repository, recording which prover carries which
+obligation and the *strength* of each result, under the estate rules. It exists
+because JtV claims proofs (README, EXPLAINME §7, AFFIRMATION), which makes a
+ledger mandatory (`standards/docs/README-EXPLAINME-STANDARD.adoc` §5).
+
+*Normative sources — this file follows them, and where it disagrees with them
+they win:*
+
+* `hyperpolymath/standards` → `3-practice/PROOF-POLICY.adoc` — which prover
+  carries which obligation (§1 mapping), how theory proofs are rechecked (§2),
+  re-homing of existing proofs (§3), exceptions (§4), status vocabulary (§5).
+* `hyperpolymath/standards` → `docs/README-EXPLAINME-STANDARD.adoc` §5 — the
+  closed proof-ledger vocabulary.
+* `hyperpolymath/mathesis` → `estate-mathematical-architecture` §5 (graded proof
+  architecture) and §6 (epistemic precision, receipts, regressions).
+* `verification/PROOF-CAPABILITY-MATRIX.adoc` — JtV's own detail matrix
+  (per-library, per-theorem). This file is the ledger summary that matrix feeds.
+
+== 1. Conformance summary — the honest headline
+
+JtV is an *engineering-first* project with a *Lean-first* theory layer. Under the
+estate's Theory Path, that combination currently reaches **no mathesis grade at
+all**, for three independent reasons:
+
+[cols="1,3",options="header"]
+|===
+| Estate leg | State in JtV
+
+| Theory — *Agda* source of truth (PROOF-POLICY §1, §2)
+| *Absent.* No `.agda` file in the tree. This is the one that matters: every
+  mathesis grade (3, 2i, 2ii, 1) is defined on an Agda witness, so **with no Agda
+  witness there is no grade to assign**, however strong the Lean work is.
+
+| Theory — *Rocq* recheck leg
+| *Absent.* No `.v` file, no Dedukti/Lambdapi transport.
+
+| Theory — *Lean* recheck leg
+| *Present and substantial* (7 libraries, no `sorry`/`admit`/added `axiom`,
+  Mathlib-free). Under PROOF-POLICY §3 this is **target-only evidence**, not a
+  leg: "until then it is target-only evidence, recorded with its own status, and
+  the Agda row stays `OPEN`."
+
+| Engineering — *Idris2* (ABIs, wire formats, totality)
+| *Present.* `src/abi/Types.idr`, `%default total`, the Harvard GADT separation
+  and the purity/widening orderings.
+
+| Engineering — *Rust/Creusot* (contracts on first-party Rust)
+| *Absent.* No Creusot contract, no `why3` artefact, no Creusot harness anywhere
+  in `crates/`. Under §1 this is the mapping for JtV's core runtime.
+
+| Engineering — *Kani* (standing exception: `unsafe`, FFI seams)
+| *Absent* (see §4 rows K-1…K-2).
+|===
+
+*Status tokens used below* (closed vocabulary, PROOF-POLICY §5 /
+README-EXPLAINME §5): `proven`, `proven-with-postulates`, `tested-only`,
+`argued`, `open`. *Mathesis status tokens* (mathesis §6): `Open`, `Claimed`,
+`Grade 3`, `Grade 2i`, `Grade 2ii`, `Grade 1`, `Superseded`, `Regressed`.
+
+*Two honesty constraints applied to every row in this file:*
+
+. *No receipt was generated for these rows in the session that wrote them*
+  (2026-11-01): no `cargo`, no `lake`, no `idris2`, no Agda toolchain, and no
+  access to the hosts in PROOF-POLICY §6. Rows therefore record the *repository's
+  own* verification history — most recently a local `lake build` and
+  `cargo test`/clippy run reported 2026-06-21 in
+  `verification/PROOF-CAPABILITY-MATRIX.adoc` — and are marked `Claimed`
+  (repo-reported) where they would otherwise be `Grade 1`-style receipts.
+  PROOF-POLICY §2.3 is explicit that policy text "records a policy, not
+  successful proof executions"; the same applies to this ledger.
+. *Version pins for the re-verification claims:* Lean
+  `leanprover/lean4:v4.12.0` (`jtv_proofs/lean-toolchain`), Idris2 as installed
+  by `.github/workflows/proof-regression.yml` (distro package, `idris2-pack`
+  fallback). Agda/Agda-stdlib: **not pinned — none present.**
+
+=== 1.1 What Grade 3 would require, concretely
+
+Grade 3 = the theorem type-checks **locally in Agda** under the canonical
+invocation (`agda --safe --without-K --cubical-compatible <module.agda>`,
+PROOF-POLICY §2.1) and has **not** been translated to an independent foundation.
+Note the consequence for JtV: because the Lean proofs already exist, the moment an
+Agda witness for the same statement type-checks, JtV is *past* Grade 3 — it is at
+Grade 2i (Lean leg present, statement correspondence recorded), with Grade 2ii
+needing a non-DTT second leg (Isabelle/HOL) and Grade 1 needing a headless CI
+checker API receipt. The binding obligation is therefore **Agda first**, not more
+Lean.
+
+''''
+
+== 2. Proof ledger (closed vocabulary)
+
+=== 2.1 Theory obligations — JtV's own model
+
+All rows are proofs over the *model* (`DataExpr`/`State`, `Int`-carried), not over
+the Rust runtime — the model↔code rows are in §2.3. Every row's trust boundary
+says the same load-bearing thing, so it is stated once here and referenced:
+**T-BOUNDARY-THEORY** = "statement is about the Int-only semantic model; under
+PROOF-POLICY §1 the theory prover is Agda and under §3 a Lean-only proof is
+target-only evidence, so this row carries no mathesis grade until an Agda
+statement exists and the Lean statement is compared to it."
+
+[cols="2,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
+
+| Data fragment totality and determinism (`evalDataExpr` always yields a value,
+  and is a function)
+| `proven`
+| Lean 4.12.0, `lake build`, no `sorry`/`admit`/added `axiom`
+| `jtv_proofs/JtvTheorems.lean:dataExpr_totality`, `dataExpr_determinism`
+| T-BOUNDARY-THEORY
+
+| Data reduction reaches a literal; Data steps preserve state (purity/Harvard)
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvOperational.lean:data_terminates`, `data_is_pure`
+| T-BOUNDARY-THEORY; small-step only
+
+| Control cannot flow into Data; Data is inert (injection impossibility)
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvSecurity.lean:no_control_to_data_flow`,
+  `string_not_executable`, `no_vulnerable_constructs`
+| T-BOUNDARY-THEORY; "inert" is *evaluation lands in `Int`*, which is a weaker
+  statement than a full non-interference result over a real compiler
+
+| No Control→Data join points (every flow is `dataToControl`)
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvSecurity.lean:no_reverse_joinpoints`
+| T-BOUNDARY-THEORY
+
+| Type preservation for the integer-represented family `{int, hex, binary}`
+| `proven`
+| Lean 4.12.0, `lake build`; `#print axioms` reports no axioms
+| `jtv_proofs/JtvTypes.lean:type_preservation` (guarded by `isIntRepr`),
+  `type_preservation_int`
+| T-BOUNDARY-THEORY; carrier-distinct systems (float/rational/complex/symbolic)
+  are typed but **not** value-modelled — `gap-005`, open
+
+| Safe single-step reversal: `reverse (x += e)` where `x ∉ e.freeVars`
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvTheorems.lean:rev_forward_backward`, `rev_composition`
+| T-BOUNDARY-THEORY; one operation, one variable
+
+| Neutral (self-referential) step recoverable from a retained residue; the naive
+  inverse provably fails
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvTheorems.lean:rev_forward_backward_with_token`,
+  `rev_backward_naive_fails_self_ref`
+| T-BOUNDARY-THEORY; the model's token is a single `Int` residue for one `RevOp`
+  — **not** the runtime's multi-op log, and it models no conditional
+  (see §3.2 of `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`)
+
+| Echo lattice laws; write-block admissibility (Safe-only and
+  residue/Bennett policies)
+| `proven`
+| Lean 4.12.0, `lake build`, Mathlib-free
+| `jtv_proofs/JtvEcho.lean:blockEcho_admissible`,
+  `blockEcho_admissibleWithResidue`, `admissibleWithResidue_iff`,
+  `join_admissibleWithResidue`
+| T-BOUNDARY-THEORY
+
+| Number-system stratification by additive algebra → Echo tier
+| `proven` (classification) / `open` (value-level semantics)
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvEcho.lean` §6: `exact_groups_safe`, `float_not_safe`,
+  `hex_binary_collapse`, `reversal_tier_by_algebra`, `no_current_system_breaks`
+| T-BOUNDARY-THEORY. The `float`/`complex` non-associativity is *witnessed in
+  Rust* (`number.rs::approx_group_witness`), not proved in Lean: opaque `@[extern]
+  Float`, and `native_decide` is disallowed (it adds `Lean.ofReduceBool`).
+  Rational/symbolic value models are designed, not landed (`gap-005`).
+
+| Echo × Epistemic product effect row: comm/assoc/idem composition laws
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvEcho.lean` §5
+| T-BOUNDARY-THEORY; representational — no first-class function values exist yet,
+  so the graded arrow is latent
+|===
+
+=== 2.2 Theory obligations — estate legs (who must carry them)
+
+[cols="1,2,2,3",options="header"]
+|===
+| Leg | Obligation | Status | Note
+
+| T-AGDA
+| Agda source of truth for the §2.1 statements
+| `open`
+| *The binding obligation for any grade.* Absent entirely. Required invocation
+  `agda --safe --without-K --cubical-compatible` (PROOF-POLICY §2.1), with Agda
+  and stdlib versions pinned per commit.
+
+| T-ROCQ
+| Rocq recheck of the Agda witness
+| `open`
+| Absent. PROOF-POLICY §2 prefers Dedukti transport, re-proof as fallback;
+  echidna's exchange layer would be the transport route.
+
+| T-LEAN
+| Lean recheck of the Agda witness
+| `open` (leg) / `proven` (evidence)
+| The Lean proofs exist and are the strongest artefact in this repository, but a
+  leg is only a leg once the Agda source is `proven` and the Lean statement has
+  been **compared** with it and the comparison recorded (PROOF-POLICY §2.2,
+  §3). Recording the comparison is a separate obligation and is `open`.
+
+| T-GRADE
+| Mathesis verification grade
+| `Claimed`
+| Nothing above Grade 3 is reachable today; Grade 3 itself is not held because no
+  Agda witness exists. Recorded as `Claimed`, not downgraded to `Open`, because a
+  substantial kernel-checked artefact does exist — it is simply in the wrong
+  prover for the estate's Theory Path.
+|===
+
+=== 2.3 Model ↔ code obligations (the honest gap)
+
+[cols="2,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
+
+| Denotational model agrees with the interpreter on the integer fragment
+| `tested-only`
+| `cargo test`, harness `mod denotational_correspondence`
+| `crates/jtv-core/src/interpreter.rs`
+| Exhaustive over integer-fragment expressions of height ≤ 2 across three states
+  (≈12k cases), in-range only; **not** a mechanised refinement. Bounds are the
+  status.
+
+| Interpreter is a refinement of the Lean semantics (process, not property)
+| `open`
+| —
+| `gap-001` in `verification/PROOF-CAPABILITY-MATRIX.adoc`
+| Nothing exists. Nothing may be claimed above `argued` until it does.
+|===
+
+=== 2.4 Engineering-ledger rows (Idris2, Rust/Creusot, Kani)
+
+[cols="1,2,1,2,3",options="header"]
+|===
+| ID | Obligation | Status | Where / prover | Trust boundary
+
+| E-1
+| Harvard GADT separation: `isControl`, `dataIsNeverControl`
+| `proven`
+| `src/abi/Types.idr`, Idris2 `%default total`
+| Uses no `believe_me`; verified by the repo's `idris2-abi` CI job. Not re-run in
+  this session.
+
+| E-2
+| Purity ordering is a preorder (`purityLeqTrans`); numeric widening
+  (`widenTrans`) is transitive
+| `proven`
+| `src/abi/Types.idr`
+| As E-1.
+
+| E-3
+| ABI layout / FFI return-type / pointer-safety contracts
+| `open`
+| — (no such statements exist yet; the Zig FFI is unimplemented)
+| Absent work, not a failed proof.
+
+| K-1
+| `unsafe` block in `crates/jtv-cli/src/rsr_check.rs` is memory-safe
+| `open`
+| Kani (standing exception, PROOF-POLICY §4.1) — no harness
+| Kani reports `tested-only` with unwinding bounds. No harness exists.
+
+| K-2
+| FFI seam behaviour at coprocessor boundaries
+| `open`
+| Kani — no harness
+| Same as K-1; the seam is `ExternCoprocNotYetLowered`, so the surface is
+  currently a documented error path rather than live FFI.
+
+| R-1
+| Reversibility contract on `ReversibleInterpreter` (forward ∘ reverse = id)
+| `open` (Creusot) / `tested-only` (current evidence)
+| Creusot absent; `crates/jtv-core/tests/reversibility_tests.rs`,
+  `reversibility_c2_tests.rs`
+| Tested at unit and language-surface level for Safe blocks; **no** integration
+  round-trip for the Neutral tier and no proof. Findings F1–F3 in the 2026-11-01
+  audit are unproved *and* currently untested failure modes.
+
+| R-2
+| Echo admissibility gate holds on the executed path (not just the typechecked
+  path)
+| `tested-only`
+| `typechecker.rs` + tests; `Interpreter::run` does not consult the gate
+| The Lean rule is proved; the *executed* path is not gated unless the host
+  typechecks first. Recorded as `tested-only`, not `proven`, for that reason.
+
+| R-3
+| Contract on first-party Rust generally (PROOF-POLICY §1 mapping)
+| `open`
+| Creusot — none present
+| Whole-crate obligation; JtV's core runtime has no contracts. Sequencing in §5.
+|===
+
+''''
+
+== 3. Verification commands and their toolchain requirements
+
+[source,bash]
+----
+# Theory (Lean leg, target-only evidence)
+cd jtv_proofs && lake build          # pin: leanprover/lean4:v4.12.0
+grep -rnwE 'sorry|admit|axiom' jtv_proofs/*.lean   # must be empty
+
+# Engineering (Idris2 ABI)
+idris2 --check src/abi/Types.idr
+
+# Engineering (Rust behaviour — tested-only)
+cargo test --all
+
+# Estate legs not yet runtime-checkable here
+agda --safe --without-K --cubical-compatible <module>.agda   # no modules exist
+----
+
+*Toolchain honesty (PROOF-POLICY §6).* A session without Agda, Rocq/Lambdapi, or
+Creusot/Why3 **cannot run those legs**, and must say so rather than report them
+passing. The session that wrote this ledger had none of them. Adding them belongs
+in `setup.sh` (agent sessions) and the Guix manifest/container (CI) per
+`standards/LANGUAGE-POLICY.adoc` §2.
+
+''''
+
+== 4. Grade status by topic (mathesis §6 vocabulary)
+
+No percentages — the estate forbids flattening confidence (mathesis §6).
+
+[cols="2,1,3",options="header"]
+|===
+| Topic | Mathesis status | Why
+
+| Data totality / determinism / purity | `Claimed` | Kernel-checked in Lean;
+  no Agda source, so no grade. Target-only evidence per PROOF-POLICY §3.
+
+| Injection impossibility / Harvard separation (theory) | `Claimed` | As above.
+
+| Type preservation (integer-represented family) | `Claimed` | As above; also
+  axiom-free, which is recorded in the detail matrix.
+
+| Echo lattice + admissibility | `Claimed` | As above. The `echo-types` (Agda)
+  reference is *another repository's* artefact — JtV's Lean §4 fibre
+  correspondence is `argued`, not `proven`, because no statement comparison has
+  been recorded (PROOF-POLICY §2.2).
+
+| Reversibility (Safe step, Neutral residue step) | `Claimed` | Per-operation
+  model only; no conditional, no log semantics.
+
+| Reversibility (runtime, token/log semantics) | `Open` | Untested end-to-end for
+  the Neutral tier; findings F1–F3 open.
+
+| Interpreter ↔ model refinement (`gap-001`) | `Open` | `tested-only` at the
+  integer-fragment level; no refinement.
+
+| Rust contracts (Creusot) | `Open` | Absent.
+
+| ABI contracts (Idris2) | `Claimed` | `%default total` proofs present; not re-run
+  in this session.
+|===
+
+''''
+
+== 5. Path to Grade 3 and beyond (sequenced per PROOF-POLICY §2.3)
+
+Evidence-first order; each step keeps the existing gates green rather than
+replacing them.
+
+. *Keep the Lean and Idris2 gates exactly as they are.* They are the repository's
+  only kernel-checked evidence and `proof-regression.yml` already runs them.
+. *Take one exact theorem to Agda.* Not the whole suite: `dataExpr_totality`
+  (structural recursion over the `DataExpr` GADT — no fancy library needed) or
+  the Echo lattice laws (`Safe ⊑ Neutral ⊑ Breaking`, join is idempotent and
+  associative). Pin `agda --safe --without-K --cubical-compatible` plus the stdlib
+  version, and record both with the commit. **This single step is what converts
+  `Claimed` into Grade 3.**
+. *Then the Rocq leg* for that same statement (Dedukti transport via echidna's
+  exchange layer, or hand re-proof — PROOF-POLICY §2 lets either stand, provided
+  the route is recorded per theorem). That is Grade 2i.
+. *Reconcile statements, don't just compile both.* Record, per theorem: exact
+  proposition, assumptions, type/universe discipline, source revision, versions,
+  invocation, observed result, and the declared route (`transported` /
+  `re-proved`). A green build in both provers is **not** evidence they proved the
+  same proposition (PROOF-POLICY §2.2). This is the obligation most likely to be
+  skipped and it is the one that makes 2i mean anything.
+. *Grade 2ii* additionally needs a non-DTT leg — Isabelle/HOL — because Agda,
+  Rocq and Lean are all in the same DTT/CIC family and a second DTT leg buys no
+  foundational diversity (mathesis §5).
+. *Grade 1 / receipts* needs the headless checker API leg (AXLE for Lean,
+  coq-lsp for Rocq, Isabelle server for HOL) plus the pinned commit hash, so
+  mathesis can detect `Regressed`/`Superseded` states later.
+
+=== 5.1 The Rust/Creusot route — and the Aeneas temptation
+
+PROOF-POLICY §1 puts JtV's core runtime under Creusot: contracts and proofs on
+the first-party Rust itself. None exist, so every behavioural claim about
+`reversible.rs`/`interpreter.rs` is currently `tested-only` at best.
+
+Aeneas is *the* estate route for "Rust code implements a theorem proved in a
+proof assistant" (§4.1), which is exactly JtV's `gap-001`. It is **not** adoptable
+today, and the reason is policy, not preference:
+
+* Aeneas's Rocq backend carries an axiom (`mk_array`) from which `False` is
+  derivable and is unmaintained → cannot support any status above `ASSUMED`.
+* Aeneas's Lean backend depends on Mathlib, which §2 rules out estate-wide.
+* Therefore the Rust↔model correspondence row is `ASSUMED` at best, and the
+  model theorem stays `proven` only because its own kernel check is independent.
+
+Recorded so a future session does not "close the proof-to-interpreter gap" with
+Aeneas and then report the implementation as proved: per §4.1 that would be two
+rows — `proven` for the model, `ASSUMED` for the correspondence — and needs a
+recorded owner decision to adopt the backend at all.
+
+''''
+
+== 6. Changelog
+
+[cols="1,3,1",options="header"]
+|===
+| Date | Change | By
+
+| 2026-11-01 | Initial estate-conformant ledger. Records that JtV holds no
+  mathesis grade (no Agda source), that the Lean theory layer is target-only
+  evidence under PROOF-POLICY §3, that no Rust/Creusot leg exists, and the
+  ordered path to Grade 3. No prover was executed for these rows. | audit session
+|===

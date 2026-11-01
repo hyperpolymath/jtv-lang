@@ -242,7 +242,7 @@ The v2 reversibility design (5 decisions, see `docs/language/DESIGN-JTV-V2-REVER
 
 === 7.1 Lean 4 Libraries
 
-The `jtv_proofs/` directory contains five Lean 4 libraries under `jtv_proofs/lakefile.lean`. All compile under Lean 4 v4.12.0 with zero `sorry` or `sorryAx`.
+The `jtv_proofs/` directory contains seven Lean 4 libraries under `jtv_proofs/lakefile.lean` (`JtvCore`, `JtvTheorems`, `JtvOperational`, `JtvTypes`, `JtvSecurity`, `JtvEcho`, `JtvExtended`). All compile under Lean 4 v4.12.0 with zero `sorry` or `sorryAx`, Mathlib-free.
 
 [source,lean]
 ----
@@ -289,6 +289,81 @@ The proofs verify semantic *models*, not the executable Rust interpreter directl
 * Rust interpreter processes: `pest` parse tree → `Value` enum → side effects
 
 Bridging this gap (extraction or correlation testing) is future work. The proofs are nonetheless valuable: they pin the semantics precisely, making any divergence between model and implementation *detectable*.
+
+=== 7.4 Verification strength, and why "Lean" is not "graded"
+
+Two separate questions, often conflated:
+
+* *Is it mechanised?* Yes, for the model: seven `sorry`-free Lean libraries, and
+  an Idris2 ABI development under `%default total`. See
+  `verification/PROOF-CAPABILITY-MATRIX.adoc` for per-library detail.
+* *What verification grade does that earn in the estate?* None yet. Grades follow
+  `hyperpolymath/mathesis:estate-mathematical-architecture` §5, where a *theory*
+  statement's source of truth is **Agda**; under
+  `hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §3 a Lean-only theory
+  proof is *target-only evidence* and the Agda row stays `open`. JtV has no Agda
+  source, so **no Grade 3 (or better) is held**, however strong the Lean work is.
+
+Practical consequence: quote the matrix for "what is mechanised", and
+`verification/PROOF-STATUS.adoc` for "how strongly this is established, against
+which prover, and what remains". Grades are recorded as one of
+`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1` — never as a
+percentage.
+
+[[proof-ledger]]
+=== 7.5 Proof ledger
+
+A proof ledger is mandatory once a repository claims proofs
+(`standards/docs/README-EXPLAINME-STANDARD.adoc` §5). JtV's is
+`verification/PROOF-STATUS.adoc`; it carries the closed-vocabulary rows.
+
+[cols="2,1,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where and trust boundary
+
+| Data totality / determinism / purity (model)
+| `proven`
+| Lean 4.12.0, `lake build`, no `sorry`/`admit`/`axiom`
+| `jtv_proofs/JtvTheorems.lean`, `JtvOperational.lean`. Trust boundary: Int-only
+  model; target-only evidence under PROOF-POLICY §3, so no mathesis grade.
+
+| Injection impossibility / Harvard separation (model)
+| `proven`
+| Lean 4.12.0, `lake build`
+| `jtv_proofs/JtvSecurity.lean`. Boundary: "inert" means evaluation lands in
+  `Int`; not a full compiler-level non-interference result.
+
+| Echo lattice + reverse-block admissibility (Safe and residue policies)
+| `proven`
+| Lean 4.12.0, `lake build`, Mathlib-free
+| `jtv_proofs/JtvEcho.lean`. Boundary: the residue policy is mechanised for one
+  operation; the runtime log and its conditionals are not modelled.
+
+| ABI separation and totality (engineering)
+| `proven`
+| Idris2 `%default total`, CI job `idris2-abi`
+| `src/abi/Types.idr`. Boundary: interface contract only — not the Rust body.
+
+| Interpreter agrees with the denotational model (integer fragment)
+| `tested-only`
+| `cargo test`, `mod denotational_correspondence`
+| `crates/jtv-core/src/interpreter.rs`. Boundary: expressions of height ≤ 2,
+  in-range i64; exhaustive-up-to-depth, not a refinement.
+
+| Reversibility round-trip on the executed path (Neutral tier, conditionals)
+| `open`
+| —
+| Findings F1–F3 in
+  `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8. Boundary:
+  not proved, and not currently tested end-to-end.
+
+| Contracts on first-party Rust
+| `open`
+| Creusot — none present
+| Whole-crate obligation under PROOF-POLICY §1. Boundary: every behavioural claim
+  about the interpreter is `tested-only` until this leg exists.
+|===
+
 
 ---
 

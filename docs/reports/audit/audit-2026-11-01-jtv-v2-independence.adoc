@@ -4,7 +4,7 @@
 = Audit: JtV v2 is an Independent Research-Language Programme
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :revdate: 2026-11-01
-:revnumber: 1.0
+:revnumber: 1.1
 :toc: left
 :sectnums:
 
@@ -499,6 +499,19 @@ dependency graph exactly as it is.
 These are the connections the shared vocabulary invites. Each is recorded with
 its *actual* relation to JtV and the reason it is not a dependency.
 
+[NOTE]
+====
+*Evidential status of this section.* Every relation below is an inference drawn by
+this session from repository contents; none is a receipt. Per mathesis
+`estate-mathematical-architecture` §8, bridges or correspondences suggested by a
+model must be tagged: **everything in §6 and §7 is LLM-Hypothesized
+(Unverified)** and belongs in a nomination, not in the catalogue. The *negative*
+findings in §1 (absence of dependencies) are grep-checked against this tree at
+`b23f8e9` and are not hypotheses; the *positive* readings of what
+another project's artefacts would have to supply cannot be checked from here and
+carry the tag.
+====
+
 === 6.1 Janus (Lutz & Derby 1982; Yokoyama & Glück 2007)
 
 *Relation:* literature lineage. JtV's per-operation reversal — and the
@@ -722,13 +735,106 @@ the language surface.
 * `docs/ecosystem-status.adoc` — a non-dependency statement for the portfolio
   table: JtV ships no code dependency on Absolute Zero, JanusKey, or any sibling;
   the status document reports, it does not couple.
+* `verification/PROOF-STATUS.adoc` — *new.* JtV's estate-conformant proof ledger:
+  the closed status vocabulary per obligation, the prover legs required by
+  PROOF-POLICY §1, the mathesis grade status (none held), and the graded path to
+  Grade 3 (§5). No prover was executed for its rows, and it says so.
+* `verification/PROOF-CAPABILITY-MATRIX.adoc` — header note separating "what JtV
+  has mechanised, in which prover" from "what grade that earns"; the matrix's
+  local `verified`/`partial` vocabulary explicitly does *not* confer a grade.
+* `EXPLAINME.adoc` — §7.1 corrected from "five Lean libraries" to the actual
+  seven; new §7.4 (strength vs grade) and §7.5 (the `[[proof-ledger]]` summary the
+  README-EXPLAINME standard requires once proofs are claimed).
+* `CLAUDE.md` — the PROOF-POLICY pointer the policy expects every repository's
+  `CLAUDE.md` to carry, with the two rules with teeth for this repo (Lean ≠ theory
+  source of truth; no Mathlib, no weakened flags).
+* `STATUS.adoc` — grade row in the classification table.
 
 Nothing in the code, the grammar, the dependency graph, or the proof
-requirements was changed by this audit.
+*requirements* was changed by this audit. No prover, verifier, or test suite was
+executed in this session (§3.1 covers what is claimed without execution).
 
 ''''
 
-== §9 One-paragraph answer
+== §9 Estate conformance: which grade does any of this earn?
+
+Folded in 2026-11-01 at the owner's direction: the governing policies are
+`hyperpolymath/mathesis` → `estate-mathematical-architecture` (§5 graded proof
+architecture, §6 epistemic precision) and `hyperpolymath/standards` →
+`3-practice/PROOF-POLICY.adoc` (§1 prover mapping, §2 rechecking, §3 re-homing,
+§4 exceptions, §5 vocabulary). JtV now carries a ledger at
+`verification/PROOF-STATUS.adoc`; this section is the audit-level summary.
+
+=== 9.1 The grade definitions that matter here
+
+* *Grade 3* — the theorem type-checks **locally in Agda** under strict flags
+  (`agda --safe --without-K --cubical-compatible`), not yet translated to an
+  independent foundation.
+* *Grade 2i / 2ii* — the **Agda witness** is translated to one / two other
+  foundations (2ii's second must be non-DTT, e.g. Isabelle/HOL, because
+  Agda/Rocq/Lean share the DTT-CIC family).
+* *Grade 1* — those witnesses compile headless in CI via verified checker APIs
+  (AXLE for Lean, coq-lsp for Rocq, Isabelle server for HOL), receipt pinned to a
+  commit.
+* Statuses are `Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` /
+  `Grade 1` (plus `Superseded` / `Regressed`). *Never* a percentage.
+
+=== 9.2 JtV's position
+
+*JtV holds no grade at all.* Not because its proofs are weak, but because of an
+ordering choice: JtV mechanised in Lean first, and the estate's Theory Path puts
+Agda first. PROOF-POLICY §3 settles the consequence without ambiguity — a Lean
+proof of a theory statement is *target-only evidence*, and "the Agda row stays
+`OPEN`". JtV has zero `.agda` files. So:
+
+[cols="2,1,3",options="header"]
+|===
+| Layer | Estate status | Note
+
+| Theory source (Agda) | `open` | Missing entirely; the binding obligation
+| Theory recheck (Rocq) | `open` | No `.v`, no Dedukti transport
+| Theory recheck (Lean) | `open` as a *leg* | Present as evidence: 7 libraries,
+  no `sorry`/`admit`/`axiom`, Mathlib-free (satisfies §2's no-Mathlib rule) —
+  but a leg only counts once the Agda source is `proven` and the statements have
+  *been compared*, with that comparison recorded (§2.2)
+| Engineering (Idris2 ABI) | `proven` | `src/abi/Types.idr`, `%default total`
+| Engineering (Rust/Creusot) | `open` | No contracts anywhere in `crates/`; this
+  is the §1 mapping for JtV's core runtime
+| Model ↔ interpreter (`gap-001`) | `open` / `tested-only` | Harness only
+| Mathesis grade | `Claimed` | Substantial kernel-checked work exists; it is in
+  the wrong prover for the estate's Theory Path
+|===
+
+=== 9.3 What this audit therefore does *not* claim
+
+It does not claim JtV's reversibility is "proved". §3 already scopes that
+precisely; the estate vocabulary makes the scoping citable: the Safe single-step
+and Neutral residue-step theorems are `proven` *over the model and in the wrong
+prover for the leg*, the runtime log semantics is `tested-only` at best, the
+Neutral round-trip is `open`, and the Rust contracts are `open`.
+
+=== 9.4 The shortest route to Grade 3 (and why it is one theorem, not a suite)
+
+Per PROOF-POLICY §2.3's evidence-first order, keep the Lean and Idris2 gates
+running, then take **one exact theorem** to Agda under the canonical invocation
+and pin the Agda + stdlib versions with the commit. `dataExpr_totality`
+(structural recursion over the `DataExpr` GADT) and the Echo lattice laws are the
+cheapest honest candidates: no library dependency, no cubical feature, and the
+Lean statement already exists to be compared against. The moment one such
+statement type-checks in Agda *and the Lean statement has been compared with it*,
+JtV is at Grade 2i — because the Lean leg already exists. Grade 3 alone (Agda,
+untranslated) is a state JtV would have to reach by *not* having Lean, so it is
+better understood as a milestone on the way, not a destination.
+
+*On the Rust side*, Aeneas is the estate's route for "Rust implements a proved
+theorem" — precisely `gap-001` — and it is **not** adoptable today: its Rocq
+backend carries an axiom (`mk_array`) from which `False` is derivable and is
+unmaintained, and its Lean backend requires Mathlib, which §2 forbids. The
+correspondence row would be `ASSUMED` at best. Recorded so no future session
+closes the proof-to-interpreter gap with Aeneas and then reports the
+implementation as proved.
+
+== §10 One-paragraph answer
 
 JtV v2 remains an independent research-language programme. Its reversible
 runtime is JtV's own: an in-process linear token (`u64`) indexing a
@@ -748,4 +854,10 @@ and the prose that said otherwise is corrected here. JtV's Harvard Data/Control
 split and its independently stated reversibility obligations (ADR-0007 D1–D6,
 spec §9, ADR-0009, ADR-0010) are untouched. Vocabulary overlap with `epistemic-types`,
 *JanusKey* and *Absolute Zero* is recorded as related work with no mapping, and
-no dependency is introduced.
+no dependency is introduced. On the estate's proof grading, JtV holds **no
+mathesis grade**: it mechanised in Lean while the Theory Path puts Agda first, so
+its seven `sorry`-free libraries are target-only evidence under
+`standards/3-practice/PROOF-POLICY.adoc` §3 — a strong artefact in the wrong
+prover for the leg, not a weak one — and its first-party Rust carries no Creusot
+contracts. Both are recorded, with the ordered path to Grade 3, in
+`verification/PROOF-STATUS.adoc`.

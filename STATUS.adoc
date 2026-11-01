@@ -45,7 +45,7 @@ Proof artefacts are in `jtv_proofs/` (Lean 4) and `src/abi/` (Idris2).
 
 === Lean 4 (`jtv_proofs/`)
 
-All five libraries compile cleanly under Lean 4 v4.12.0, with zero `sorry` or `sorryAx`:
+All seven libraries compile cleanly under Lean 4 v4.12.0, Mathlib-free, with zero `sorry` or `sorryAx`:
 
 [cols="1,2,1", options="header"]
 |===
@@ -163,7 +163,7 @@ Phase 2 Echo mechanisation (Lean 4):
 | Implemented; 531 tests passing
 
 | Formal proofs (Lean 4)
-| 5 libraries compile; zero sorry
+| 7 libraries compile; zero sorry; no mathesis grade (see `verification/PROOF-STATUS.adoc`)
 
 | Formal proofs (Idris2)
 | ABI types verified; total enforcement
@@ -179,4 +179,7 @@ Phase 2 Echo mechanisation (Lean 4):
 
 | Extensions (quantum, probabilistic, advanced types)
 | Research directions — not implemented
+
+| Verification grade (estate)
+| *No mathesis grade held* — Lean-first theory layer is target-only evidence under PROOF-POLICY §3; no Agda source; no Rust/Creusot leg. See `verification/PROOF-STATUS.adoc`
 |===
