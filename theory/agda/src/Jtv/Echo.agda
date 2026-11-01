@@ -146,6 +146,7 @@ token-buys-neutral = refl , refl
 
 open import Data.List using (List; []; _∷_)
 
+-- Return the worst tier in the block, or Safe for an empty block.
 blockEcho : List Echo → Echo
 blockEcho = foldr _⊔_ Safe
   where
@@ -153,10 +154,12 @@ blockEcho = foldr _⊔_ Safe
     foldr f z [] = z
     foldr f z (x ∷ xs) = f x (foldr f z xs)
 
+-- Check each tier against the Safe-only policy; an empty block is admissible.
 allAdmissible : List Echo → Bool
 allAdmissible [] = true
 allAdmissible (e ∷ es) = admissible e ∧ allAdmissible es
 
+-- Check each tier against the residue policy; an empty block is admissible.
 allAdmissibleWithResidue : List Echo → Bool
 allAdmissibleWithResidue [] = true
 allAdmissibleWithResidue (e ∷ es) = admissibleWithResidue e ∧ allAdmissibleWithResidue es

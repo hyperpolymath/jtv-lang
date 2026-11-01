@@ -79,17 +79,20 @@ data RevOp : Set where
   addAssign : Var → DataExpr → RevOp
   subAssign : Var → DataExpr → RevOp
 
+-- Apply the assignment using the operand evaluated in the original state.
 execForward : RevOp → State → State
 execForward (addAssign x e) σ = update σ x (σ x + eval e σ)
 execForward (subAssign x e) σ = update σ x (σ x + (- eval e σ))
 
--- The naive inverse: undo by the opposite arithmetic, from the current
--- state. Correct only in the Safe tier.
+-- Apply the opposite arithmetic using the operand evaluated in the current
+-- state. The forward round trip restores the state when the assigned variable
+-- is not free in the operand; it can fail for self-referential operands.
 execBackward : RevOp → State → State
 execBackward (addAssign x e) σ = update σ x (σ x + (- eval e σ))
 execBackward (subAssign x e) σ = update σ x (σ x + eval e σ)
 
--- The Neutral-tier inverse: restore from the retained residue.
+-- Restore the assigned variable from the retained residue, the value it held
+-- before the forward step. Other variables retain their current values.
 execBackwardWithToken : RevOp → State → ℤ → State
 execBackwardWithToken (addAssign x _) σ tok = update σ x tok
 execBackwardWithToken (subAssign x _) σ tok = update σ x tok

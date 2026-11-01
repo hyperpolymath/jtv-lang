@@ -54,6 +54,8 @@ eval (var x) σ = σ x
 eval (add e₁ e₂) σ = eval e₁ σ + eval e₂ σ
 eval (neg e) σ = - (eval e σ)
 
+-- List the variable occurrences in expression order; repeated variables
+-- remain in the list.
 freeVars : DataExpr → List Var
 freeVars (lit n) = []
 freeVars (var x) = x ∷ []
@@ -72,6 +74,8 @@ decIf : ∀ {p : Set} → Dec p → ℤ → ℤ → ℤ
 decIf (yes _) t f = t
 decIf (no _) t f = f
 
+-- Return a state with the given variable set to the new value; all other
+-- variables retain their previous values.
 update : State → Var → ℤ → State
 update σ z v = λ x → decIf (x ≟ z) v (σ x)
 

@@ -78,6 +78,8 @@ reverse-if-recorded : Bool → Var → ℤ → State → State
 reverse-if-recorded true  x v σ = update σ x (σ x + (- v))
 reverse-if-recorded false _ _ σ = σ
 
+-- Add the given value to the variable when the guard holds in the input
+-- state; otherwise return that state unchanged.
 forward-if : (State → Bool) → Var → ℤ → State → State
 forward-if g x v σ = if g σ then update σ x (σ x + v) else σ
 
