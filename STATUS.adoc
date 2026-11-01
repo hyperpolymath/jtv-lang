@@ -181,5 +181,5 @@ Phase 2 Echo mechanisation (Lean 4):
 | Research directions — not implemented
 
 | Verification grade (estate)
-| *No mathesis grade held* — Lean-first theory layer is target-only evidence under PROOF-POLICY §3; no Agda source; no Rust/Creusot leg. See `verification/PROOF-STATUS.adoc`
+| *Grade 3* held for four Agda modules (`theory/agda/`: Data model, Safe/Neutral reversal, Echo lattice + fibre, tokenless-`if` counterexample), receipt filed. Grade 2i pending one Lean↔Agda strengthening reconciliation; Rocq leg, non-DTT leg and Rust/Creusot leg absent. See `verification/PROOF-STATUS.adoc`
 |===

@@ -4,7 +4,7 @@
 = Audit: JtV v2 is an Independent Research-Language Programme
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :revdate: 2026-11-01
-:revnumber: 1.1
+:revnumber: 1.2
 :toc: left
 :sectnums:
 
@@ -781,9 +781,19 @@ architecture, §6 epistemic precision) and `hyperpolymath/standards` →
 
 === 9.2 JtV's position
 
-*JtV holds no grade at all.* Not because its proofs are weak, but because of an
-ordering choice: JtV mechanised in Lean first, and the estate's Theory Path puts
-Agda first. PROOF-POLICY §3 settles the consequence without ambiguity — a Lean
+*Status update (later the same day): JtV now holds Grade 3 for four Agda modules.*
+The section below is the position *as audited*; it is kept because it explains
+why the gap existed, and because every word of it still applies to the theorems
+that were **not** ported. `theory/agda/` now carries `Jtv.Core`, `Jtv.Reversal`,
+`Jtv.Echo` and `Jtv.Conditional` under the canonical invocation, receipted in
+`verification/receipts/2026-11-01-agda.adoc`, with the per-theorem Lean↔Agda
+correspondence (and its one strengthening discrepancy) in
+`theory/agda/README.adoc` §4. Grade 2i is pending that reconciliation; the Rocq
+leg, a non-DTT leg and any Rust/Creusot leg remain absent.
+
+*As audited, JtV held no grade at all.* Not because its proofs were weak, but
+because of an ordering choice: JtV mechanised in Lean first, and the estate's
+Theory Path puts Agda first. PROOF-POLICY §3 settles the consequence without ambiguity — a Lean
 proof of a theory statement is *target-only evidence*, and "the Agda row stays
 `OPEN`". JtV has zero `.agda` files. So:
 
@@ -801,8 +811,8 @@ proof of a theory statement is *target-only evidence*, and "the Agda row stays
 | Engineering (Rust/Creusot) | `open` | No contracts anywhere in `crates/`; this
   is the §1 mapping for JtV's core runtime
 | Model ↔ interpreter (`gap-001`) | `open` / `tested-only` | Harness only
-| Mathesis grade | `Claimed` | Substantial kernel-checked work exists; it is in
-  the wrong prover for the estate's Theory Path
+| Mathesis grade | `Claimed` → *`Grade 3` (§2.1b)* | Four modules ported to Agda
+  the same day and receipted; the Lean-only remainder stays `Claimed`
 |===
 
 === 9.3 What this audit therefore does *not* claim

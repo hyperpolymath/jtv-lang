@@ -21,8 +21,11 @@ proof of a theory statement is **target-only evidence** ("the Agda row stays
 `OPEN`").
 
 Consequence, stated plainly: the `verified` marks below are true *as matrix
-statements* (mechanised, `sorry`-free, in Lean), and they confer **no mathesis
-grade**, because no Agda witness exists yet. JtV's proof ledger, the estate legs
+statements* (mechanised, `sorry`-free, in Lean). A subset now also has an Agda
+source (`theory/agda/`, four modules, receipted 2026-11-01) and therefore a
+mathesis grade — see `theory/agda/README.adoc` for the per-theorem Lean↔Agda
+correspondence, and `verification/PROOF-STATUS.adoc` §2.1b for the graded rows.
+The Lean-only remainder still confers **no grade**. JtV's proof ledger, the estate legs
 per obligation, and the ordered path to Grade 3 are in
 `verification/PROOF-STATUS.adoc` — read it before quoting a `verified` row
 externally.
@@ -125,6 +128,7 @@ representation-agnostic.)
 | `JtvOperational` | `verified` | Small/big-step equivalence, progress, `data_terminates`, `data_is_pure`; Control non-termination shown by example.
 | `JtvTypes` | `verified` | Typing/purity rules, algebraic cancellation, semantic equivalence congruences.
 | `JtvSecurity` | `verified` | Injection impossibility, no Control→Data flow, OWASP mitigation, sandboxing.
+| *Agda* `theory/agda` | `verified` (4 modules) | Data-fragment model, Safe/Neutral reversal, Echo lattice + fibre, tokenless-`if` counterexample. Grade 3; receipt `verification/receipts/2026-11-01-agda.adoc`.
 | `JtvExtended` | `verified` | Strong normalization, confluence, non-interference, reversibility composition.
 | `JtvEcho` | `verified` | *New.* Echo lattice + reverse-block admissibility + fibre correspondence with `echo-types`.
 |===

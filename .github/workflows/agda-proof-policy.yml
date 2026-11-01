@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Enforces the estate Theory Path for JtV: theory proofs are checked in Agda
+# with the canonical invocation.
+#   hyperpolymath/standards:3-practice/PROOF-POLICY.adoc §2.1, §6
+#   hyperpolymath/mathesis:estate-mathematical-architecture §5
+#
+# Verify this gate both ways (PROOF-POLICY §7): it must fail on a planted
+# `{!!}` as well as pass on the tree.
+name: agda-proof-policy
+
+on:
+  push:
+    branches: [main]
+    paths: ['theory/agda/**', '.github/workflows/agda-proof-policy.yml']
+  pull_request:
+    paths: ['theory/agda/**', '.github/workflows/agda-proof-policy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agda:
+    name: Agda theory proofs (canonical invocation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOTE: the pinned versions are Agda 2.7.0.1 and agda-stdlib 2.4.
+      # This job uses the Debian/apt pair as the cheapest reproducible
+      # route; if the distro version drifts from the pin, switch to the
+      # Guix manifest or a pinned container (PROOF-POLICY §6) rather than
+      # silently checking with a different Agda.
+      - name: Install Agda + standard library
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y agda agda-stdlib
+          agda --version
+
+      - name: Register the standard library
+        run: |
+          mkdir -p ~/.agda
+          LIB=$(find /usr/share -name 'standard-library*.agda-lib' 2>/dev/null | head -1)
+          if [ -z "$LIB" ]; then echo "::error::agda-stdlib not found"; exit 1; fi
+          echo "$LIB" > ~/.agda/libraries
+          awk '/^name:/{print $2}' "$LIB" > ~/.agda/defaults
+          cat ~/.agda/defaults
+
+      - name: Check theory proofs (fails on any hole or postulate)
+        working-directory: theory/agda
+        run: ./check.sh
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agda-proof-receipt
+          path: theory/agda/_build/**
+          if-no-files-found: ignore
+          retention-days: 30
