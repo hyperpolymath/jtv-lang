@@ -187,8 +187,13 @@ Two rules with teeth for this repo:
   stays `open`. JtV now has an Agda layer for **part** of the model
   (`theory/agda/`: `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`, `Jtv.Conditional`,
   **Grade 3**, receipt in `verification/receipts/`). The *remaining* Lean
-  theorems — Control-plane, `JtvExtended`, the non-`isIntRepr` type preservation,
-  `JtvSecurity`'s AOLD bundle — are still Lean-only and carry **no grade**. So:
+  theorems — Control-plane, `JtvExtended`, **all of `JtvTypes` type preservation
+  including the `isIntRepr` family**, `JtvSecurity`'s AOLD bundle — are still
+  Lean-only and carry **no grade**. (None of the four Agda modules defines
+  `JtvType`, `isIntRepr` or any type-preservation theorem, so a type-preservation
+  claim cannot be part of the graded subset; this sentence said "the *non*-
+  `isIntRepr` type preservation", which wrongly implied the integer family had
+  been ported.) So:
   quote the graded subset from `verification/PROOF-STATUS.adoc` §2.1b, and treat
   every other Lean theorem as `Claimed`.
 * **No Mathlib**, and no weakening flags to make a check green. Theory proofs must

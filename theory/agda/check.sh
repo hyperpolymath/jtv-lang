@@ -20,7 +20,13 @@
 #                      Agda uses the user's own library configuration.
 set -uo pipefail
 
-cd "$(dirname "$0")"
+# Resolve this script's directory *before* changing into it: invoking the
+# script from the repository root (`theory/agda/check.sh`) and then asking for
+# `dirname "$0"` again would look for `theory/agda/theory/agda`. The failure
+# was silent — the script has no `set -e` — and the library registry then got a
+# nonexistent path, so AGDA_STDLIB runs from the repo root failed confusingly.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE"
 
 # The receipt is a *file* as well as terminal output: CI uploads
 # _build/check.log as the run's artifact, and the ledger cites exactly that
@@ -75,7 +81,6 @@ if [ -n "${AGDA_STDLIB:-}" ]; then
   if [ ! -f "$AGDA_STDLIB" ]; then
     echo "AGDA_STDLIB=$AGDA_STDLIB does not exist" >&2; exit 2
   fi
-  HERE="$(cd "$(dirname "$0")" && pwd)"
   TMPLIBS="$(mktemp)"
   printf '%s\n%s\n' "$AGDA_STDLIB" "$HERE/jtv-theory.agda-lib" > "$TMPLIBS"
   LIBFLAGS=(--library-file "$TMPLIBS" --no-default-libraries)

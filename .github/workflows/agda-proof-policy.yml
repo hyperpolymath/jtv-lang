@@ -51,6 +51,16 @@ permissions:
 env:
   AGDA_VERSION: '2.7.0.1'
   AGDA_STDLIB_TAG: 'v2.4'
+  # The *commit* each tag resolved to, and the sha256 of the archive fetched at
+  # that commit. Tags are mutable (`git tag -f` is legal and silent), so a tag
+  # URL is not a pin: it can serve different bytes while still claiming the same
+  # version, and the library-name assertion below cannot see the difference.
+  # Fetching by commit makes the bytes immutable; the digest makes even a
+  # compromised archive detectable.
+  AGDA_COMMIT: 'a6fc20c27ae953149b53a8997ba4a1c8b17d628a'
+  AGDA_SHA256: '036bcca0ebf6cb2ceb17be58240f7634b99b7e9cd81521be56b2f3e9926d33d5'
+  AGDA_STDLIB_COMMIT: '2a5a0dec0a3cb5c87468ce101388a513d39dbf10'
+  AGDA_STDLIB_SHA256: '9c643759e49eca6b3538edd3cc1c0f30b572e629f2ad154a835ff97eca21c737'
 
 jobs:
   agda:
@@ -71,15 +81,19 @@ jobs:
           # ships without data/lib/prim — fetched from the matching source tag.
           pip install "agda==${AGDA_VERSION}"
           AGDA_DATA="$(python -c 'import agda,os;print(os.path.join(os.path.dirname(agda.__file__),"data"))')"
-          curl -sSL "https://codeload.github.com/agda/agda/tar.gz/refs/tags/v${AGDA_VERSION}" -o /tmp/agda-src.tar.gz
+          curl -sSL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
+          echo "${AGDA_SHA256}  /tmp/agda-src.tar.gz" | sha256sum -c -
           tar xzf /tmp/agda-src.tar.gz -C /tmp
+          mv "/tmp/agda-${AGDA_COMMIT}" "/tmp/agda-${AGDA_VERSION}"
           rm -rf "$AGDA_DATA/lib"
           mkdir -p "$AGDA_DATA"
           cp -r "/tmp/agda-${AGDA_VERSION}/src/data/lib" "$AGDA_DATA/lib"
 
           # Standard library at the pinned tag.
-          curl -sSL "https://codeload.github.com/agda/agda-stdlib/tar.gz/refs/tags/${AGDA_STDLIB_TAG}" -o /tmp/stdlib.tar.gz
+          curl -sSL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
+          echo "${AGDA_STDLIB_SHA256}  /tmp/stdlib.tar.gz" | sha256sum -c -
           tar xzf /tmp/stdlib.tar.gz -C /tmp
+          mv "/tmp/agda-stdlib-${AGDA_STDLIB_COMMIT}" "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}"
           echo "AGDA_STDLIB=/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib" >> "$GITHUB_ENV"
 
           agda --version
