@@ -129,6 +129,10 @@ Phase 2 Echo mechanisation (Lean 4):
 | AffineScript alignment
 | `ALIGNMENT-AFFINESCRIPT.adoc`
 | Design decisions recorded; implementation pending
+
+| v2 independence + per-layer semantics audit
+| `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`
+| Complete (2026-11-01); no sibling-project dependency; findings F1–F7 open
 |===
 
 ---
@@ -136,7 +140,10 @@ Phase 2 Echo mechanisation (Lean 4):
 == Known Gaps
 
 - Verification chain incomplete: proofs validate models but are not wired to the executable interpreter
+  (the Lean token is a single-op `Int` residue; the runtime token is a multi-op `Vec<RecordedOp>` log, and no refinement connects them)
 - Reversibility round-trip: no full `(forward ∘ reverse = id)` test at the integration level
+- Reversible `if` branches: branch assignments are graded `Safe` by Echo but recorded as nothing, so `reverse` is a silent no-op there (F1–F2); tokenless `reverse { }` re-evaluates its guard on reversal and can silently skip the undo (F3) — see `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8
+- `irreversible { }` and the typed `ReversalToken<S>` are designed, not implemented; token linearity is enforced at runtime only
 - `typing_coercion` theorem weaker than documented — follow-up ADR needed
 - Coprocessor implementation gated on PataCL Phase 1
 - No mutation testing

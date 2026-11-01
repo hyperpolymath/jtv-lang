@@ -183,10 +183,21 @@ reversible {
 reverse tok       // undoes the block: x -= value
 ----
 
-* Snapshot-based rollback of local state
-* `ReversalToken` is linearly typed: exactly one of `reverse tok` or `abandon tok`
-* `Send` to external handles inside `reversible { }` requires `irreversible { }` wrapper
-* Enables quantum-circuit simulation and Landauer-efficient computation
+* Per-operation inverse log: the token carries the recorded `(op, inv(op))` pairs,
+  replayed last-to-first — not a whole-block snapshot restore. A saved-value
+  *residue* is recorded for Neutral (self-referential) steps such as `x += x`,
+  where the naive subtraction inverse is wrong (ADR-0007 D5, the v2 "(c)" bridge).
+* `ReversalToken` is linear *by consumption at runtime* (exactly one of
+  `reverse tok` / `abandon tok`; a second use errors). Static linear typing is
+  designed (`ReversalToken<S>`), not yet implemented.
+* Cross-agent `Send` inside `reversible { }` is a *specified* static error; the
+  `irreversible { }` escape hatch is designed but not yet implemented in the
+  grammar.
+* Enables Landauer-oriented reasoning and (aspirationally) quantum-circuit
+  simulation — see `docs/QUANTUM_VISION.adoc`.
+
+For the precise per-layer semantics, the proof-to-interpreter gap, and v2 status,
+see `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`.
 
 ---
 

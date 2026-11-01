@@ -13,6 +13,19 @@ A point-in-time status of four hyperpolymath projects, each grouped into the
 normative tiers *MUST* (invariants / required), *INTEND* (declared, in-progress),
 and *WISH* (aspirational). JtV is the normative anchor.
 
+[IMPORTANT]
+====
+*This is a reporting document, not a coupling document.* The four projects below
+are status-adjacent, not dependency-adjacent. JtV (the reversible-language
+runtime) declares *no* code, build, FFI, or runtime dependency on Absolute Zero,
+JanusKey, or maa-framework; each has its own evidence base and its own
+reversibility obligations at a different abstraction level (language semantics /
+proofs about CNOs / filesystem operations / accountability framework). Shared
+vocabulary is not convergence and has not been turned into a dependency.
+Audited 2026-11-01:
+`docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`.
+====
+
 Legend: ✅ done · ◑ partial · ◻ planned · ⚠ gap · ○ aspirational.
 
 Sources / freshness: JtV is live (this session, commit `fff9689`); Absolute Zero

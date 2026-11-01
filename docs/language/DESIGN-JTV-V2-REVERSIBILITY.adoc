@@ -32,6 +32,25 @@ This commitment places JTV v2 in the tradition of Janus (Lutz & Derby
 invertibility, genuine connection to Landauer’s principle and Bennett’s
 theorem on reversible computation.
 
+[NOTE]
+====
+*Lineage is not dependency.* The Janus reference above is *literature*: a
+published language whose reversal discipline JTV v2 follows, cited for
+provenance. JTV v2 embeds no Janus implementation, imports no Janus artefact,
+and inherits no Janus obligation. It also diverges from Janus on a point worth
+keeping explicit: Janus buys reversibility *by construction* (no irreversible
+assignment exists), whereas JTV buys it by *grading plus gate* (Echo
+classification, an admissibility rule in the checker, and a residue token for the
+Neutral tier) — which is what lets JTV keep a total, addition-only Data plane.
+
+For the same reason, shared reversibility/epistemic *vocabulary* with other
+hyperpolymath projects (`epistemic-types`, JanusKey, Absolute Zero) is not
+evidence of architectural convergence and has not been turned into a dependency.
+The audit that establishes this, and the admissibility conditions any future
+adapter would have to meet, is
+`docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`.
+====
+
 '''''
 
 === The Three Constructs
@@ -68,6 +87,15 @@ Explicitly marks operations with no defined inverse: I/O, cross-agent
 sends, external API calls. Attempting to `+reverse+` an `+irreversible+`
 block is a static error.
 
+[NOTE]
+====
+*Design, not yet implemented.* There is no `irreversible` grammar rule, AST node,
+or parser arm in this tree. The one boundary rule that *is* enforced today is the
+type-level Echo gate (`Echo.Breaking` is rejected in reverse blocks); the
+cross-agent `send` case remains prose. Do not cite `irreversible { }` as
+available surface.
+====
+
 '''''
 
 === The Linear Token (Shared with 007)
@@ -77,6 +105,20 @@ pairing. Entering `+reversible { }+` produces a linear value `+tok+` of
 type `+ReversalToken<S>+`. The token must be consumed by `+reverse tok+`
 or `+abandon tok+` (explicit commit). Linearity guarantees exactly one
 `+reverse+`/`+abandon+` per token — no double-reversal, no lost log.
+
+[NOTE]
+====
+*Implementation status (2026-11-01).* The runtime token is an opaque
+`Value::ReversalToken(u64)` indexing an in-process log; the type parameter
+`+ReversalToken<S>+` and the path-sensitive `Option<ReversalToken<S>>` promotion
+at asymmetric branch joins are *designed, not implemented*. Linearity is enforced
+by consumption at runtime (the id is removed from the store, so a second
+`reverse`/`abandon` errors) — not by the type system, which accepts
+`reverse tok` / `abandon tok` unconditionally. Also note the log is
+*per-operation with recorded values*, with a saved-value residue only for Neutral
+steps: describing the mechanism as "snapshot restore" is wrong at this layer.
+See `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §2 and §4.
+====
 
 ....
 reversible {

@@ -1,4 +1,27 @@
-= Reversibility (Current State)
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= Reversibility (Current State) — SUPERSEDED
+
+[IMPORTANT]
+====
+*Superseded 2026-11-01. Retained as a historical record only.*
+
+This note predates the C1/C2 implementation and the v2 "(c)" Neutral bridge. Its
+body below ("no reverse execution model", "no integration with formal proofs",
+"not enforced at the language level") no longer describes the tree.
+
+Authoritative sources, in order:
+
+. `STATUS.adoc` — implemented surface and known gaps.
+. `docs/language/DESIGN-JTV-V2-REVERSIBILITY.adoc` — canonical v2 design
+  (per-operation inverse log; residue for Neutral steps).
+. `verification/PROOF-CAPABILITY-MATRIX.adoc` — what is mechanised.
+. `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` — per-layer
+  semantics, the proof-to-interpreter gap, and open findings F1–F7.
+====
+
+== Historical body (pre-C1/C2, do not cite)
 
 JtV currently provides limited, partial reversibility.
 

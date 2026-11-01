@@ -134,10 +134,23 @@ Allowed only if:
 - no EchoBreaking statements
 - no loops in V2
 
-Implementation note (2026-06-02): the checker enforces a *stricter, Safe-only*
-policy — every statement must be `EchoSafe`. `EchoNeutral` is permitted by this
-spec in principle (reversal via a retained residue, Bennett-style), but that
-runtime mechanism is unimplemented, so the checker conservatively rejects it.
+Implementation note (revised 2026-11-01; supersedes the 2026-06-02 note): the
+gate is *two policies*, selected by whether a residue is retained.
+
+* Tokenless blocks (`reverse { }` and `reversible { }` with no `-> tok`) use the
+  *Safe-only* policy — every statement must be `EchoSafe`
+  (`typechecker.rs::check_echo_admissible`).
+* `reversible { } -> tok` uses the *residue* policy — `EchoNeutral` (structured
+  loss, e.g. self-reference) is admissible because the token retains the residue
+  to invert from; only `EchoBreaking` is rejected
+  (`typechecker.rs::check_echo_admissible_with_residue`). This is the v2 "(c)"
+  Neutral bridge that landed 2026-06-15 (ADR-0007 D5/D6, `JtvEcho` §2b,
+  `JtvTheorems.rev_forward_backward_with_token`).
+
+Both policies are *type-level*: the interpreter itself does not re-check
+admissibility, so a host that runs a program without typechecking it first gets
+no gate. Open items (reversible-`if` branch grading and recording) are tracked as
+F1–F3 in `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1.
 See `crates/jtv-core/src/echo.rs` and `jtv_proofs/JtvEcho.lean`.
 
 == 10. Soundness Theorem
