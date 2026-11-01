@@ -13,11 +13,13 @@ receipts establish those separately, and this is one such receipt.
 | Field | Value
 
 | Date (UTC) | 2026-11-01T16:53:58Z
-| Commit checked out | `2f54c28` (the commit that lands `theory/agda/`; the
-  module set was also checked pre-commit at `384d91f`+working tree, same result)
+| Commit checked out | `e34feda2fa6994885f68bda401717951f38b4362` (`e34feda`), a
+  reachable commit on `arena/06c0481f-jtv-lang` that contains all four modules.
+  Earlier revisions of this receipt cited `2f54c28`, which became unreachable
+  after a rebase; that citation was corrected after review.
 | Checker | `Agda version 2.7.0.1-cf6e2d9`
 | Library | `standard-library-2.4` (tag `v2.4`)
-| Invocation | `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch src/Jtv/<Module>.agda`
+| Invocation | `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch --library-file <tmp> --no-default-libraries src/Jtv/<Module>.agda`
 | Command | `theory/agda/check.sh`
 | Environment | session sandbox, no network to the §6 hosts; Agda from the PyPI
   `agda` 2.7.0.1 wheel + upstream `src/data/lib/prim` at tag `v2.7.0.1`
@@ -52,10 +54,12 @@ any statement-level comparison against `echo-types`; or any refinement of
 the Rust interpreter (`gap-001`). It is not a Grade 1 receipt: no AXLE,
 coq-lsp, or Isabelle-server API was invoked.
 
-== Re-run (post-commit, recorded)
+== Re-run (recorded, reachable commit)
 
-`./check.sh` at `2f54c28`, 2026-11-01T16:56:13Z: `Core`, `Reversal`, `Echo`,
-`Conditional` all `TYPECHECKED`; hole/postulate scan clean.
+`./check.sh` at `e34feda`, 2026-11-01T17:41:19Z, with
+`AGDA_STDLIB=/tmp/stdlib24/standard-library.agda-lib`:
+`Core`, `Reversal`, `Echo`, `Conditional` all `TYPECHECKED`; hole/postulate
+scan clean.
 
 == Re-run
 
