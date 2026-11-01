@@ -771,8 +771,12 @@ the language surface.
   the status document reports, it does not couple.
 * `verification/PROOF-STATUS.adoc` — *new.* JtV's estate-conformant proof ledger:
   the closed status vocabulary per obligation, the prover legs required by
-  PROOF-POLICY §1, the mathesis grade status (none held), and the graded path to
-  Grade 3 (§5). No prover was executed for its rows, and it says so.
+  PROOF-POLICY §1, the mathesis grade status (**Grade 3 held for four Agda
+  modules**, receipt filed; Grade 2i pending), and the remaining graded path (§5).
+  This bullet originally read "none held … no prover was executed", which was
+  true when the ledger was first written and is no longer: the Agda layer was
+  added, run under the canonical invocation, and receipted in
+  `verification/receipts/2026-11-01-agda.adoc`.
 * `verification/PROOF-CAPABILITY-MATRIX.adoc` — header note separating "what JtV
   has mechanised, in which prover" from "what grade that earns"; the matrix's
   local `verified`/`partial` vocabulary explicitly does *not* confer a grade.
@@ -786,7 +790,11 @@ the language surface.
 
 Nothing in the code, the grammar, the dependency graph, or the proof
 *requirements* was changed by this audit. No prover, verifier, or test suite was
-executed in this session (§3.1 covers what is claimed without execution).
+executed *by the audit itself* (§3.1 covers what is claimed without execution).
+The subsequent Agda work is a separate, receipted execution: four modules
+typechecked under the canonical invocation on 2026-11-01, recorded in
+`verification/receipts/2026-11-01-agda.adoc`, and that receipt — not this
+document — is the evidence for the Grade 3 claim in §9.
 
 ''''
 

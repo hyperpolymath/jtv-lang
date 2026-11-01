@@ -138,8 +138,11 @@ token-buys-neutral :
 token-buys-neutral = refl , refl
 
 ------------------------------------------------------------------------
--- SECTION 3: blocks, and the admissibility theorems
--- (`blockEcho_admissible` / `blockEcho_admissibleWithResidue` in Lean).
+-- SECTION 3: blocks, and the admissibility theorems. Both policies carry a
+-- block theorem, mirroring Lean's `blockEcho_admissible` and
+-- `blockEcho_admissibleWithResidue`:
+--   `blockEcho-admissible`          — Safe-only policy
+--   `blockEcho-admissibleWithResidue` — residue/Bennett policy
 
 open import Data.List using (List; []; _∷_)
 
@@ -170,6 +173,27 @@ join-admissibleWithResidue Neutral Safe = refl
 join-admissibleWithResidue Neutral Neutral = refl
 join-admissibleWithResidue Neutral Breaking = refl
 join-admissibleWithResidue Breaking _ = refl
+
+-- The Safe-only counterpart, the headline theorem for the strict policy
+-- (Lean: `blockEcho_admissible`). It was missing from the first revision
+-- of this module while the section header claimed both block theorems —
+-- `allAdmissible` was declared and used by nothing.
+join-admissible :
+  ∀ (a b : Echo) → admissible (a ⊔ b) ≡ (admissible a ∧ admissible b)
+join-admissible Safe Safe = refl
+join-admissible Safe Neutral = refl
+join-admissible Safe Breaking = refl
+join-admissible Neutral Safe = refl
+join-admissible Neutral Neutral = refl
+join-admissible Neutral Breaking = refl
+join-admissible Breaking _ = refl
+
+blockEcho-admissible :
+  ∀ (es : List Echo) → admissible (blockEcho es) ≡ allAdmissible es
+blockEcho-admissible [] = refl
+blockEcho-admissible (e ∷ es) =
+  trans (join-admissible e (blockEcho es))
+        (cong (admissible e ∧_) (blockEcho-admissible es))
 
 blockEcho-admissibleWithResidue :
   ∀ (es : List Echo) → admissibleWithResidue (blockEcho es) ≡ allAdmissibleWithResidue es

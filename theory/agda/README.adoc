@@ -40,8 +40,10 @@ assignable at all.
 | `Jtv.Echo`
 | The structured-loss lattice `{Safe ⊑ Neutral ⊑ Breaking}` with join
   laws; the two admissibility policies (Safe-only, and residue/Bennett)
-  and `token-buys-neutral`; the block theorems
-  `blockEcho-admissibleWithResidue`; and the retained-loss fibre
+  and `token-buys-neutral`; both block theorems —
+  `blockEcho-admissible` (Safe-only) and `blockEcho-admissibleWithResidue`
+  (residue/Bennett), each with its `join-*` induction step; and the
+  retained-loss fibre
   `Echo-of f y = Σ x, f x ≡ y` with the injective⇒no-branching theorem
   and a witness that loss is real.
 | `jtv_proofs/JtvEcho.lean`
@@ -180,6 +182,14 @@ Per §2.2 the transport route would be preferable and is open work.
 | `neutral_admissibleWithResidue`
 | re-proved
 | Corresponds.
+
+| `blockEcho-admissible`
+| `blockEcho_admissible`
+| re-proved
+| Corresponds. The Safe-only block theorem was *missing* from the first
+  revision of `Jtv.Echo` (the section header claimed both while only the
+  residue form existed, leaving `allAdmissible` unused); it is now proved
+  with its join lemma `join-admissible`.
 
 | `blockEcho-admissibleWithResidue`
 | `blockEcho_admissibleWithResidue`

@@ -31,9 +31,16 @@ mkdir -p "$BUILD"
 exec > >(tee "$BUILD/check.log") 2>&1
 
 AGDA="${AGDA:-agda}"
+# Default to *every* module under src/Jtv, not a hard-coded list: the gate is
+# triggered by any change under theory/agda/**, so a newly added module must be
+# compiled by it. (A fixed list would let CI go green while the new module was
+# never checked — the escape-hatch grep catches markers, not type errors.)
 MODULES=("$@")
 if [ ${#MODULES[@]} -eq 0 ]; then
-  MODULES=(Core Reversal Echo Conditional)
+  mapfile -t MODULES < <(cd src/Jtv && ls -1 *.agda 2>/dev/null | sed 's/\.agda$//' | sort)
+  if [ ${#MODULES[@]} -eq 0 ]; then
+    echo "no modules found under src/Jtv" >&2; exit 2
+  fi
 fi
 
 # --safe is the checker's safe mode; --without-K and --cubical-compatible

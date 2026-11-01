@@ -438,6 +438,11 @@ No percentages — the estate forbids flattening confidence (mathesis §6).
   no statement comparison against *that* library has been recorded, and this repo
   neither imports nor transports from it.
 
+| Echo block theorem, Safe-only policy | `Grade 3` |
+  `Jtv/Echo.agda:blockEcho-admissible` (with `join-admissible`). Was absent from
+  the first revision of the module while the section header advertised it;
+  restored and rechecked.
+
 | Reversibility (Safe step, Neutral residue step) | `Grade 3` | Ported to Agda
   and rechecked under the canonical invocation; receipt filed. Per-operation
   model only — no log semantics, and the runtime diverges from it (F1–F3).
