@@ -12,12 +12,14 @@ receipts establish those separately, and this is one such receipt.
 |===
 | Field | Value
 
-| Date (UTC) | 2026-11-01T17:48:50Z
-| Commit checked out | `c46ddf2b9c159adce2cf04d75444ce3e29130baf` (`c46ddf2`), a
-  reachable commit on `arena/06c0481f-jtv-lang` that contains all four modules,
-  including the `reversible-if-with-residue` repair theorem. Earlier revisions
-  of this receipt cited `2f54c28` (unreachable after a rebase) and then
-  `e34feda`; each citation was superseded when the checked sources changed.
+| Date (UTC) | 2026-11-01T18:02:00Z
+| Commit checked out | `c622ddc` (`c622ddc`), a reachable commit on
+  `arena/06c0481f-jtv-lang` that contains all four modules, including the
+  `reversible-if-with-residue` repair theorem and the
+  `tokenless-conditional-not-identity` declaration under the name the
+  documentation cites. Earlier revisions of this receipt cited `2f54c28`
+  (unreachable after a rebase), `e34feda` and `c46ddf2`; each citation was
+  superseded when the checked sources changed.
 | Checker | `Agda version 2.7.0.1-cf6e2d9`
 | Library | `standard-library-2.4` (tag `v2.4`)
 | Invocation | `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch --library-file <tmp> --no-default-libraries src/Jtv/<Module>.agda`
