@@ -35,13 +35,27 @@ AGDA="${AGDA:-agda}"
 # triggered by any change under theory/agda/**, so a newly added module must be
 # compiled by it. (A fixed list would let CI go green while the new module was
 # never checked — the escape-hatch grep catches markers, not type errors.)
+# Discovery is *recursive* and covers every namespace: a module added at
+# src/Jtv/Algebra/Group.agda is triggered by the same workflow, so it must be
+# compiled and scanned too. Paths are made relative to src/ without the .agda
+# suffix (Agda wants `src/Jtv/Algebra/Group.agda`; callers may pass either a
+# bare name like `Core` or a namespaced one like `Jtv/Core`).
 MODULES=("$@")
 if [ ${#MODULES[@]} -eq 0 ]; then
-  mapfile -t MODULES < <(cd src/Jtv && ls -1 *.agda 2>/dev/null | sed 's/\.agda$//' | sort)
+  mapfile -t MODULES < <(find src -name '*.agda' -print 2>/dev/null \
+    | sed -e 's|^src/||' -e 's|\.agda$||' | sort)
   if [ ${#MODULES[@]} -eq 0 ]; then
-    echo "no modules found under src/Jtv" >&2; exit 2
+    echo "no modules found under src/" >&2; exit 2
   fi
 fi
+
+# Resolve a module name to a source path: bare names live in Jtv/.
+module_path() {
+  case "$1" in
+    */*) printf 'src/%s.agda' "$1" ;;
+    *)   printf 'src/Jtv/%s.agda' "$1" ;;
+  esac
+}
 
 # --safe is the checker's safe mode; --without-K and --cubical-compatible
 # are the policy's flags; the warning switch silences the cubical
@@ -78,7 +92,7 @@ echo
 fail=0
 for m in "${MODULES[@]}"; do
   printf '%-14s ' "$m"
-  if out=$("$AGDA" "${FLAGS[@]}" ${LIBFLAGS[@]+"${LIBFLAGS[@]}"} "src/Jtv/$m.agda" 2>&1); then
+  if out=$("$AGDA" "${FLAGS[@]}" ${LIBFLAGS[@]+"${LIBFLAGS[@]}"} "$(module_path "$m")" 2>&1); then
     echo "TYPECHECKED"
   else
     echo "FAILED"
@@ -91,8 +105,9 @@ echo
 if [ $fail -eq 0 ]; then
   echo "result: all modules typecheck (no holes: see the grep below)"
   # An escape hatch would make a "green" run meaningless (PROOF-POLICY §5).
-  if grep -rnE '\{[!][!]\}|\{-# (NON_)?TERMINATING|postulate|primTrustMe' src/Jtv/*.agda >/dev/null 2>&1; then
-    echo "ESCAPE HATCH FOUND — this receipt is not evidence:"; grep -rnE '\{[!][!]\}|postulate' src/Jtv/*.agda
+  if grep -rnE --include='*.agda' '\{[!][!]\}|\{-# (NON_)?TERMINATING|postulate|primTrustMe' src >/dev/null 2>&1; then
+    echo "ESCAPE HATCH FOUND — this receipt is not evidence:"
+    grep -rnE --include='*.agda' '\{[!][!]\}|postulate' src
     exit 1
   fi
   echo "hole/postulate scan: clean"

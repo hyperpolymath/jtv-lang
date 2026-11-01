@@ -103,14 +103,20 @@ this directory depends on the wheel.
 [source,shell]
 ----
 cd theory/agda
-./check.sh                 # all modules; prints versions + per-module result
-./check.sh Reversal        # one module
+./check.sh                 # every src/**/*.agda (recursive); prints versions + results
+./check.sh Reversal        # one module (bare name => src/Jtv/Reversal.agda)
+./check.sh Jtv/Core        # namespaced form also accepted
 AGDA=/path/to/agda AGDA_STDLIB=/path/to/standard-library.agda-lib ./check.sh
 ----
 
+Discovery is recursive: every `src/**/*.agda` is compiled and scanned, so a
+module added under a new namespace (say `src/Jtv/Algebra/Group.agda`) cannot
+slip past the gate — the workflow fires on `theory/agda/**`, and a fixed module
+list would then report success without compiling it.
+
 `check.sh` is the receipt generator: it prints the Agda version, the stdlib
-name, the exact invocation, the commit, the per-module result, and it
-scans for escape hatches (`{!!}`, `postulate`, `primTrustMe`,
+name, the exact invocation, the commit, the per-module result, the receipt file
+path (`_build/check.log`), and it scans for escape hatches (`{!!}`, `postulate`, `primTrustMe`,
 `{-# NON_TERMINATING #-}`). A "green" run with a hole in it is not
 evidence, so the script fails on one rather than reporting success.
 
@@ -131,9 +137,12 @@ Per §2.2 the transport route would be preferable and is open work.
 | Agda theorem | Lean theorem | Route | Correspondence, and where it is not exact
 
 | `eval-independent`
-| `eval_state_independent` / `free_vars_sufficient`
+| `free_vars_sufficient` (`JtvTheorems.lean:172`), with `update_non_free_var` (`:193`)
 | re-proved
-| Corresponds. *Representation differs:* Lean's `State := String → Int`;
+| Corresponds — the earlier citation `eval_state_independent` names no Lean
+  declaration; `free_vars_sufficient` is the theorem that states evaluation is
+  determined by the free variables, and `update_non_free_var` is what the
+  reversal proofs consume. *Representation differs:* Lean's `State := String → Int`;
   Agda's is `Var = ℕ → ℤ`, chosen so `_≟_` is structural. Equality of
   predicates is therefore up to the variable encoding.
 
@@ -179,9 +188,12 @@ Per §2.2 the transport route would be preferable and is open work.
   Lean definition encodes the same operation.
 
 | `token-buys-neutral`
-| `neutral_admissibleWithResidue`
+| `neutral_residue_only` (`JtvEcho.lean:171`)
 | re-proved
-| Corresponds.
+| Corresponds. Corrected name: the Lean declaration is `neutral_residue_only`
+  (`admissible neutral = false ∧ admissibleWithResidue neutral = true` — the
+  same conjunction as the Agda statement). `neutral_admissibleWithResidue` does
+  not exist.
 
 | `blockEcho-admissible`
 | `blockEcho_admissible`
