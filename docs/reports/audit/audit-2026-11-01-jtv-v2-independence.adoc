@@ -4,7 +4,7 @@
 = Audit: JtV v2 is an Independent Research-Language Programme
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :revdate: 2026-11-01
-:revnumber: 1.2
+:revnumber: 1.3
 :toc: left
 :sectnums:
 
@@ -98,7 +98,8 @@ import.
 ADR/state files inside this repo only.
 
 | Repository name check for the item under discussion
-| `grep -rn 'epistemic-types'` ⇒ *0* hits in the whole tree. The repo cites a
+| `grep -rn 'epistemic-types'` over the **parent tree** (`b23f8e9`, before this
+audit existed) ⇒ *0* hits; every current hit is this audit's own prose. The repo cites a
 *different* artefact, `echo-types` (Agda), and only as a *conceptual
 source/reference* (`echo.rs`, `jtv_proofs/JtvEcho.lean`,
 `verification/PROOF-CAPABILITY-MATRIX.adoc` §Echo, `ADR-0007`, `ADR-0009`,
@@ -241,9 +242,21 @@ marshalling), *not* the semantic mechanism — worth stating plainly, because it
 the most likely reason a reader describes JtV's tokens as "snapshot-based".
 
 Note the tokenless conditional is the one place where re-evaluation can *fail to
-undo*: `x = 4; reverse { if x < 5 { x += 1 } }` records nothing and, on
-reversal, re-evaluates `x < 5` at `x = 5` ⇒ false ⇒ no inverse applied, so the
-block is not the identity. Janus handles this by *requiring* the guard to hold
+undo*. The grammar allows only a plain assignment inside a reversible `if` branch
+(`reversible_stmt = reversible_assignment | if_stmt`, and the branch body is a
+control `block`), so the demonstration has to use `=`:
+
+[source,jtv]
+----
+x = 4
+reverse { if x < 5 { x = 5 } }
+----
+
+Forward: the guard holds, the branch assigns `x = 5` - and records nothing.
+Reverse: the guard is re-evaluated at `x = 5` => false => the undo is skipped, so
+`x` stays `5`. The block is not the identity. (This program is syntactically
+valid; an earlier draft showed `x += 1` inside the branch, which the parser
+rejects - corrected after review.)
 in the reverse direction (the comment at `reversible.rs:204` invokes exactly that
 requirement) — but JtV has no check for it. See F3 in §8. **[not executed]**
 
@@ -318,13 +331,21 @@ Lean-mechanised refinement of the evaluator".
   (`check_echo_admissible` / `check_echo_admissible_with_residue`). But the
   interpreter itself performs *no* admissibility or reversibility check:
   `Interpreter::run` (`interpreter.rs:183`) evaluates statements directly. The
-  gate holds only on paths that typecheck first. Only the CLI does that
+  gate holds only on paths that typecheck first. Only `jtv run` does that
   (`run_file`, `main.rs:199-222`, "SECURITY: Run type checking before
-  execution"). The WASM bindings do *not*: `WasmInterpreter::run` and
-  `run_and_collect` parse and execute (`wasm.rs:69-92`); `type_check` is a
-  separate, host-opt-in method. And `parse_program` + `Interpreter::run` — what
-  the reversibility test suites and any embedding host use — bypasses the gate
-  entirely. So a library embedder, or a playground that forgets the extra call,
+  execution"). These shipped paths do **not**:
+
+  * **REPL** — `crates/jtv-cli/src/repl.rs` calls `parse_program` then
+    `Interpreter::run` with no `TypeChecker`;
+  * **debugger** — `crates/jtv-debug/src/main.rs` likewise;
+  * **WASM** — `WasmInterpreter::run` / `run_and_collect` parse and execute
+    (`wasm.rs:69-92`); `type_check` is a separate, host-opt-in method;
+  * **any embedder** — `parse_program` + `Interpreter::run` is the public API,
+    and the reversibility test suites use exactly that.
+
+  So F1-F3 are reachable interactively in the REPL and debugger, in the
+  playground, and from any library host - not only in unusual embedding
+  scenarios.
   silently gets unchecked reversal.
 . *`check_reversibility` is production-dead.* The AST-level guard in
   `reversible.rs:471` is referenced only by tests
@@ -682,7 +703,7 @@ reversibility projects".
   Echo/reversibility. Only the CLI typechecks before executing; the WASM `run`
   bindings and any `parse_program` + `Interpreter::run` host do not.
 | *Medium*
-| `interpreter.rs:183`, `main.rs:199`, `wasm.rs:69`
+| `interpreter.rs:183`, `main.rs:199`, `repl.rs`, `jtv-debug/src/main.rs`, `wasm.rs:69`
 
 | F5
 | `check_reversibility` (AST-level guard) is dead in production — tests only;
@@ -704,7 +725,8 @@ reversibility projects".
 | see §4.1
 |===
 
-F1–F3 are the ones that matter: they are cases where the *mechanised* story
+F7 (documentation overstatement) is closed by this same change (§8.2); F1–F6
+remain open. F1–F3 are the ones that matter: they are cases where the *mechanised* story
 (Echo is a sound gate; the log inverts) and the *executed* story (conditionals
 are neither graded nor recorded soundly) have diverged. They are recorded here
 rather than patched, because this audit could not compile or run the test suite

@@ -132,7 +132,7 @@ Phase 2 Echo mechanisation (Lean 4):
 
 | v2 independence + per-layer semantics audit
 | `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`
-| Complete (2026-11-01); no sibling-project dependency; findings F1–F7 open
+| Complete (2026-11-01); no sibling-project dependency; findings F1–F6 open (F7, the doc overstatement this PR fixes, closed)
 |===
 
 ---

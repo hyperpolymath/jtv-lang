@@ -183,13 +183,20 @@ reversible {
 reverse tok       // undoes the block: x -= value
 ----
 
-* Per-operation inverse log: the token carries the recorded `(op, inv(op))` pairs,
-  replayed last-to-first — not a whole-block snapshot restore. A saved-value
-  *residue* is recorded for Neutral (self-referential) steps such as `x += x`,
-  where the naive subtraction inverse is wrong (ADR-0007 D5, the v2 "(c)" bridge).
-* `ReversalToken` is linear *by consumption at runtime* (exactly one of
-  `reverse tok` / `abandon tok`; a second use errors). Static linear typing is
-  designed (`ReversalToken<S>`), not yet implemented.
+* Per-operation inverse log: the token carries *recorded operations whose
+  inverses are derived during replay* (last-to-first) — not a whole-block
+  snapshot restore. A saved-value *residue* is recorded only for
+  self-referential steps such as `x += x`, where the derived subtraction inverse
+  is wrong (ADR-0007 D5, the v2 "(c)" bridge). Steps graded Neutral by their
+  *carrier* (e.g. a non-self-referential `float` addition) record no prior value,
+  so their restoration is not exact — see `spec/jtv_v2_type_system_corrected.adoc`
+  §9.
+* `ReversalToken` is consumed at runtime: `reverse tok` errors on a token it
+  cannot find, so the log cannot be replayed twice. `abandon tok` does *not*
+  check, so a token reached twice through aliasing is not rejected; and no static
+  linear typing exists yet (`ReversalToken<S>` is designed). Treat linearity as a
+  *convention the interpreter mostly keeps*, not a guarantee — the type system
+  does not enforce it and an embedder may clone the token value.
 * Cross-agent `Send` inside `reversible { }` is a *specified* static error; the
   `irreversible { }` escape hatch is designed but not yet implemented in the
   grammar.

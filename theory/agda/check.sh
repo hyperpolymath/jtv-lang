@@ -13,9 +13,11 @@
 # commit it describes; mathesis tracks the commit hash, not the claim.
 #
 # Usage:  ./check.sh [module ...]      (default: all modules)
-# Env:    AGDA       agda binary           (default: agda)
-#         AGDA_STDLIB  path to a .agda-lib (optional; else the user's
-#                      ~/.agda/libraries must register the stdlib)
+# Env:    AGDA         agda binary           (default: agda)
+#         AGDA_STDLIB  path to a .agda-lib (optional). When set it is wired
+#                      into Agda via an explicit --library-file, so no
+#                      ~/.agda/libraries registration is needed. When unset,
+#                      Agda uses the user's own library configuration.
 set -uo pipefail
 
 cd "$(dirname "$0")"
@@ -30,10 +32,29 @@ fi
 # indexed-match note the stdlib itself sets in its .agda-lib.
 FLAGS=(--safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch)
 
+# Wire AGDA_STDLIB into Agda for real. NOTE: Agda's --library-file takes a
+# file that *lists* .agda-lib paths (the same shape as ~/.agda/libraries),
+# not a single .agda-lib. So we write a temporary libraries file holding the
+# given stdlib plus this project's own jtv-theory.agda-lib, and point Agda at
+# it with --no-default-libraries.
+LIBFLAGS=()
+TMPLIBS=""
+cleanup() { [ -n "$TMPLIBS" ] && rm -f "$TMPLIBS"; }
+trap cleanup EXIT
+if [ -n "${AGDA_STDLIB:-}" ]; then
+  if [ ! -f "$AGDA_STDLIB" ]; then
+    echo "AGDA_STDLIB=$AGDA_STDLIB does not exist" >&2; exit 2
+  fi
+  HERE="$(cd "$(dirname "$0")" && pwd)"
+  TMPLIBS="$(mktemp)"
+  printf '%s\n%s\n' "$AGDA_STDLIB" "$HERE/jtv-theory.agda-lib" > "$TMPLIBS"
+  LIBFLAGS=(--library-file "$TMPLIBS" --no-default-libraries)
+fi
+
 echo "# JtV theory proofs — Agda"
 echo "agda:            $("$AGDA" --version 2>&1 | head -1)"
-echo "stdlib:          $(awk '/^name:/{print $2}' "${AGDA_STDLIB:-/dev/null}" 2>/dev/null || echo 'per ~/.agda/defaults')"
-echo "invocation:      $AGDA ${FLAGS[*]} <module>.agda"
+echo "stdlib:          ${AGDA_STDLIB:-per ~/.agda/defaults}"
+echo "invocation:      $AGDA ${FLAGS[*]} ${LIBFLAGS[*]:-} <module>.agda"
 echo "commit:          $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "date:            $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
@@ -41,7 +62,7 @@ echo
 fail=0
 for m in "${MODULES[@]}"; do
   printf '%-14s ' "$m"
-  if out=$("$AGDA" "${FLAGS[@]}" "src/Jtv/$m.agda" 2>&1); then
+  if out=$("$AGDA" "${FLAGS[@]}" ${LIBFLAGS[@]+"${LIBFLAGS[@]}"} "src/Jtv/$m.agda" 2>&1); then
     echo "TYPECHECKED"
   else
     echo "FAILED"

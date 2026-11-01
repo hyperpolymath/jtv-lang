@@ -297,12 +297,18 @@ Two separate questions, often conflated:
 * *Is it mechanised?* Yes, for the model: seven `sorry`-free Lean libraries, and
   an Idris2 ABI development under `%default total`. See
   `verification/PROOF-CAPABILITY-MATRIX.adoc` for per-library detail.
-* *What verification grade does that earn in the estate?* None yet. Grades follow
+* *What verification grade does that earn in the estate?* Grades follow
   `hyperpolymath/mathesis:estate-mathematical-architecture` §5, where a *theory*
   statement's source of truth is **Agda**; under
   `hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §3 a Lean-only theory
-  proof is *target-only evidence* and the Agda row stays `open`. JtV has no Agda
-  source, so **no Grade 3 (or better) is held**, however strong the Lean work is.
+  proof is *target-only evidence* and the Agda row stays `open`.
+  **Grade 3 is now held for the four modules in `theory/agda/`** — the Data
+  model, the Safe/Neutral reversal theorems, the Echo lattice + fibre, and the
+  tokenless-`if` counterexample — checked with the canonical invocation and
+  receipted. The Lean-only remainder (Control-plane, `JtvExtended`, non-`isIntRepr`
+  type preservation, the AOLD bundle) still carries **no grade**. Grade 2i is
+  pending one Lean↔Agda statement reconciliation; the Rocq leg, a non-DTT leg and
+  any Rust/Creusot leg are absent.
 
 Practical consequence: quote the matrix for "what is mechanised", and
 `verification/PROOF-STATUS.adoc` for "how strongly this is established, against

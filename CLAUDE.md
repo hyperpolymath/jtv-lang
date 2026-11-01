@@ -184,9 +184,13 @@ Two rules with teeth for this repo:
 
 * **JtV's Lean proofs are not the theory source of truth.** Under PROOF-POLICY §3
   a Lean-only proof of a theory statement is *target-only evidence*; the Agda row
-  stays `open`. JtV currently has **no Agda source**, hence **no mathesis grade**
-  however strong the Lean work is. Status detail:
-  `verification/PROOF-STATUS.adoc`.
+  stays `open`. JtV now has an Agda layer for **part** of the model
+  (`theory/agda/`: `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`, `Jtv.Conditional`,
+  **Grade 3**, receipt in `verification/receipts/`). The *remaining* Lean
+  theorems — Control-plane, `JtvExtended`, the non-`isIntRepr` type preservation,
+  `JtvSecurity`'s AOLD bundle — are still Lean-only and carry **no grade**. So:
+  quote the graded subset from `verification/PROOF-STATUS.adoc` §2.1b, and treat
+  every other Lean theorem as `Claimed`.
 * **No Mathlib**, and no weakening flags to make a check green. Theory proofs must
   be Mathlib-free (they currently are) and Agda entrypoints use
   `agda --safe --without-K --cubical-compatible`.

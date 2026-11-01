@@ -150,14 +150,22 @@ statement exists and the Lean statement is compared to it."
 | T-BOUNDARY-THEORY
 
 | Number-system stratification by additive algebra → Echo tier
-| `proven` (classification) / `open` (value-level semantics)
+| `proven` (classification) / `open` (value-level semantics) — **and
+  `regressed` for `complex`/`symbolic`**
 | Lean 4.12.0, `lake build`
 | `jtv_proofs/JtvEcho.lean` §6: `exact_groups_safe`, `float_not_safe`,
   `hex_binary_collapse`, `reversal_tier_by_algebra`, `no_current_system_breaks`
-| T-BOUNDARY-THEORY. The `float`/`complex` non-associativity is *witnessed in
-  Rust* (`number.rs::approx_group_witness`), not proved in Lean: opaque `@[extern]
-  Float`, and `native_decide` is disallowed (it adds `Lean.ofReduceBool`).
-  Rational/symbolic value models are designed, not landed (`gap-005`).
+| T-BOUNDARY-THEORY, **plus a contradiction that must not be read as settled**:
+  `exact_groups_safe` classifies `complex` and `symbolic` as `Safe` groups, while
+  `docs/proofs/number-system-value-models.adoc` describes `complex` as an
+  approximate group (`Neutral`) and `symbolic` string concatenation as a
+  non-group (`Breaking`). The Lean and Rust classifiers therefore disagree with
+  the design document, and the checker will accept e.g. a tokenised symbolic
+  `x += b` whose "reversal" grows the expression rather than restoring `x`.
+  `float` is witnessed in Rust (`number.rs::approx_group_witness`), not proved in
+  Lean (opaque `@[extern] Float`; `native_decide` disallowed). Treat the
+  `complex`/`symbolic` rows as `regressed` pending alignment of Lean, Rust and
+  `number-system-value-models.adoc`.
 
 | Echo × Epistemic product effect row: comm/assoc/idem composition laws
 | `proven`
@@ -306,10 +314,15 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | Absent work, not a failed proof.
 
 | K-1
-| `unsafe` block in `crates/jtv-cli/src/rsr_check.rs` is memory-safe
+| The shipped `unsafe` boundary — `unsafe impl Send` / `unsafe impl Sync` for
+  `JsCallback` (`crates/jtv-core/src/wasm.rs:343-344`) — is sound
 | `open`
 | Kani (standing exception, PROOF-POLICY §4.1) — no harness
-| Kani reports `tested-only` with unwinding bounds. No harness exists.
+| Kani reports `tested-only` with unwinding bounds. No harness exists. The
+  in-file SAFETY comment argues wasm32 is single-threaded; that is an argument,
+  not a check. (An earlier draft of this ledger named `rsr_check.rs`, which only
+  *scans source text* for unsafe blocks and is not itself an unsafe boundary —
+  corrected after review.)
 
 | K-2
 | FFI seam behaviour at coprocessor boundaries
@@ -348,8 +361,12 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 
 [source,bash]
 ----
-# Theory (Lean leg, target-only evidence)
-cd jtv_proofs && lake build          # pin: leanprover/lean4:v4.12.0
+# Theory (Agda — the estate source of truth; this is the receipted one)
+( cd theory/agda && ./check.sh )     # pin: Agda 2.7.0.1, agda-stdlib 2.4
+
+# Theory (Lean leg, target-only evidence) — run from the repo root: a bare
+# `cd jtv_proofs` would persist and break the commands below it.
+( cd jtv_proofs && lake build )      # pin: leanprover/lean4:v4.12.0
 grep -rnwE 'sorry|admit|axiom' jtv_proofs/*.lean   # must be empty
 
 # Engineering (Idris2 ABI)

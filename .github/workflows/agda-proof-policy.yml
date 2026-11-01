@@ -6,7 +6,15 @@
 #   hyperpolymath/mathesis:estate-mathematical-architecture §5
 #
 # Verify this gate both ways (PROOF-POLICY §7): it must fail on a planted
-# `{!!}` as well as pass on the tree.
+# `{!!}` as well as pass on the tree. theory/agda/check.sh does the latter
+# itself (it scans for holes/postulates and exits non-zero).
+#
+# TOOLCHAIN PINNING: the ubuntu-latest archive ships agda-stdlib 1.7.3, which
+# cannot satisfy this project's `depend: standard-library-2.4`, so distro
+# packages are NOT used here. Agda 2.7.0.1 and agda-stdlib 2.4 are fetched
+# from their own release source trees at fixed tags. PROOF-POLICY §6 prefers
+# the repo's Guix manifest/container; this is the fallback until that exists,
+# and the versions below are the pin — do not "simplify" this to apt.
 name: agda-proof-policy
 
 on:
@@ -20,32 +28,48 @@ on:
 permissions:
   contents: read
 
+env:
+  AGDA_VERSION: '2.7.0.1'
+  AGDA_STDLIB_TAG: 'v2.4'
+
 jobs:
   agda:
     name: Agda theory proofs (canonical invocation)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      # NOTE: the pinned versions are Agda 2.7.0.1 and agda-stdlib 2.4.
-      # This job uses the Debian/apt pair as the cheapest reproducible
-      # route; if the distro version drifts from the pin, switch to the
-      # Guix manifest or a pinned container (PROOF-POLICY §6) rather than
-      # silently checking with a different Agda.
-      - name: Install Agda + standard library
+      - name: Install pinned Agda + agda-stdlib
         run: |
-          sudo apt-get update
-          sudo apt-get install -y agda agda-stdlib
+          set -euo pipefail
+          # Agda: the PyPI wheel packages the upstream 2.7.0.1 binary, but
+          # ships without data/lib/prim — fetched from the matching source tag.
+          pip install "agda==${AGDA_VERSION}"
+          AGDA_DATA="$(python -c 'import agda,os;print(os.path.join(os.path.dirname(agda.__file__),"data"))')"
+          curl -sSL "https://codeload.github.com/agda/agda/tar.gz/refs/tags/v${AGDA_VERSION}" -o /tmp/agda-src.tar.gz
+          tar xzf /tmp/agda-src.tar.gz -C /tmp
+          rm -rf "$AGDA_DATA/lib"
+          mkdir -p "$AGDA_DATA"
+          cp -r "/tmp/agda-${AGDA_VERSION}/src/data/lib" "$AGDA_DATA/lib"
+
+          # Standard library at the pinned tag.
+          curl -sSL "https://codeload.github.com/agda/agda-stdlib/tar.gz/refs/tags/${AGDA_STDLIB_TAG}" -o /tmp/stdlib.tar.gz
+          tar xzf /tmp/stdlib.tar.gz -C /tmp
+          echo "AGDA_STDLIB=/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib" >> "$GITHUB_ENV"
+
           agda --version
+          awk '/^name:/{print $2}' "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib"
 
-      - name: Register the standard library
+      - name: Assert the pin matches the project's declared dependency
         run: |
-          mkdir -p ~/.agda
-          LIB=$(find /usr/share -name 'standard-library*.agda-lib' 2>/dev/null | head -1)
-          if [ -z "$LIB" ]; then echo "::error::agda-stdlib not found"; exit 1; fi
-          echo "$LIB" > ~/.agda/libraries
-          awk '/^name:/{print $2}' "$LIB" > ~/.agda/defaults
-          cat ~/.agda/defaults
+          set -euo pipefail
+          want="$(awk '/^depend:/{print $2}' theory/agda/jtv-theory.agda-lib)"
+          have="$(awk '/^name:/{print $2}' "$AGDA_STDLIB")"
+          echo "project wants: $want / installed: $have"
+          if [ "$want" != "$have" ]; then
+            echo "::error::stdlib version mismatch: project depends on $want, installed $have"
+            exit 1
+          fi
 
       - name: Check theory proofs (fails on any hole or postulate)
         working-directory: theory/agda
@@ -53,7 +77,7 @@ jobs:
 
       - name: Upload receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: agda-proof-receipt
           path: theory/agda/_build/**
