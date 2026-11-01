@@ -190,7 +190,10 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | Neutral-tier reversal from a retained residue (unconditional, incl. `x += x`)
 | `proven`
 | `Jtv/Reversal.agda:rev-forward-backward-with-token`
-| The residue is a single saved value, not the runtime's log
+| The residue is a single saved value, not the runtime's log. **Exactness holds
+  for the `ℤ` carrier and the `Snapshot` residue only** — per the owner's §9
+  refinement (`bd32a96`), a Neutral step graded by *carrier* (float) records no
+  prior value, so this theorem does not claim exact restoration there
 
 | The residue is necessary (naive inverse fails on self-reference)
 | `proven`

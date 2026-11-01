@@ -206,7 +206,16 @@ Stated so no reader infers more coverage than exists:
   counterexample — `Jtv.Conditional` proves the tokenless strategy is
   unsound, it does not mechanise the runtime's actual recording path;
 * the **carrier-distinct number systems** (float/rational/complex/symbolic
-  value models, `gap-005`) — everything here is over `ℤ`;
+  value models, `gap-005`) — everything here is over `ℤ`. This bound now matters
+  more than it did: the owner's refinement of `spec/jtv_v2_type_system_corrected.adoc`
+  §9 (commit `bd32a96`) records that only *self-referential* assignments save a
+  `Snapshot` residue, while other Neutral steps — a non-self-referential `float`
+  addition, for instance — record an operation *without* a prior value, so
+  IEEE-754 rounding can prevent exact restoration. Accordingly,
+  `rev-forward-backward-with-token` is an **exactness theorem for the `ℤ` carrier
+  and for the Snapshot residue**; it is *not* a claim that every Neutral-graded
+  step is exactly reversible. A float-carrier analogue would be a different
+  theorem (and a false one, absent a residue);
 * Control-plane semantics (loops, calls, purity/liveness), which the Lean
   libraries cover and this directory does not yet.
 
