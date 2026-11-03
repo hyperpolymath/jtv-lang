@@ -146,7 +146,7 @@ in that table — the two vocabularies are deliberately not mixed.
 | `Jtv.Core` | `typechecks` | `theory/agda/check.sh` green under the canonical invocation.
 | `Jtv.Reversal` | `typechecks` | Safe/Neutral reversal, full-state (`∀ y`) round trip.
 | `Jtv.Echo` | `typechecks` | Echo lattice + fibre correspondence.
-| `Jtv.Conditional` | `typechecks` | Tokenless-`if` counterexample, plus the recorded-branch repair proved (`reversible-if-with-residue`).
+| `Jtv.Conditional` | `typechecks` | Tokenless-`if` counterexample, plus the additive recorded-branch repair proved by `reversible-if-with-residue`; overwriting branches remain out of scope.
 |===
 
 `typechecks` here means: the module builds under `agda --safe --without-K
