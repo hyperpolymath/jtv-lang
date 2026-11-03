@@ -44,3 +44,7 @@ deps/
 .cache/
 build/
 dist/
+
+# Agda (theory/)
+theory/agda/_build/
+**/*.agdai

@@ -9,6 +9,33 @@
 elsewhere. If another document disagrees with this matrix, this matrix is right
 and the other document is a bug.
 
+[IMPORTANT]
+====
+*Relationship to the estate's proof policy (added 2026-11-01).* This matrix is
+authoritative for *what JtV has mechanised, and in which prover*. It is **not** a
+statement of verification grade. Grades follow
+`hyperpolymath/mathesis:estate-mathematical-architecture` §5, where the source of
+truth for a *theory* statement is **Agda**, and
+`hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §1–§3, where a Lean-only
+proof of a theory statement is **target-only evidence** ("the Agda row stays
+`OPEN`").
+
+Consequence, stated plainly: the `verified` marks below are true *as matrix
+statements* (mechanised, `sorry`-free, in Lean). A subset now also has an Agda
+source (`theory/agda/`, four modules, receipted 2026-11-01) and therefore a
+mathesis grade — see `theory/agda/README.adoc` for the per-theorem Lean↔Agda
+correspondence, and `verification/PROOF-STATUS.adoc` §2.1b for the graded rows.
+The Lean-only remainder still confers **no grade**. JtV's proof ledger, the estate legs
+per obligation, and the ordered path to Grade 3 are in
+`verification/PROOF-STATUS.adoc` — read it before quoting a `verified` row
+externally.
+
+Vocabulary bridge: this file's `verified` / `partial` / `stated-unproven` /
+`absent` are *local* to the matrix. The estate's closed tokens
+(`proven`, `proven-with-postulates`, `tested-only`, `argued`, `open`) are reserved
+for `PROOF-STATUS.adoc` and for prose outside this file.
+====
+
 == Status vocabulary (proof-specialised)
 
 [cols="1,4"]
@@ -104,6 +131,29 @@ representation-agnostic.)
 | `JtvExtended` | `verified` | Strong normalization, confluence, non-interference, reversibility composition.
 | `JtvEcho` | `verified` | *New.* Echo lattice + reverse-block admissibility + fibre correspondence with `echo-types`.
 |===
+
+== Agda development (not a Lean library)
+
+The table above defines `verified` as *mechanised in Lean 4 and compiles under
+`lake build`*. The Agda development is mechanised under a different checker
+(`agda --safe`), so it is recorded **here**, with its own criterion, rather than
+in that table — the two vocabularies are deliberately not mixed.
+
+[cols="1,1,3"]
+|===
+| Module | Status | Criterion and notes
+
+| `Jtv.Core` | `typechecks` | `theory/agda/check.sh` green under the canonical invocation.
+| `Jtv.Reversal` | `typechecks` | Safe/Neutral reversal, full-state (`∀ y`) round trip.
+| `Jtv.Echo` | `typechecks` | Echo lattice + fibre correspondence.
+| `Jtv.Conditional` | `typechecks` | Tokenless-`if` counterexample, plus the additive recorded-branch repair proved by `reversible-if-with-residue`; overwriting branches remain out of scope.
+|===
+
+`typechecks` here means: the module builds under `agda --safe --without-K
+--cubical-compatible` with the receipt's toolchain, with a clean hole/postulate
+scan. Mathesis grading is separately recorded in `verification/PROOF-STATUS.adoc`
+§2.1b (Grade 3 held for these four modules; Grade 2i pending). Receipt:
+`verification/receipts/2026-11-01-agda.adoc`.
 
 == Key theorems
 

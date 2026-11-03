@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Receipt — Agda theory proofs, 2026-11-01
+:toc: none
+
+A receipt records *an execution*: tool, version, invocation, what was
+checked, and the commit it describes. It is not a policy statement. Per
+`hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §2.3, "this text
+records a policy, not successful proof executions" — the implementation
+receipts establish those separately, and this is one such receipt.
+
+[cols="1,3",options="header"]
+|===
+| Field | Value
+
+| Date (UTC) | 2026-11-01T18:33:00Z
+| Commit checked out | `afea85c` (`afea85c`), a reachable commit on
+  `arena/06c0481f-jtv-lang` that contains all four modules, including the
+  `reversible-if-with-residue` repair theorem and the
+  `tokenless-conditional-not-identity` declaration under the name the
+  documentation cites. Earlier revisions of this receipt cited `2f54c28`
+  (unreachable after a rebase), `e34feda`, `c46ddf2`, `c622ddc`, `3fbbb59`, `e6cc78d`, `e33b29b` and `33116f6`; each
+  citation was superseded when the checked sources changed.
+| Checker | `Agda version 2.7.0.1-cf6e2d9`
+| Library | `standard-library-2.4` (tag `v2.4`)
+| Invocation | `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch --library-file <tmp> --no-default-libraries src/Jtv/<Module>.agda`
+| Command | `theory/agda/check.sh`
+| Environment | session sandbox, no network to the §6 hosts; Agda from the PyPI
+  `agda` 2.7.0.1 wheel + upstream `src/data/lib/prim` at tag `v2.7.0.1`
+|===
+
+== Result
+
+[cols="1,1,3",options="header"]
+|===
+| Module | Result | Notes
+
+| `Jtv.Core` | typechecks | `--safe`, no holes, no postulates
+| `Jtv.Reversal` | typechecks | incl. `naive-backward-fails-self-ref`
+| `Jtv.Echo` | typechecks | lattice, both admissibility policies, fibre
+| `Jtv.Conditional` | typechecks | tokenless reversible `if` proven unsound
+|===
+
+Within `Jtv.Echo`, both block theorems are checked: `blockEcho-admissible`
+(Safe-only policy, with `join-admissible`) and `blockEcho-admissibleWithResidue`.
+Within `Jtv.Conditional`: `tokenless-conditional-not-identity` and the
+recorded-branch repair `reversible-if-with-residue` — the latter for the
+additive step `x += v`, where the recorded branch bit is the whole residue; an
+overwriting branch needs a `Snapshot` residue and is not covered. Module discovery is dynamic and recursive — `check.sh` typechecks every
+`src/**/*.agda` and scans it for escape hatches — so a newly added module, at any
+namespace depth, cannot pass the gate unbuilt. (Checked by planting
+`src/Jtv/Test/Nested.agda` with a hole: it was discovered and reported FAILED.)
+
+The receipt is written to `theory/agda/_build/check.log` by `check.sh`, and
+that file is what the CI artifact uploads (it previously pointed at a
+directory nothing wrote, so it silently uploaded nothing).
+
+Escape-hatch scan (`{!!}`, `postulate`, `primTrustMe`,
+`{-# NON_TERMINATING #-}`): *clean*.
+
+== What this receipt does and does not establish
+
+*Establishes:* the four Agda modules typecheck under the canonical estate
+invocation with no escape hatches, at the pinned versions, on this commit.
+That is the **Grade 3** condition of
+`hyperpolymath/mathesis:estate-mathematical-architecture` §5.
+
+*Does not establish:* any recheck leg (no Rocq, no transport — the Lean
+rewrites are `re-proved` and are recorded per theorem in
+`theory/agda/README.adoc` §4, with the one strengthening discrepancy);
+any statement-level comparison against `echo-types`; or any refinement of
+the Rust interpreter (`gap-001`). It is not a Grade 1 receipt: no AXLE,
+coq-lsp, or Isabelle-server API was invoked.
+
+== Re-run (recorded, reachable commit)
+
+`./check.sh` at `e34feda`, 2026-11-01T17:41:19Z, with
+`AGDA_STDLIB=/tmp/stdlib24/standard-library.agda-lib`:
+`Core`, `Reversal`, `Echo`, `Conditional` all `TYPECHECKED`; hole/postulate
+scan clean.
+
+== Re-run
+
+[source,shell]
+----
+cd theory/agda && ./check.sh
+----

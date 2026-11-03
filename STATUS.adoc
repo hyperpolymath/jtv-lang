@@ -45,7 +45,7 @@ Proof artefacts are in `jtv_proofs/` (Lean 4) and `src/abi/` (Idris2).
 
 === Lean 4 (`jtv_proofs/`)
 
-All five libraries compile cleanly under Lean 4 v4.12.0, with zero `sorry` or `sorryAx`:
+All seven libraries compile cleanly under Lean 4 v4.12.0, Mathlib-free, with zero `sorry` or `sorryAx`:
 
 [cols="1,2,1", options="header"]
 |===
@@ -69,6 +69,14 @@ All five libraries compile cleanly under Lean 4 v4.12.0, with zero `sorry` or `s
 
 | `JtvSecurity`
 | Injection impossibility, sandboxing, Harvard separation guarantees
+| ✅ Compiles
+
+| `JtvEcho`
+| Echo lattice (Safe/Neutral/Breaking), admissibility policies, retained-loss fibre
+| ✅ Compiles
+
+| `JtvExtended`
+| Extended metatheory: algebraic cancellation/distribution, expression lemmas
 | ✅ Compiles
 |===
 
@@ -129,6 +137,10 @@ Phase 2 Echo mechanisation (Lean 4):
 | AffineScript alignment
 | `ALIGNMENT-AFFINESCRIPT.adoc`
 | Design decisions recorded; implementation pending
+
+| v2 independence + per-layer semantics audit
+| `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc`
+| Complete (2026-11-01); no sibling-project dependency; findings F1–F6 open (F7, the doc overstatement this PR fixes, closed)
 |===
 
 ---
@@ -136,7 +148,10 @@ Phase 2 Echo mechanisation (Lean 4):
 == Known Gaps
 
 - Verification chain incomplete: proofs validate models but are not wired to the executable interpreter
+  (the Lean token is a single-op `Int` residue; the runtime token is a multi-op `Vec<RecordedOp>` log, and no refinement connects them)
 - Reversibility round-trip: no full `(forward ∘ reverse = id)` test at the integration level
+- Reversible `if` branches: branch assignments are graded `Safe` by Echo but recorded as nothing, so `reverse` is a silent no-op there (F1–F2); tokenless `reverse { }` re-evaluates its guard on reversal and can silently skip the undo (F3) — see `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8
+- `irreversible { }` and the typed `ReversalToken<S>` are designed, not implemented; token linearity is enforced at runtime only
 - `typing_coercion` theorem weaker than documented — follow-up ADR needed
 - Coprocessor implementation gated on PataCL Phase 1
 - No mutation testing
@@ -156,7 +171,7 @@ Phase 2 Echo mechanisation (Lean 4):
 | Implemented; 531 tests passing
 
 | Formal proofs (Lean 4)
-| 5 libraries compile; zero sorry
+| 7 libraries compile; zero sorry; no mathesis grade (see `verification/PROOF-STATUS.adoc`)
 
 | Formal proofs (Idris2)
 | ABI types verified; total enforcement
@@ -172,4 +187,7 @@ Phase 2 Echo mechanisation (Lean 4):
 
 | Extensions (quantum, probabilistic, advanced types)
 | Research directions — not implemented
+
+| Verification grade (estate)
+| *Grade 3* held for four Agda modules (`theory/agda/`: Data model, Safe/Neutral reversal, Echo lattice + fibre, tokenless-`if` counterexample), receipt filed. Grade 2i pending one Lean↔Agda strengthening reconciliation; Rocq leg, non-DTT leg and Rust/Creusot leg absent. See `verification/PROOF-STATUS.adoc`
 |===

@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Enforces the estate Theory Path for JtV: theory proofs are checked in Agda
+# with the canonical invocation.
+#   hyperpolymath/standards:3-practice/PROOF-POLICY.adoc §2.1, §6
+#   hyperpolymath/mathesis:estate-mathematical-architecture §5
+#
+# Verify this gate both ways (PROOF-POLICY §7): it must fail on a planted
+# `{!!}` as well as pass on the tree. theory/agda/check.sh does the latter
+# itself (it scans for holes/postulates and exits non-zero).
+#
+# TOOLCHAIN PINNING: the ubuntu-latest archive ships agda-stdlib 1.7.3, which
+# cannot satisfy this project's `depend: standard-library-2.4`, so distro
+# packages are NOT used here. Agda 2.7.0.1 and agda-stdlib 2.4 are fetched
+# from their own release source trees at fixed tags. PROOF-POLICY §6 prefers
+# the repo's Guix manifest/container; this is the fallback until that exists,
+# and the versions below are the pin — do not "simplify" this to apt.
+#
+# RECORDED DEVIATIONS from PROOF-POLICY §6 / the SHA-pin hook (both reviewed;
+# both are repo-wide conditions, not choices made by this workflow):
+#
+#   1. INSTALL ROUTE. §6 wants CI toolchains installed through the repository's
+#      Guix manifest or container. This repository has neither — there is no
+#      guix/ manifest, no flake, and no Agda container image (the only
+#      Containerfile is ClusterFuzzLite's). Writing an untested manifest here
+#      would move the problem rather than solve it, so the deviation is
+#      recorded instead: the toolchain is built from upstream tags and the
+#      step below *asserts* the installed stdlib name against the project's
+#      `depend:`, so a silent substitution fails the job. Remediation: add an
+#      Agda entry to the estate manifest and switch this job to it.
+#   2. ACTION REFS. `hooks/validate-sha-pins.sh` wants 40-character commit
+#      SHAs, but every workflow in this repository pins by version tag and
+#      `actions.lock` is machine-generated from those tags; pinning one
+#      workflow would desynchronise the lockfile contract. Migrating to SHAs
+#      is a repo-wide change with its own lockfile regeneration, tracked
+#      separately. What is done here is the credential part of the same
+#      concern: checkout runs with `persist-credentials: false`.
+name: agda-proof-policy
+
+on:
+  push:
+    branches: [main]
+    paths: ['theory/agda/**', '.github/workflows/agda-proof-policy.yml']
+  pull_request:
+    paths: ['theory/agda/**', '.github/workflows/agda-proof-policy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AGDA_VERSION: '2.7.0.1'
+  AGDA_STDLIB_TAG: 'v2.4'
+  # The *commit* each tag resolved to, and the sha256 of the archive fetched at
+  # that commit. Tags are mutable (`git tag -f` is legal and silent), so a tag
+  # URL is not a pin: it can serve different bytes while still claiming the same
+  # version, and the library-name assertion below cannot see the difference.
+  # Fetching by commit makes the bytes immutable; the digest makes even a
+  # compromised archive detectable.
+  AGDA_COMMIT: 'a6fc20c27ae953149b53a8997ba4a1c8b17d628a'
+  AGDA_SHA256: '036bcca0ebf6cb2ceb17be58240f7634b99b7e9cd81521be56b2f3e9926d33d5'
+  AGDA_STDLIB_COMMIT: '2a5a0dec0a3cb5c87468ce101388a513d39dbf10'
+  AGDA_STDLIB_SHA256: '9c643759e49eca6b3538edd3cc1c0f30b572e629f2ad154a835ff97eca21c737'
+
+jobs:
+  agda:
+    name: Agda theory proofs (canonical invocation)
+    runs-on: ubuntu-24.04
+    steps:
+      # `persist-credentials: false`: this job only reads the tree, and one of
+      # its steps uploads an artifact, so leaving the token in .git/config
+      # would put repository credentials inside anything that step swept up.
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Agda + agda-stdlib
+        run: |
+          set -euo pipefail
+          # Agda: the PyPI wheel packages the upstream 2.7.0.1 binary, but
+          # ships without data/lib/prim — fetched from the matching source tag.
+          pip install "agda==${AGDA_VERSION}"
+          AGDA_DATA="$(python -c 'import agda,os;print(os.path.join(os.path.dirname(agda.__file__),"data"))')"
+          curl -sSL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
+          echo "${AGDA_SHA256}  /tmp/agda-src.tar.gz" | sha256sum -c -
+          tar xzf /tmp/agda-src.tar.gz -C /tmp
+          mv "/tmp/agda-${AGDA_COMMIT}" "/tmp/agda-${AGDA_VERSION}"
+          rm -rf "$AGDA_DATA/lib"
+          mkdir -p "$AGDA_DATA"
+          cp -r "/tmp/agda-${AGDA_VERSION}/src/data/lib" "$AGDA_DATA/lib"
+
+          # Standard library at the pinned tag.
+          curl -sSL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
+          echo "${AGDA_STDLIB_SHA256}  /tmp/stdlib.tar.gz" | sha256sum -c -
+          tar xzf /tmp/stdlib.tar.gz -C /tmp
+          mv "/tmp/agda-stdlib-${AGDA_STDLIB_COMMIT}" "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}"
+          echo "AGDA_STDLIB=/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib" >> "$GITHUB_ENV"
+
+          agda --version
+          awk '/^name:/{print $2}' "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib"
+
+      - name: Assert the pin matches the project's declared dependency
+        run: |
+          set -euo pipefail
+          want="$(awk '/^depend:/{print $2}' theory/agda/jtv-theory.agda-lib)"
+          have="$(awk '/^name:/{print $2}' "$AGDA_STDLIB")"
+          echo "project wants: $want / installed: $have"
+          if [ "$want" != "$have" ]; then
+            echo "::error::stdlib version mismatch: project depends on $want, installed $have"
+            exit 1
+          fi
+
+      - name: Check theory proofs (fails on any hole or postulate)
+        working-directory: theory/agda
+        run: ./check.sh
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: agda-proof-receipt
+          path: theory/agda/_build/**
+          if-no-files-found: error
+          retention-days: 30
