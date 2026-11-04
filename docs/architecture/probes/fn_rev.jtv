@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+x = 100
+y = 1
+@pure fn h(x: Int, y: Int): Int {
+  reverse { x += y }
+  return x
+}
+r = h(10, 3)
+print(r)
+print(x)

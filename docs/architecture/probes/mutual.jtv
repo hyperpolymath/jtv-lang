@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+@total fn f(n: Int): Int {
+    return g(n)
+}
+@total fn g(n: Int): Int {
+    return f(n)
+}
+y = f(2)

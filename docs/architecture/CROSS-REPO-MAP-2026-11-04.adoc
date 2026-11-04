@@ -1,0 +1,775 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= JtV language system: cross-repo map, proof and engineering ladders, critical path
+
+Scope and conventions:
+
+* *Sources.* The 16 repository maps supplied: jtv-lang (implementation), jtv-lang (design), jtv-halting-islands-ct, anytype, typell, typed-wasm, echo-types, epistemic-types, tropical-types, choreographic-types, occupancy-types, secret-types, residual-evidence-types, absolute-zero, januskey and maa-framework.
+* *Status words.* "verified" means re-run in the mapping session. "Stated" means repo docs or CI only.
+* *Missing toolchains in the mapping environment.* lean/lake/elan, agda, idris2, zig, just, wasm-pack, the wasm32 target, coqc, isabelle, julia and deno. Present: cargo/rustc, bun and node. Every prover claim below is therefore stated-only unless marked otherwise.
+* *Repos referenced but not mapped* (out of scope; nothing is claimed about their contents beyond what the maps cite): resource-algebra (pins inspected by the occupancy-types mapper only), patacl, systemet, affinescript, ephapax, 007, oblibeny, nextgen-typing, nextgen-languages, EchoTypes.jl, valence-shell, ochrance, aletheia-as-separate, hypatia, standards, cicd-suite, kategoria, ordinal-notation, typedqliser, lintel and wokelang.
+
+== 1. Dependency graph
+
+=== 1.1 Adjacency list
+
+How to read an edge: "FROM <kind> TO" reads as a sentence. For example, "typed-wasm target-of jtv-core" means typed-wasm is the intended target of jtv-core.
+
+Edge kinds: theory-feeds, proof-shadow-of, target-of, ABI/FFI-seals, consumes, blocked-by. Each edge carries a status: EXISTS, CITATION (prose only), PROPOSED (not in either repo) or BROKEN.
+
+==== Components inside jtv-lang
+
+[cols="1,1,1,3"]
+|===
+|From |Kind |To |Status and evidence
+
+|jtv-cli |consumes |jtv-core |EXISTS. `run` = parse → typecheck → purity → interpret. 0 tests.
+|jtv-lsp |consumes |jtv-core |EXISTS but a stub. Diagnostics are pinned at Range 0:0, hover is a constant string, formatting returns None. 0 tests.
+|jtv-debug |consumes |jtv-core |EXISTS but a stub. Breakpoints are recorded; stepping fields are `#[allow(dead_code)]`, "not yet wired up". 0 tests.
+|WASM bindings (crates/jtv-core/src/wasm.rs, 756 LOC) |consumes |jtv-core interpreter |EXISTS. `JtvWasm::run` and `run_and_collect` skip TypeChecker and PurityChecker (~L70/L88).
+|WASM bindings |blocked-by |wasm32 toolchain + static breakage |MISSING-TOOLCHAIN. Statically, `lib.rs` has `#![forbid(unsafe_code)]` while wasm.rs has `unsafe impl Send/Sync for JsCallback`, and `use js_sys::...` appears with no js-sys dependency declared. No CI job builds wasm32.
+|playground/PWA |consumes |WASM bindings |PROPOSED/absent. playground/jtv has only docs and 2 samples, both failing to parse at 1:1. www/ is empty.
+|playground/PWA |blocked-by |WASM bindings; owner stack decision |The ReScript/Deno plan conflicts with estate policy.
+|jtv_proofs (Lean 4 v4.12.0, 7 modules + JtvAll) |proof-shadow-of |jtv-core |PARTIAL. Int-only model (lit/var/add/neg). Correspondence is the Rust harness `interpreter.rs mod denotational_correspondence`: height ≤ 2, ~12k cases, plus a 7-point golden corpus mirrored by rfl.
+|jtv_proofs |blocked-by |Lean toolchain (environment) |`lake build` was not re-run. CI `proof-regression.yml` is the claimed verifier.
+|Idris2 ABI (src/abi/Types.idr, 152 LOC) |ABI/FFI-seals |jtv-core |CITATION only. Not linked to Rust. `dataAdditionOnly` returns `()` for every constructor. `DNeg` contradicts ADR-0008. Unchecked (no idris2).
+|Zig FFI (ffi/zig) |ABI/FFI-seals |Idris2 ABI |BROKEN/absent. This is a Julia-Zig-FFI template exporting add/multiply/factorial; its README points to julia-zig-ffi.
+|PataCL coproc (coproc.rs, coproc_lower.rs) |consumes |patacl |EXISTS behind `#[cfg(feature="patacl")]`.
+|PataCL coproc |blocked-by |patacl Phase 1 (patacl_core absent) |`cargo check -p jtv-core --features patacl` fails with E0432/E0433. 0/6 coproc_lower, 5/12 coproc and 1/7 coproc_corpus tests run.
+|Zig FFI / Idris2 ABI |target-of |PataCL coproc (coproc_lower) |EXISTS as text emission only: Zig `pub export fn` with `unreachable` bodies, plus Idris `%foreign` and C header text.
+|typed-wasm |target-of |jtv-core |PROPOSED. Only ALIGNMENT-AFFINESCRIPT.adoc Phase 4 G5 mentions it, and `.github/workflows/language-policy.yml:41` mentions it. No codegen exists.
+|===
+
+==== Theory and proof feeds into jtv-lang
+
+[cols="1,1,1,3"]
+|===
+|From |Kind |To |Status and evidence
+
+|echo-types |theory-feeds |jtv-lang |CITATION. Cited by JtvEcho.lean, echo.rs:8-9, spec §8, ADR-0007/0009 and ALIGNMENT §5. Zero back-references (grep).
+|jtv_proofs/JtvEcho.lean |proof-shadow-of |echo-types |PARTIAL. A truncated Prop/UIP shadow, sound in the Agda→Lean direction only. It mirrors Fibre, echoIntro, mapOver, toResidue, injective_fibre_subsingleton and residue_lossy. There is no classifier linking Safe/Neutral/Breaking to Fibre. PROOF-CAPABILITY-MATRIX says "Agda↔Lean bridge deferred to Phase 4".
+|absolute-zero |theory-feeds |jtv-lang |CITATION. reversible.rs:162 and interpreter.rs:424 name the CNO pattern; ROADMAP.adoc:64. docs/ecosystem-status.adoc is stale.
+|epistemic-types |theory-feeds |jtv-lang |PROPOSED. Candidate semantics for the ADR-0009 Epistemic grade. Grep finds nothing in either direction.
+|secret-types |theory-feeds |jtv-lang |PROPOSED. `Typing.Generic.lab` coincides with jtv academic/proofs/SECURITY_PROOFS.adoc §3.2 IFC-Lit/Var/Add. No import either way.
+|residual-evidence-types |theory-feeds |jtv-lang |PROPOSED (inferred). The snapshot token is an evidence predicate that identifies the pre-image (cf. `Presence.no-noise-identifies-two`).
+|choreographic-types |theory-feeds |jtv-lang |PROPOSED. A two-role Harvard choreography. The JtV Echo lattice satisfies the two laws K-CUT-LOSS needs.
+|occupancy-types |theory-feeds |jtv-lang |PROPOSED. HWM grade for the `token_store` RecordedOp logs (interpreter.rs:447-478).
+|tropical-types |theory-feeds |jtv-lang |CITATION. echo.rs:110 reserves NumAlgebra::NonGroup "for a future tropical / min-plus system"; ADR-0007 D6 and ADR-0010 "anticipated but uninhabited".
+|anytype |theory-feeds |jtv-lang |PROPOSED. Candidate grade kernel; grep finds no anytype/systemet in jtv-lang.
+|jtv-halting-islands-ct |theory-feeds |jtv-lang |CITATION-free sibling. Supplies the claim text, prior-art note and diode-negative catalogue (git 91b345b:tests/test_diode_negative.py). It uses an independent GRAMMAR.ebnf, and jtv-lang has zero references to it.
+|affinescript |theory-feeds |jtv-lang |CITATION. Governance model: ALIGNMENT-AFFINESCRIPT.adoc G1–G5; the PROOF-CAPABILITY-MATRIX is "Modelled on AffineScript's CAPABILITY-MATRIX".
+|januskey |theory-feeds |jtv-lang |PROPOSED. Second real-world instance of the "reversible by retained residue" pattern.
+|===
+
+==== Consumers of jtv-lang
+
+[cols="1,1,1,3"]
+|===
+|From |Kind |To |Status and evidence
+
+|typell (crates/typell-jtv, 316 LOC, 11 tests) |consumes |jtv-lang |EXISTS as a re-encoding. Its Cargo.toml has no jtv-core dependency. typell-server does not depend on it and has no jtv route.
+|typell-jtv |blocked-by |soundness hole in rules.rs:18 |`check_coercion` compares by `std::mem::discriminant`, so List<Int>→List<String> = true. Verified with a probe.
+|maa-framework / Aletheia |consumes |jtv-lang |EXISTS as a tool. `aletheia /home/user/jtv-lang` gave 19/26, Bronze NOT MET, exit 1 (verified).
+|hypatia |consumes |jtv-lang |EXISTS. .github/workflows/hypatia-scan.yml.
+|jtv-lang |consumes |standards |EXISTS. Reusable workflows; STATE next-action "pin governance-reusable@main → SHA".
+|jtv-lang (design) |consumes |007 |CITATION. DESIGN-JTV-V2-REVERSIBILITY.adoc "The Designed Fork with 007".
+|===
+
+==== Family-internal edges that shape the JtV options
+
+[cols="1,1,1,3"]
+|===
+|From |Kind |To |Status and evidence
+
+|echo-types |consumes |absolute-zero |EXISTS. `echo-types.agda-lib depend: standard-library absolute-zero`; EchoCNOBridge imports CNO.
+|echo-types |proof-shadow-of |januskey |EXISTS, drifted. EchoJanusBridge has a 4-variant JanusOp against januskey's 8-variant OpKind, and cites stale paths.
+|epistemic-types |consumes |echo-types |EXISTS (optional). tests/integration/CanonicalEcho.agda via `just check-canonical`.
+|epistemic-types |proof-shadow-of |residual-evidence-types |EXISTS. Kripke/Residual.agda and Kripke/Dependence.agda mirror (E-9).
+|residual-evidence-types |consumes |echo-types @9c4b72b5; epistemic-types @dd948fbd |EXISTS in tests/integration.
+|choreographic-types |consumes |resource-algebra @b2c9f1f6; epistemic-types @495db9cc; echo-types @da140cc2 |EXISTS. The echo-types pin is experimental/echo-additive/Grade.agda, off main.
+|occupancy-types |consumes |resource-algebra @0b338c9 |EXISTS. Names confirmed in a scratch clone.
+|januskey |consumes |resource-algebra @cf9235c |EXISTS (scripts/fetch-siblings.sh).
+|tropical-types |theory-feeds |resource-algebra |EXISTS. Per PRIORITY.adoc 2026-10-12, tropical-types is provenance and resource-algebra is the kernel.
+|echo-types |theory-feeds |tropical-types |EXISTS. One-way ResidueMeasure E→R seam (FOUNDATIONS_BRIDGE §2).
+|typed-wasm |consumes |typell |CITATION. Level theory, doc-level only.
+|typed-wasm |consumes |resource-algebra @0b338c9; occupancy-types @8f09c0b; choreographic-types @edb784a; echo-types @2bbdb49 |EXISTS as pinned transcription / port-and-reprove / mirror.
+|typed-wasm |target-of |affinescript; ephapax |EXISTS, partial. Access-site carriers are gated on affinescript#462 and ephapax#251.
+|typed-wasm |target-of |007 |Status CONFLICTS. typed-wasm LEVEL-STATUS says "007 lowering DONE"; echo-types CLAUDE.md says "TwasmBackendNotYetImplemented".
+|systemet |theory-feeds |anytype |EXISTS. Pinned 0af1a2f6; extend-not-redefine.
+|anytype |theory-feeds |affinescript |CITATION. Profile chain; Affine.idr mirrors quantity.ml by comment only.
+|anytype |blocked-by |stale abi.ipkg path |BROKEN since 2026-09-19. idris2-proof.yml:90 and Justfile:138; failing run 35433563385.
+|anytype L4 (effects) |blocked-by |systemet TEA-erasure |OPEN upstream.
+|absolute-zero |theory-feeds |januskey |CITATION. "op ; inverse(op) ≡ CNO"; FilesystemCNO.v is now archived.
+|maa-framework |consumes |absolute-zero |BROKEN. The gitlink @87902bb is uninitialised and the directory is empty.
+|maa-framework |blocked-by |oblibeny |The reference language exists in spec only and is not in tree.
+|patacl |theory-feeds (inherits) |oblibeny |CITATION. MPR dual-form.
+|===
+
+=== 1.2 Mermaid
+
+[source,mermaid]
+----
+flowchart LR
+  subgraph JTV["jtv-lang"]
+    CORE["jtv-core (parser, typechecker, interpreter; 592 tests)"]
+    CLI["jtv-cli"]
+    LSP["jtv-lsp (stub)"]
+    DBG["jtv-debug (no stepping)"]
+    WASMB["WASM bindings wasm.rs (interpreter, not codegen)"]
+    PWA["playground / PWA (absent)"]
+    LEAN["jtv_proofs Lean 4.12 (Int model)"]
+    IDR["Idris2 ABI Types.idr"]
+    ZIG["ffi/zig (Julia template)"]
+    COPROC["PataCL coproc (feature-gated)"]
+  end
+
+  CLI -->|"consumes"| CORE
+  LSP -->|"consumes"| CORE
+  DBG -->|"consumes"| CORE
+  WASMB -->|"consumes (skips purity)"| CORE
+  PWA -->|"consumes"| WASMB
+  LEAN -->|"proof-shadow-of"| CORE
+  IDR -.->|"ABI/FFI-seals (unlinked)"| CORE
+  ZIG -.->|"ABI/FFI-seals (absent)"| IDR
+  ZIG -->|"target-of (unreachable stubs)"| COPROC
+  COPROC -->|"consumes"| PATACL["patacl (external)"]
+  COPROC -.->|"blocked-by"| PATACL
+  WASMB -.->|"blocked-by"| TCW["wasm32/wasm-pack missing + unsafe/js-sys"]
+  LEAN -.->|"blocked-by"| TCL["lean toolchain (env)"]
+
+  TW["typed-wasm (197 tests; verifier/codegen/gate)"] -.->|"target-of (proposed)"| CORE
+  TW -.->|"blocked-by"| TWGAP["IR gaps + L15 caps erased + proposal 0004 draft"]
+
+  ECHO["echo-types (Agda)"] -->|"theory-feeds (citation)"| JTV
+  LEAN -->|"proof-shadow-of (JtvEcho)"| ECHO
+  AZ["absolute-zero (Agda CNO/OND)"] -->|"theory-feeds (citation)"| JTV
+  ECHO -->|"consumes"| AZ
+  EPI["epistemic-types (Agda)"] -.->|"theory-feeds (proposed)"| JTV
+  EPI -->|"consumes (optional)"| ECHO
+  EPI -->|"proof-shadow-of"| REV["residual-evidence-types (Agda)"]
+  REV -->|"consumes"| ECHO
+  REV -->|"consumes"| EPI
+  REV -.->|"theory-feeds (proposed)"| JTV
+  SEC["secret-types (Agda TINI)"] -.->|"theory-feeds (proposed)"| JTV
+  CHO["choreographic-types (Agda)"] -->|"consumes"| RA["resource-algebra (Agda kernel; not mapped)"]
+  CHO -->|"consumes"| EPI
+  CHO -->|"consumes"| ECHO
+  CHO -.->|"theory-feeds (proposed)"| JTV
+  OCC["occupancy-types"] -->|"consumes"| RA
+  OCC -.->|"theory-feeds (proposed)"| JTV
+  TROP["tropical-types (Lean/Isabelle provenance)"] -->|"theory-feeds"| RA
+  ECHO -->|"theory-feeds (ResidueMeasure seam)"| TROP
+  TROP -.->|"theory-feeds (anticipated)"| JTV
+  JAN["januskey (Rust 135 tests)"] -->|"consumes"| RA
+  AZ -->|"theory-feeds (citation)"| JAN
+  ECHO -->|"proof-shadow-of (drifted)"| JAN
+  JAN -.->|"theory-feeds (proposed)"| JTV
+  HI["jtv-halting-islands-ct (Rust POC)"] -->|"theory-feeds"| JTV
+  ANY["anytype (Idris2 kernel)"] -.->|"theory-feeds (proposed)"| JTV
+  SYS["systemet (not mapped)"] -->|"theory-feeds"| ANY
+  ANY -.->|"blocked-by"| ABIPKG["stale abi.ipkg path"]
+  ANY -->|"theory-feeds"| AFS["affinescript (not mapped)"]
+  AFS -->|"theory-feeds (governance)"| JTV
+  TW -->|"target-of"| AFS
+  TW -->|"consumes"| TYPELL["typell (Rust 447 tests)"]
+  TW -->|"consumes"| RA
+  TW -->|"consumes"| OCC
+  TW -->|"consumes"| CHO
+  TW -->|"consumes (mirror)"| ECHO
+  TYPELL -->|"consumes (typell-jtv, unwired)"| JTV
+  TYPELL -.->|"blocked-by"| COERCE["check_coercion soundness hole"]
+  MAA["maa-framework / Aletheia"] -->|"consumes (19/26 gate)"| JTV
+  MAA -.->|"consumes (uninit gitlink)"| AZ
+  PATACL -->|"theory-feeds"| OBL["oblibeny (not mapped)"]
+----
+
+== 2. Proof ladder
+
+=== 2.1 Rungs
+
+Each rung gives a status (LANDED / PARTIAL / OPEN), the prover and repo, and the trust boundary. "LANDED-stated" means the claim rests on repo docs or CI and was not re-checked here.
+
+R0. Proof hygiene of the JtV suite: *PARTIAL (verified statically only)*.
+* Lean 4 v4.12.0, jtv_proofs: 7 modules, 3,175 LOC.
+* Verified by grep: 0 sorry/admit/axiom and 0 True-typed theorems.
+* `lake build` was NOT re-run (no Lean toolchain). STATE/MATRIX claim exit 0 on 2026-06-21.
+* The durable verifier is CI proof-regression.yml, whose run results were not inspected.
+
+R1. Data core over the Int model: *LANDED-stated*.
+* Lean: dataExpr_totality, data_terminates, data_is_pure, determinism, strong normalisation, confluence.
+* Trust boundary: an Int-only denotational model (lit/var/add/neg over σ : String → Int).
+* Caveat from the halting-islands map: in Lean, `∃ n, evalDataExpr e σ = n` is near-trivial, because definitions are total by construction. The real certificate is the termination checker accepting evalDataExpr.
+
+R2. Injection/security over the Lean AST: *LANDED-stated*.
+* no_control_to_data_flow and string_not_executable.
+* Holds over the Lean DataExpr AST, not the pest grammar (MATRIX: parser_correctness absent).
+
+R3. Per-op reversibility: *LANDED-stated*.
+* rev_forward_backward (x ∉ freeVars e).
+* Bennett token rev_forward_backward_with_token (JtvTheorems.lean:383–402).
+* rev_backward_naive_fails_self_ref.
+* End-to-end integration (gap-004) is OPEN. Rust has only 7 RV + 5 C2 tests.
+
+R4. Echo/Epistemic lattice laws: *LANDED-stated, semantically thin*.
+* blockEcho_admissible{,WithResidue}, injective_fibre_subsingleton, residue_lossy.
+* Echo×Epistemic product-lattice laws.
+* §6 NumSystem stratification is a table discharged by rfl/decide, so `float_not_safe` follows from the table, not from IEEE semantics.
+* Epistemic in §5 is a 3-constructor enum with no semantics.
+
+R5. type_preservation: *PARTIAL*. Holds for {int, hex, binary} under isIntRepr (gap-005).
+
+R6. Number-system value models: *OPEN*.
+* Rational and symbolic are designed in docs/proofs/number-system-value-models.adoc.
+* Float and complex are Rust-witnessed only (number.rs approx_group_witness). Per do_not_reopen they are NOT to be Lean-proved via native_decide.
+
+R7. Idris2 ABI: *PARTIAL, unchecked*.
+* `%default total`; the GADT index makes CWhile : Expr DataLang ill-typed.
+* dataIsNeverControl, purityLeqTrans and widenTrans are present.
+* `dataAdditionOnly` is vacuous, and `DNeg` contradicts ADR-0008.
+* idris2 is missing locally.
+
+R8. Grammar-level injection impossibility and totality, i.e. PROOF-1 parser_correctness: *OPEN* (MATRIX: absent).
+* The halting-islands map shows that once `data_expr` admits `function_call`, grammar membership is no longer a termination certificate. Totality then depends on the Pure Function Rule (typechecker.rs ~L680) plus call-graph well-foundedness.
+* This rung needs three things:
+** a grammar→AST conformance or round-trip statement;
+** a theorem that Pure-annotated calls are well-founded (no recursion);
+** the T1/T2/T3 statements from jtv-halting-islands-ct README/handover (membership ⇒ termination; diode one-way; islands contribute no non-termination).
+* *Engineering soundness hole in front of this rung (doctrine 1):* `JtvWasm::run`/`run_and_collect` and `Interpreter::run` do not enforce purity. Any proof at this rung is bypassable on the embedding path until those entry points are fixed.
+
+R9. Interpreter correctness, PROOF-2: *PARTIAL*.
+* Exhaustive Rust testing at height ≤ 2 over lit/var/add/neg, i64 boundary.
+* Missing: mechanised refinement; Control, reverse blocks, calls, lists, strings and the other number systems.
+* Reusable pattern: residual-evidence-types `tests/correspondence`, which proves `checker-matches-explorer : table ≡ expected` by refl over 546 rows from a generated table. The JS half was verified (11/11 bun, byte-identical table). jtv already has a 7-point rfl-mirrored corpus to extend.
+
+R10. Echo semantics anchored in echo-types: *OPEN*.
+* echo-types holds the theory: EchoGraded (keep ≤ residue ≤ forget, ≤g-prop, degrade-compose), EchoLossTaxonomy (EQUIV/INJ/SURJ/CONST), EchoNoSectionGeneric and the Echo.* foundation contract. All LANDED-stated, CI green on 1073d60 (run 40446306048), not type-checked locally.
+* Blockers:
+** ADR-0007/0009 cite the retracted "graded comonad" framing (echo-types R-2026-05-18 and EchoVariance #243).
+** JtV's 3-point Echo fuses the loss-class axis and the retention-index axis, a fusion FOUNDATION_CONTRACT forbids.
+** "Breaking = total erasure" has no fibre meaning: `const-fibre-section` shows the constant map's fibre keeps the whole domain.
+** "tropical → Breaking" conflicts with EchoTropical (retains distinct echoes) and with FOUNDATIONS_BRIDGE §5 (tropical belongs on the resource axis).
+
+R11. Token reversibility anchored to the family kernel: *OPEN*.
+* Available pieces:
+** echo-types `EchoReversibilityBridge.reversibility-via-totality : Σ B (Echo f) ↔ A` and `EchoResidueCell.once-only`, written for 007 (Agda, LANDED-stated);
+** absolute-zero CNO.agda (IsCNO, cno-composition; LANDED-stated, unchecked).
+* Gaps:
+** absolute-zero's reversibility↔CNO bridge (reverses_seq_computes_identity, reversible_bridge_forward/backward_upto) exists only in ARCHIVED Coq.
+** IsCNO's `terminates` and `cno-reversible` fields are vacuous (total eval; energy constant zero).
+** Partial residues (float-carrier Neutral `x += 0.1` is not snapshotted in reversible.rs, so its reverse yields a candidate, not an identified pre-state) need residual-evidence-types vocabulary. Its DECISION-002 (family vs view) is unresolved.
+
+R12. Epistemic semantics: *OPEN*.
+* epistemic-types supplies Kripke/Frame.Box over Kripke/Residual.residualFrame, the factive/belief split, and de dicto vs de re (LANDED-stated, unchecked; no grade lattice).
+* Two required corrections:
+** ADR-0009 D3 "no cross-axis interaction" is likely false under fibre semantics: injective (Safe) outputs are Transparent.
+** The Rust grader (epistemic.rs) under-reports in the unsafe direction: `x + 1` is graded Partial (pinned by a test), and If/While conditions are ignored, so implicit flows grade Opaque.
+
+R13. Information-flow noninterference: *OPEN for JtV; source LANDED-stated in secret-types*.
+* secret-types `Noninterference.Generic.tini` proves TINI for an addition-only lit/var/plus language under while/ifz with a pc label, generic over a 6-field minimal Lattice, with countermodels (N-8).
+* CI cited at f149e08, not HEAD 7736da2.
+* Gaps for JtV: no JtV bridge rule; no declassification (D154 requires it); TSNI OPEN; two-variable fragment only.
+* jtv SECURITY_PROOFS.adoc §3 marks IFC "Verified" with an unchecked Lean tick and has no pc rule.
+
+R14. Cost and occupancy grades: *OPEN for JtV*.
+* Sources:
+** resource-algebra (Agda kernel; not mapped);
+** tropical-types `Resource.*` Lean (parametric_resource_transport) — provenance only;
+** occupancy-types Reclaim.agda (reclaim-law, occupancy-at-cut). This is LANDED-stated but has NO CI lane: proofs.yml has no Agda job and check.sh has no Agda stage.
+* Insight from the tropical map: tropical ⊗ is ordinary `+`, so JtV Data is a pure ⊠-fold and its halting island is a finite grade. The Isabelle Kleene star needs `no_pos_cycle`, and the Isabelle status is contested.
+
+R15. Harvard bridge as a two-role choreography: *OPEN*.
+* choreographic-types K-CUT-LOSS needs only ⊕-idempotence and ⊗-left-unit (LANDED-stated, unchecked). The JtV Echo join lattice would satisfy both.
+* Missing: the "Data-never-selects" predicate. Recursion (μ-types) is OPEN, so Turing-complete Control cannot be modelled.
+
+R16. Unified grade kernel: *OPEN*.
+* anytype GradeAlgebra has no join, so no `if`; it has only Affine/Exact instances and coeffect-only grades, and its golden path is red.
+* typell levels are metadata-presence based (determine_safety_level), and LevelMonotonicity.SafeAt is vacuous.
+
+R17. WASM compilation correctness, PROOF-3: *OPEN* (absent).
+* typed-wasm side (stated):
+** L1–L10 proofs erased by design;
+** T4 layout equivalence and T5b WasmCert OPEN; the T5a Rust verifier is the trusted base;
+** L15-C capability evidence is erased at emission (probe: 0 bytes of typedwasm.capabilities);
+** there is no totality level and no reversibility carrier.
+* The Idris2 package (33 modules) was not checked; proof regression in the repo is name-presence only (223 checks).
+
+R18. ABI/FFI seal for JtV values: *OPEN*.
+* jtv Types.idr is not linked to Rust; ffi/zig is foreign; coproc_lower emits unreachable stubs.
+* Template precedents with their own holes: typed-wasm contract-gated carriers; absolute-zero Idris ABI with 5 believe_me and an unbuilt Zig template; januskey's Zig FFI returns JK_OK for unimplemented operations.
+
+R19. End-to-end PROOF-4: *PARTIAL* per the MATRIX. No chain links Lean theorems to running code.
+
+R20. External accountability and attestation: *OPEN*.
+* maa-framework/Aletheia can record artefact presence (SARIF/JSON, exit codes 0–4). hypatia is the normative oracle.
+* MAA has no program-level attestation mechanism, and its CNO anchor is an uninitialised gitlink.
+
+=== 2.2 Cross-prover bridges
+
+Provers in play:
+* *Lean 4*: jtv v4.12.0; tropical-types v4.13.0 (provenance); occupancy stackcert v4.15.0 (never compiled).
+* *Agda*:
+** echo-types: 2.6.3 + stdlib 2.3 + absolute-zero;
+** absolute-zero: 2.6.3 + stdlib *v1.7.3* — skew with echo-types, which imports CNO;
+** epistemic-types, choreographic-types, secret-types and residual-evidence-types: 2.6.4.3, mostly builtins only;
+** januskey and occupancy-types: via resource-algebra.
+* *Idris2*: anytype 0.7.0; typed-wasm, absolute-zero and januskey 0.8.0; jtv, typell (unchecked).
+* *Coq*: absolute-zero ARCHIVED (owner ruling 2026-10-10); maa via submodule.
+* *Isabelle*: tropical-types (contested, no CI).
+
+Bridges the plan would need (B1–B7) and whether to avoid them:
+
+* B1 *Lean JtvEcho ↔ Agda echo-types* (lattice iso, Fibre/Echo, residue). NEEDED unless Echo theory moves fully to one prover. Cheapest form: a citation-level correspondence table in echo-types docs/bridges/cross-repo-bridge-status.adoc, following the existing CNO Agda↔Coq↔Lean4 and tropical Agda↔Isabelle↔Lean rows. It must state the Prop/UIP asymmetry: sound Agda→Lean only.
+* B2 *Lean token theorem ↔ Agda reversibility* (EchoReversibilityBridge + CNO). AVOIDABLE: state the token-reversibility theorem once in Agda over an abstract store, and keep the Lean statement as the integer-store instance by citation. januskey needs the same Agda lemma, which is an argument for an Agda home.
+* B3 *Coq (archived CNO bridge) → Agda*. AVOID Coq entirely. Re-prove the bridge in absolute-zero Agda, consistent with the archive ruling and the T1 exception.
+* B4 *Lean tropical ↔ Agda resource-algebra* (M-2, OPEN). AVOID. JtV cost grading should target resource-algebra's Agda interface; tropical-types is "provenance … then nothing new".
+* B5 *Agda/Lean ↔ Idris2 ABI*. Transcription only (cf. januskey G-2 ASSUMED). Keep Idris2 for the ABI only and prove nothing semantic there.
+* B6 *Idris2 typed-wasm Echo/Loss ↔ JtV Echo*. A monotone embedding Safe↦0, Neutral↦finite, Breaking↦∞ is plausible but unproved and must not be baked into Echo.idr variance. Avoidable by stating it once in Agda (resource-algebra Loss) and transcribing it.
+* B7 *Rust ↔ Lean* (implementation refinement). UNAVOIDABLE, but it can stay test-based via the golden-table refl pattern rather than a prover bridge.
+
+Default "one prover home per theorem" assignment (avoids B2, B3, B4 and most of B6):
+* *Lean (jtv_proofs)*: JtV operational semantics, parser conformance, Pure-Function-Rule well-foundedness, interpreter refinement, number-system value models.
+* *Agda (family kernel per nextgen-typing D-2026-10-12)*: Echo grade semantics, token reversibility over an abstract store, IFC instance, epistemic semantics, cost/occupancy grades.
+* *Idris2*: ABI layouts only.
+* *Not used*: Coq, Isabelle.
+
+== 3. Engineering ladder
+
+* E0. Rust workspace health: *LANDED (verified)*.
+** `cargo test --workspace` gives 592 passed, 0 failed. jtv-core lib 149; integration suites: harvard_boundary 35, mutation_killers 156, pest_rule 137, property 41, and others.
+** clippy -D warnings and fmt --check are clean. The lints allowed globally are noted in the map.
+** jtv-cli, jtv-lsp and jtv-debug have 0 tests.
+* E1. Surface-language usability: *OPEN (bug)*.
+** `identifier = @{ !keyword ~ ...}` has no word boundary, so `int_a = 42` fails at 1:1 and `ab = 42` works.
+** This alone breaks examples/basic/02_number_systems.
+* E2. Example corpus: *OPEN*.
+** 3/15 examples pass `jtv run`; 3/17 pass `jtv check` including the two playground samples.
+** 10 fail with parse errors (all contracts/*, advanced/{sorting, matrix_operations, state_machine, reversible_computing}, basic/02). advanced/fibonacci and basic/04_loops fail with purity violations.
+** Justfile `ci` depends on `run-examples` with `|| exit 1`, so it cannot pass.
+* E3. Typechecker and Pure Function Rule: *PARTIAL*.
+** Enforced on the CLI path, with Echo/Epistemic effect rows, the carrier-aware reverse gate and graded Fn types.
+** Bypassed in JtvWasm::run/run_and_collect and Interpreter::run.
+* E4. Interpreter: *LANDED* for 7 number systems, C1 `reverse {}` and C2 `reversible {} -> tok` / `reverse tok` / `abandon` with Snapshot residues.
+** Probe `x=5; reverse { x += 3 }` prints 2 (verified).
+** Integration-level round-trip coverage is thin (gap-004).
+* E5. Formatter, pretty-printer round-trip and dialect purity certificate: *LANDED*. ADR-0008 D1–D3 (`sugar` feature, purist parse-reject, lint): *OPEN*. Cargo features are {default, patacl} only.
+* E6. CLI: *LANDED* for run, parse, check, analyze, version, rsr-check, repl, fmt and lower. build/new/publish (in DEVELOPMENT_PLAN and TECHNICAL_ROADMAP): *OPEN*.
+* E7. Canonical grammar: *OPEN*.
+** grammar.pest is the de-facto source.
+** spec/grammar.ebnf and shared/grammar/jtv.ebnf lack extern/coproc/abandon/@echo/@epi and diverge from each other on `symbolic`. SPEC.core.scm is "Not yet available".
+* E8. stdlib: *PARTIAL*. crates/jtv-core/stdlib/{prelude, result, collections, safe_math}.jtv; tiers 2–4 (io/time/json/net/crypto) absent.
+* E9. Module system: *OPEN*. `import a.b as c` parses; resolution is unchecked in TECHNICAL_ROADMAP; DEVELOPMENT_PLAN proposes a conflicting URL-based `use`.
+* E10. LSP: *scaffold*. 170 LOC; whole-document diagnostics at 0:0; no goto-def or references.
+* E11. Debugger: *scaffold*. 299 LOC, no stepping.
+* E12. Interpreter-in-WASM embedding: *OPEN/BROKEN*.
+** wasm32 is not built in CI, and the map gives static evidence of breakage.
+** It is mislabelled "WASM backend — DONE (591 LOC)"; the file is 756 LOC.
+* E13. Playground / Router visualisation ("killer demo") / Monaco: *OPEN*. Absent, and both samples fail to parse.
+* E14. Editor extension: *scaffold*. Two parallel trees (vscode-extension/Extension.res and editors/vscode) in retired ReScript.
+* E15. JtV→typed-wasm compiler: *OPEN* on the jtv side.
+** typed-wasm side (verified): 197 workspace tests pass; `tw build examples/01` → `tw-verify` VERIFIED; `tools/check-contract.sh` OK.
+** Gaps blocking a JtV producer:
+*** the IR (`Wty` I32/I64/F32/F64) has no i64 compares, div, eqz or conversions, no globals, tables or call_indirect, and no memory.grow, allocator or WasmGC;
+*** the `Module` IR has no capabilities field, so L15-C is erased;
+*** the verifier has L15-A/B only, gate_module never calls it, and unstable-l15 tests (12) run in no workflow;
+*** caps.rs uses a lexical token scan, top-level module only.
+* E16. Type-service integration (typell): *OPEN*. typell-jtv is unwired, has the unsound coercion and a non-transitive lattice (probes: Rational→Complex false; Hex→Float false; Symbolic+Symbolic None; String+String Some), and purity uses caller-supplied booleans. typell itself is 447/0/3 green (verified).
+* E17. Coprocessor via PataCL: *BLOCKED*. Grammar and namespace landed, `--features patacl` fails, 13 tests are gated off. Trajectory E decisions D1–D13 are closed.
+* E18. ABI/FFI: *OPEN* (see R18).
+* E19. Reversible IO backend: *optional, PROPOSED*.
+** januskey reversible-core works: 135/135 tests verified.
+** Its metadata log is not saved atomically (T-8), and its Zig FFI returns success for unimplemented operations.
+* E20. Estate compliance: *OPEN*. Aletheia scored jtv-lang 19/26, Bronze NOT MET:
+** missing SPDX headers in crates/jtv-core/src/{ast, error, interpreter}.rs and others;
+** ReScript sources flagged as banned language;
+** unpinned actions in coverage.yml and rust-ci.yml;
+** .machine_readable/rsr-profile.a2ml and .well-known files missing;
+** .clusterfuzzlite/Dockerfile flagged.
+* E21. CI: *PARTIAL*.
+** rust-ci.yml and proof-regression.yml (lake build plus an idris2 job) exist.
+** No wasm32 job; fuzz/ excluded from the workspace; `.github/workflows/deno.yml` exists despite the Deno ban.
+** The ANCHOR golden path (`cargo test --all-targets && lake build && idris2 --check`) was runnable only for the cargo leg here.
+* E22. Package registry: *OPEN*. viper-pkg is a Julia client pointing at undeployed packages.jtv.dev, with git fallback.
+* E23. Native/EVM backends (Cranelift/LLVM/EVM, HIR/optimiser): *designed only*.
+* E24. v2 constructs: *OPEN*. `irreversible {}` / ExternalHandle (0 grammar matches), Echo<T> value type (reserved), lambdas, quantum primitives.
+
+== 4. Critical-path candidates
+
+=== Common prefix: soundness holes first (doctrine 1)
+
+None of these steps has an external blocker. All are self-repo, Rust only, verifiable with cargo.
+
+* H1. Enforce typecheck and purity in JtvWasm::run/run_and_collect and in Interpreter::run (or a single checked entry point). This closes the totality/injection bypass.
+* H2. Add a word-boundary keyword rule to grammar.pest (`!(keyword ~ !ident_char)`).
+* H3. Re-triage the 15 examples after H2. Repair them, or quarantine the aspirational ones (owner Q13), so `just ci` is honest.
+* H4. Fix the epistemic.rs under-reporting (If/While conditions, injective `x + 1`), or downgrade its claim. Without this, Opaque must not be read as noninterference.
+* H5. Truth pass: one capability matrix (ALIGNMENT G1) replacing the STATE "DONE" overclaims for WASM, coproc and LSP.
+
+=== CP-A. Usable language system fastest (engineering-led)
+
+Order: H1–H5 → E7 single grammar regenerated from pest → E12 fix the wasm32 build (declare js-sys; resolve forbid(unsafe_code) vs `unsafe impl`) and add a CI job → E13 playground on the fixed bindings → E10 real LSP diagnostics with spans, hover from the typechecker → E9 local module resolution → E8 stdlib tier 2 → E5 ADR-0008 `sugar` gate → E20 compliance to Bronze/Silver.
+
+Gating dependencies:
+* the playground needs E12;
+* the LSP needs typechecker spans;
+* module resolution needs owner Q10.
+
+External blockers: wasm32 target and wasm-pack (environment/CI); owner stack decision for playground and extension (Q8); owner module-system decision (Q10). PataCL is NOT on this path (E17 stays parked).
+
+Outcome: an honest, usable, interpreter-backed language system with an embedding and a playground. No verified target.
+
+=== CP-B. Verified wasm target (typed-wasm-led)
+
+Order:
+* H1–H3.
+* typed-wasm IR extensions: i64 compares, div, eqz and conversions, then globals.
+* A new jtv lowering crate for the Int Data fragment only. It emits `typed_wasm_codegen::Module` and calls `emit` + `self_verify`; CONTRACT I1 allows a producer to depend on typed-wasm.
+* Capabilities emission in the codegen IR, plus an L15-C wasm verifier pass, gate enforcement and a CI lane with unstable-l15. This is JtV's Pure Function Rule, Data caps = {}, as binary evidence; proposal 0004 is the vehicle.
+* A structural totality pass for total-marked functions (no loop/back-edge, acyclic call graph, no call_indirect).
+* Rational/Complex region schemas.
+* PROOF-3 for the Data fragment.
+
+Gating dependencies:
+* the totality pass needs R8's well-foundedness statement to be meaningful;
+* binary L15-C needs the carrier ADR.
+
+External blockers:
+* typed-wasm CONTRACT I3: the typedwasm.* wire format changes only via a coordinated cross-producer ADR with an abi_version bump (owner, plus affinescript/ephapax producers not in scope);
+* proposal 0004 is draft;
+* idris2 is missing for the T4 proof side;
+* the 007 producer-status conflict is unresolved;
+* affinescript#462 and ephapax#251 limit multi-producer conformance.
+
+=== CP-C. Proof spine fastest (proof-led)
+
+Order:
+* Provision Lean v4.12.0 and Agda (or rely on CI). echo-types has scripts/provision-agda.sh.
+* R0: confirm `lake build` green at HEAD.
+* R8: parser conformance plus the Pure-Function well-foundedness theorem, ported with the halting-islands T1–T3 statements.
+* R9: golden-table refinement corpus generated from Rust and checked by rfl/decide, without native_decide.
+* R6: rational and symbolic value models.
+* R10: correct ADR-0007/0009; add an echo-types bridge row; add an Agda EchoJtvBridge module; add a Lean classifier/soundness theorem in JtvEcho.
+* R11: re-prove absolute-zero's reversibility bridge in Agda; restate the token theorem over an abstract store on reversibility-via-totality + ResidueCell.
+* R13: a JtV instance of secret-types TINI (owner Q15).
+* R12: epistemic semantics.
+* R14: cost and occupancy.
+
+Gating dependencies:
+* R10 needs owner decisions Q2, Q3 and Q4;
+* R11 needs absolute-zero's stdlib skew resolved (v1.7.3 vs echo-types 2.3);
+* R14 needs occupancy-types' Agda CI lane to exist first.
+
+External blockers:
+* missing Lean/Agda/Idris2 toolchains locally;
+* the echo-types local checkout is behind remote main (#358/#359 unread);
+* the jtv-lang do_not_reopen entry "Agda↔Lean bridge deferred to Phase 4";
+* residual-evidence DECISION-002 unresolved (only for partial-residue theory).
+
+=== Recommendation
+
+Run the common prefix first, then CP-A and CP-C in parallel; they share no files beyond jtv-lang docs. Start CP-B only after R8 and the owner ruling on typed-wasm carrier ADRs, because its proof value depends on R8 and its wire changes are owner-gated.
+
+== 5. What else needs creating
+
+Every item below is PROPOSED and does not exist today.
+
+=== In jtv-lang
+
+* *A typed-wasm producer crate.* Gap: there is no jtv→wasm codegen, and PROOF-3 is absent. IS check: OK, a producer depending on typed-wasm is permitted by CONTRACT I1; the reverse direction is forbidden.
+* *Honest naming for wasm.rs.* Re-label it as embedding bindings in docs, not as a backend. This is a doc change, not a rename across a boundary.
+* *docs/CAPABILITY-MATRIX.adoc plus a doc-truthing hook* (ALIGNMENT G1/G2 unchecked). Gap: six docs disagree on WASM, LSP, coproc, test counts and version.
+* *Lean modules for parser conformance, Pure-Function well-foundedness, the rational and symbolic models, and the refinement table* (R6, R8, R9).
+* *CI lanes*:
+** wasm32 build;
+** an examples gate after triage;
+** an optional `--features patacl` lane that clones patacl at a pinned SHA and injects the dependency via a `--config` patch. patacl-core must NOT become a workspace dependency (do_not_reopen).
+* *A conformance/invalid corpus ported from jtv-halting-islands-ct git 91b345b:tests/test_diode_negative.py* (10 diode-negative cases). Gap: the halting-islands handover calls this suite "the heart of the POC"; jtv-lang has no equivalent diode-negative corpus cited.
+* *ADR revisions:*
+** ADR-0007/0009 Echo framing (comonad → monad of accumulation + fibre adjunction);
+** ADR-0009 D3 orthogonality qualifier;
+** an ADR superseding the 2026-01-01 scope-arrest anchor;
+** an ADR settling the ⊗-vs-⊕ meaning of `+` for any tropical carrier.
+
+=== In echo-types (within its IS: it already hosts consumer bridges for 007, ephapax and januskey)
+
+* A "JtV Echo (Lean4) ↔ echo-types (Agda)" row in docs/bridges/cross-repo-bridge-status.adoc with a name-by-name table.
+* An EchoJtvBridge.agda module wired into All.agda and pinned in Smoke.agda, per the repo's rules. Gap: 0 hits for jtv in echo-types.
+* Separately, maintenance:
+** refresh the stale EchoJanusBridge paths;
+** fix scripts/verify.sh (check-no-unsafe.sh has no quarantine exemption);
+** correct the PROOF-STATUS "graded-comonad laws" label, module count and verified date.
+
+=== In secret-types (IS: IFC)
+
+* A JtV bridge-rule instance, plus an integrity-dual lattice instance and declassification at the bridge, if the owner chooses this home (Q15).
+* Do NOT place it in epistemic-types: its IS-NOT excludes information flow.
+
+=== In epistemic-types
+
+* A graded-revelation module defining Opaque/Partial/Transparent as properties of residualFrame, plus an Echo-axis interaction theorem. The knowledge half stays here; the noninterference half goes to secret-types (Q16).
+
+=== In typed-wasm (each change is coordinated, never unilateral)
+
+* IR op and type extensions; codegen capabilities emission.
+* An L15-C verifier pass; gate wiring; a CI lane enabling unstable-l15.
+* A totality level or structural pass.
+* A reversibility carrier proposal.
+* A cargo-based golden path to replace the `affinescript`/`node` recipes (ADR-0006).
+
+=== In typell
+
+* Structural `check_coercion` with a transitive lattice and complete `addition_result`.
+* Route typell-jtv through typell-server with a `jtv` route.
+* A generic level calculator where L5 can come from grammatical evidence.
+* A JtvType schema owned by jtv-lang and pinned by typell (extend-not-redefine).
+
+=== In anytype
+
+* Fix the abi.ipkg path at Justfile:138 and idris2-proof.yml:90 so the golden path is green.
+* A GradeAlgebra join field to enable branching (STATE critical-next-action #1, designed against systemet first).
+* Echo and Purity instances, only after owner Q5.
+
+=== In absolute-zero
+
+* An Agda re-proof of the archived reversibility↔CNO bridge.
+* A stdlib pin bump to match echo-types.
+* A non-vacuous termination notion, if it is to certify totality.
+* Wire tests/check-policy-records.sh into CI and fix the DECISION-T7 count.
+* A Cargo [workspace] plus CI for the interpreter crates; fix whitespace `test_non_whitespace_ignored`.
+* Remove Python from the Containerfile (ULTRAPLAN N5).
+
+=== In occupancy-types
+
+* An Agda CI lane for src/OccupancyTypes (its only PROVEN claims are ungated).
+* Fix the Occ `MkH` forgeability before it serves as the linear ReversalToken template.
+* An HWM grade for JtV token_store residue as the external consumer that the rung contract requires.
+
+=== In choreographic-types
+
+* A "Data-never-selects" well-formedness predicate.
+* A JtV Echo ResourceAlgebra instance as a fourth discharged instance.
+
+=== In residual-evidence-types
+
+* A JtV float-Neutral partial-residue case as the concrete driver for DECISION-002 tests 2–3.
+
+=== In maa-framework
+
+* Initialise and verify the absolute-zero pin, or record the vendoring decision.
+* A receipt-presence check that Aletheia records, while hypatia/echidnabot judge validity.
+
+=== Estate-level (fix at source, doctrine 14)
+
+* Regenerate the occupancy-types and secret-types substrates from build/templates and re-run `just claude-md`; both currently claim to be rsr-template-repo.
+* Add both repos to the copy-verbatim bug list documented in CLADE.a2ml.
+
+=== Explicitly NOT proposed (IS/IS-NOT checks)
+
+* Do not merge jtv-halting-islands-ct code into jtv-core (handover forbids completing it; jtv-core already dominates it).
+* Do not equate JtV with Oblíbený.
+* Do not make tropical an Echo modality.
+* Do not use "echo-grade" vocabulary.
+* typed-wasm must never depend on jtv.
+* patacl-core must not be a workspace dependency.
+* Do not put IFC into epistemic-types or anytype (secret-types ADR 0004).
+* Do not rename typell-jtv's "Julia-the-Viper" unilaterally (owner boundary note).
+
+== 6. Contradictions and stale docs
+
+=== jtv-lang
+
+* *WASM.* STATE says "WASM backend — DONE (591 LOC, functional)". In fact it is 756 LOC of interpreter bindings, statically broken, with no wasm32 CI. TECHNICAL_ROADMAP says "[ ] WASM code generation".
+* *Coprocessor.* STATE says "coprocessor support implementation — DONE" and "12/12 coproc_tests". In fact 5/12 run and `--features patacl` does not compile. STATE gap-003, README.adoc:206 and COPROC-TRAJECTORIES all say "gated on PataCL Phase 1".
+* *LSP.* STATE says DONE; TECHNICAL_ROADMAP says all [ ]; the code is a stub.
+* *Test counts.* STATUS.adoc and META.a2ml say 531; STATE quotes 145 lib tests. Verified: 592 total, 149 lib.
+* *Version.* STATE 0.0.1, Cargo 0.1.0, LANGUAGE_SPECIFICATION 1.0.0, DEVELOPMENT_PLAN 1.0.
+* *Maturity.* STATE says 72% with almost everything DONE. The assessment is ~45–55%.
+* *CLAUDE.md files.* Root CLAUDE.md says "v1 COMPLETED", "v2 Specification only" and "ReScript PWA". .claude/CLAUDE.md lists ReScript as primary and Nix as fallback. Both conflict with the estate retirement of ReScript and with v2 being implemented. deno.yml exists despite the ban. docs/handoffs/wokelang-kickoff.adoc mandates Deno and bans bun.
+* *Reversibility status.* docs/language/reversibility/current-status.adoc says "no reverse execution model"; spec v2 §9 says "Neutral residue unimplemented". STATE says v2(c) landed 2026-06-15.
+* *Reversibility mechanism.* META says "snapshot-based"; the DESIGN doc says "NOT snapshot, op log + replay". The code is an op log plus a Snapshot residue for self-reference.
+* *Dead references.* STATE, META and COPROC cite DESIGN-JTV-V2-REVERSIBILITY.md, but the file is .adoc. STATUS cites fuzz_parser.rs, which is absent. The scope-arrest anchor cites examples/hello.jtv, which does not exist.
+* *Grammar.* spec/README.adoc calls spec/grammar.ebnf canonical, but it lacks the implemented constructs, and the two EBNF files differ on `symbolic`.
+* *Overclaims about proofs.*
+** PROOF-CAPABILITY-MATRIX labels JtvEcho "fibre correspondence with echo-types — verified", but no classifier is mechanised.
+** SECURITY_PROOFS.adoc §3 marks "Information flow … Verified" with an unchecked Lean tick and no pc rule.
+* *Retracted or forbidden framings.* ADR-0007 and ADR-0009 use the "graded comonad … Pillar B complete" framing, which echo-types retracted (R-2026-05-18) and decided against (EchoVariance #243). ADR-0007 also calls the Echo tier "a tropical modality", which tropical FOUNDATIONS_BRIDGE §3 forbids.
+* *ADR-0008 vs code.* Idris `DNeg : Expr DataLang -> Expr DataLang` and ast.rs:170 `Negate` are still ungated.
+* *ECOSYSTEM.a2ml* (2026-04-19) omits the echo-types, typed-wasm and typell edges.
+* *docs/ecosystem-status.adoc* has a stale absolute-zero snapshot (six-prover, "~65%") and a januskey snapshot from 2026-04-04.
+* *Halting claim.* jtv's grammar.ebnf asserts Data totality without the caveat that `function_call` breaks "membership = certificate".
+
+=== jtv-halting-islands-ct
+
+* README describes a Python implementation (3.11+, `python3 -m jtv.cli`, src/jtv/*.py). The code is a Rust binary with no parser.
+* The handover claims "DONE, 45/45 tests"; there are 0 tests.
+* The GRAMMAR.ebnf header says it "Matches src/jtv/data_parser.py" (deleted).
+* Commit 98880b1 claims "Creusot annotations for formal verification bounds", but the only contract is `ensures(true)` and the feature does not build.
+* The prior-art note says the diode is enforced with "no type system"; the Rust code enforces it through enum typing.
+* README promises exact rationals; the Rust code uses i64.
+* ARCHITECTURE.adoc is a generic template.
+* LICENSE is a placeholder; LICENSES/ ships AGPL text; mise.toml installs python, go, node, deno and npm.
+
+=== anytype
+
+* The CLAUDE.md arrival pack says design/10%; STATE says implementation/40%.
+* The ECOSYSTEM IS-NOT line says "not a working type checker yet", but an MVP checker exists.
+* README says "src/ (Planned)" and "placeholder targets".
+* META lists rust, but there is no Cargo.toml, and rust-ci.yml is red.
+* STATE claims "gates real and hard-fail", but the golden path has been red since PR #55.
+* AFFIRMATION, READINESS and PROOF-NEEDS are unfilled templates.
+
+=== typell
+
+* AFFIRMATION (2026-06-16) says the workspace does not build; it builds and 447 tests pass.
+* README says Phase 0; STATE says 35% alpha.
+* README and EXPLAINME reference a nonexistent src/kernel/checker.
+* ANCHOR carries {{PROJECT_KIND}} and {{PROJECT_DOMAIN}} placeholders and names missing authority files.
+* tests/integration_test.rs imports `typell_vql` and is orphaned.
+* The typell-jtv coercion doc-diagram disagrees with its code.
+* README's PCC-certificate claim is aspirational.
+* The LevelMonotonicity "central correctness claim" is structural only (SafeAt is vacuous).
+
+=== typed-wasm
+
+* STATE.a2ml (2026-05-27, 70%, "codegen gate unmet") is stale against commits through 2026-10-27.
+* README says "WasmGC"; the IR has I32/I64/F32/F64 only.
+* The README architecture table says "Parser AffineScript (planned)" and "Codegen Zig"; .claude/CLAUDE.md says Zig codegen. The Rust parser and codegen are canonical per ADR-0006.
+* ROADMAP v1.0 lists the parser as open.
+* PROOF-NEEDS says 22/22 modules; the ipkg has 33.
+* The Justfile golden path runs `affinescript` and `node`.
+* The ANCHOR semantic-authority files (SPECIFICATION.md, docs/proofs/PROOFS.adoc) are absent.
+* "007 lowering DONE" conflicts with echo-types' TwasmBackendNotYetImplemented.
+
+=== echo-types
+
+* PROOF-STATUS lists EchoGradedComonad as "graded-comonad laws" with no caveat.
+* PROOF-STATUS says "≈200 modules" and "last verified 2026-06-18"; the guardrail counts 137 modules, and modules changed through 2026-10-27.
+* PROOF-STATUS references the deleted .machine_readable/6a2/STATE.a2ml.
+* scripts/verify.sh is broken by check-no-unsafe.sh.
+* echo-types CLAUDE.md cites docs/echo-types/cross-repo-bridge-status.md; the file is docs/bridges/cross-repo-bridge-status.adoc.
+* The local checkout is behind remote main.
+
+=== epistemic-types
+
+* STATE omits the 5 Kripke modules.
+* EXPLAINME says "No Kripke semantics".
+* PROOF-STATUS says 17 modules / 12 fixtures; there are 22 / 13.
+* AFFIRMATION (2026-06-16) says 10 modules and "no LICENSE".
+* coordination.k9 was last updated 2026-06-15.
+
+=== tropical-types
+
+* Isabelle status: STATE says GREEN with 0 failures; AFFIRMATION and FOUNDATION_CONTRACT say RED with 16 sites.
+* PROOF-STATUS says Isabelle is "CI-gated", but no workflow runs Isabelle.
+* PRIORITY mentions "the one Lean sorry"; none exists.
+* TOPOLOGY describes a nonexistent src/ tree.
+* TROPICAL-ESTATE-MAP says bellman_ford and tropm_mat_pow_eq_sum_walks are sorry; both exist.
+* EXPLAINME says Isabelle is "Verified" via a .ts harness.
+* README links FOUNDATION_CONTRACT.md and Glossary.adoc, which are wrong names.
+* The forge name is tropical-types; the metadata name is tropical-resource-typing.
+* tools/check-ci-contexts.sh reports "CONTRACT BROKEN" (secret-scan renamed to scan).
+* Tests run on Deno, which is slated for removal.
+
+=== choreographic-types
+
+* The nextgen-typing registration is claimed but unconfirmed (docs/pre-registration.adoc:248).
+* The proof gate is not a required check.
+* Its doc tooling uses Node 22, against estate guidance.
+
+=== occupancy-types
+
+* CLAUDE.md, STATE, ECOSYSTEM, the deed (rsr-template-repo_chora.deed) and ANCHOR (7 placeholders) all describe rsr-template-repo. CLADE keeps the template clade `rm`.
+* The root-shape gate fails on PROOF-STATUS.adoc and occupancy-types.agda-lib.
+* EXPLAINME C1, OPERATIONAL-MODEL.md, the manifest.json runner and the retraction-ledger cite deleted Python or python3.
+* ULTRAPLAN D2 (Lean metatheory) vs the Agda that actually landed: the pivot is unrecorded.
+* docs/status/PROOF-STATUS.adoc is a template (0/7) that contradicts the root PROOF-STATUS.adoc.
+
+=== secret-types
+
+* The whole substrate (CLAUDE.md, CLADE, STATE, ECOSYSTEM, AGENTIC and rsr-template-repo_chora.deed) describes rsr-template-repo.
+* docs/secret-types.adoc (2026-10-05) says "specification only … no noninterference theorem"; PROOF-STATUS (2026-10-19) says PROVEN.
+* The spec targets a pure total calculus; the code has `while` and a termination channel.
+* docs/AFFIRMATION.adoc is a {{PROJECT_NAME}} template.
+* README says there is no consumer, but the source mentions Lintel.
+* The CI receipt is at f149e08, not HEAD.
+
+=== residual-evidence-types
+
+* STATE (2026-09-09) marks composition, revision, checker and correspondence as pending with 3 rejections; PROOF-STATUS says landed with 9.
+* ARCHITECTURE.adoc's directory tree is stale.
+* The receipt covers befdf96, not HEAD 97244f5.
+* The assessment says Agda 2.8.0.1; the repo uses 2.6.4.3.
+* DECISION-002 has no SPDX header.
+
+=== absolute-zero
+
+* README, ROADMAP, PROOF-STATUS and ECHIDNA.adoc headline "six provers / ALL-PROVERS-GREEN" and verify-all-provers.sh, superseded by the 2026-10-10 archive ruling.
+* README.adoc:250 calls the interpreters Python; they are Rust.
+* The Containerfile installs python3 and chmods a nonexistent interpreters/*.py.
+* echidna.yml is a crytic/echidna Solidity config pointing at an absent smt2.
+* DECISION-T7 counts 10 believe_me; there are 5.
+* The coordination.k9 invariant "no-dangerous-proof-patterns" conflicts with the 5 believe_me.
+* The CNO.agda header says AGPL-3.0 (owner-only to change).
+* docs/ECOSYSTEM-CONNECTIONS.adoc points at FilesystemCNO paths that are now archived.
+
+=== januskey
+
+* STATE (2026-06-12) says 67 tests and 30 Idris proofs; verified 135 tests, and the ledger says 11 proofs.
+* TEST-NEEDS says CRG C achieved; READINESS and STATE say D.
+* unwrap counts are 225 (READINESS) and 265 (PROOF-NEEDS); measured 241.
+* ECOSYSTEM.a2ml is near-empty; ANCHOR clade is "unknown".
+* The ffi/zig header still says it is "generated from the Idris2 specification".
+* The MAA draft names Isabelle/HOL and Z3, has expired (2026-04-13) and carries a placeholder e-mail.
+
+=== maa-framework
+
+* Aletheia is labelled a "microkernel" in README, ROADMAP, Intentfile and GLOSSARY; it is an RSR compliance checker.
+* Test counts are stale (29 / 66+45 / 68+47 / 72+48 / 72+49); verified 83+52.
+* DELIVERY-186-197.md says self-verify 26/26; measured 25/26, Silver NOT MET.
+* Mustfile requires SECURITY.md (the repo has SECURITY.adoc) and mandates "Deno only".
+* ECOSYSTEM says "submodule removed 2026-06-13", but the gitlink and .gitmodules entry exist.
+* STATE says "CRG Tier-C COMPLETE", but the root tests are uncompilable.
+* TOPOLOGY gives Oblíbený spec 60% with no spec in tree.
+* ANCHOR clade "unknown" vs CLADE "pt".
+* aletheia/LICENSE is PMPL while its sources say MPL-2.0; LICENSES/ ships AGPL text.
+
+=== Cross-map
+
+* *Level vocabulary:* typell L5/L7/L9 (Injection, Cardinality, Temporal) vs typed-wasm L5/L7/L9 (Bounds, Aliasing, Lifetime) vs kategoria's feature levels.
+* *"Epistemic" has three meanings:* jtv ADR-0009 information flow (Opaque/Partial/Transparent); epistemic-types standpoint knowledge; typed-wasm L12 read-consistency (explicit IS-NOT).
+* *Three-tier loss naming differs:* jtv safe/neutral/breaking; echo-types keep/residue/forget (a retention index); januskey and typed-wasm Loss fin 0 / fin n / inf. The candidate mappings in the maps disagree on whether Breaking is "forget" or "∞ loss".
+* *Tropical placement:* jtv ADR-0007 D6 places tropical in Breaking; echo-types (EchoTropical retains echoes) and FOUNDATIONS_BRIDGE (resource axis) contradict this.
+* *Version and pin skew:* Lean 4.12 / 4.13 / 4.15. Agda 2.6.3 (echo-types, absolute-zero) vs 2.6.4.3 (others). stdlib 2.3 vs v1.7.3 between echo-types and absolute-zero, which it imports. Idris2 0.7.0 vs 0.8.0. resource-algebra pinned at three different SHAs (0b338c9, cf9235c, b2c9f1f6). echo-types and epistemic-types pinned at different SHAs by different consumers.
+* *Proof home:* the estate Agda-kernel ruling (nextgen-typing D-2026-10-12, cited by absolute-zero, januskey and tropical-types) vs jtv-lang's "JtvEcho.lean authoritative; Agda conceptual; bridge Phase 4".
+* *Language policy diverges per CLAUDE.md:* absolute-zero and januskey ban Node/npm/Deno and prefer AffineScript; occupancy-types and secret-types permit npm last and prefer plain JS on Bun; jtv .claude lists ReScript; maa Mustfile says Deno only; anytype denies Node/npm; choreographic-types and typed-wasm use node.
+* *The task brief's "591 LOC" WASM figure* is STATE's stale number; the file is 756 LOC.
+
+== 7. Owner questions, each with a default arm
+
+* *Q1. Prover home.*
+** Default (labelled most elegant long-term arm): one home per theorem. Lean holds JtV operational, parser and refinement theorems. Agda, the family kernel, holds grade, reversibility, IFC and epistemic semantics. Idris2 holds ABI layout only. No Coq or Isabelle. Lean↔Agda is linked by a citation-level correspondence table.
+** Why: it keeps the 3,175 LOC Lean suite, reuses the landed Agda theory, and avoids mechanised bridges B2–B4.
+** Alternative: migrate everything to Agda. That is more uniform, but it discards working Lean and reverses a jtv do_not_reopen.
+* *Q2. Reopen the "Agda↔Lean bridge deferred to Phase 4" decision?* Default: yes, at citation level now (a ledger row plus a table), with mechanisation later. A bridge-free citation is costless and stops the "verified" overclaim.
+* *Q3. Correct ADR-0007/0009's "graded comonad" framing?* Default: yes, to "graded monad of accumulation + fibre-exact adjunction" per EchoVariance. Fix at source in jtv-lang ADRs (doctrine 14), not in echo-types.
+* *Q4. Echo axis design.* Default: keep the 3-point surface lattice but define it as derived from two axes (loss class × retention index) per FOUNDATION_CONTRACT. State the Safe/Neutral/Breaking ↔ index/Loss maps as theorems. Why: it removes the "Breaking has no fibre meaning" and tropical conflicts without breaking user syntax.
+* *Q5. Is Echo (and Purity) a per-variable coeffect or a per-function effect?* Default: effect, as ADR-0009 already says. Consequence: anytype (coeffect L2; L4 blocked on systemet TEA) is off the critical path.
+* *Q6. WASM strategy.* Default: ship interpreter-in-wasm (fixed and CI-built) for the playground first, re-labelled as "embedding". Build the jtv→typed-wasm compiler later for the Data fragment only. Stop calling the bindings a "backend".
+* *Q7. typed-wasm cross-producer ADRs* (promote proposal 0004 capability-grants; a totality level; a reversibility carrier). Default: drive 0004 with JtV as the motivating producer. Prototype totality as a feature-gated verifier pass before any abi_version bump, which needs coordinated producers.
+* *Q8. Playground, extension and registry stack.* Default: plain JavaScript on Bun plus the wasm bindings (the estate fallback in the occupancy-types/secret-types CLAUDE.md). AffineScript is the alternative named by absolute-zero and januskey. ReScript and Deno are out either way.
+* *Q9. Is the 2026-01-01 scope-arrest anchor ("v1 before v2") superseded?* Default: yes, record it in an ADR, since v2 is implemented and tested.
+* *Q10. Module system.* Default: keep the implemented `import a.b as c` with local path resolution first. Defer URL packages and the registry (viper-pkg) until module resolution exists.
+* *Q11. PataCL path.* Default: keep it off the critical path. When PataCL Phase 1 exists, add a separate CI lane that checks out patacl at a pinned SHA via a cargo `--config` patch, leaving the workspace lockfile clean per do_not_reopen.
+* *Q12. jtv-halting-islands-ct role and the meaning of "-ct".* Default: freeze it as an honest POC. Correct the README (Rust, no parser, 0 tests) and point it at jtv-lang as the proof home. Port its negative tests into jtv-lang conformance/. Leave "-ct" unexplained until the owner states it.
+* *Q13. Example corpus.* Default: fix the keyword-prefix bug, then repair what is a real bug. Move aspirational programs (likely contracts/*) to an explicitly-labelled aspirational directory excluded from `run-examples`.
+* *Q14. Number systems.* Default: `+` means ordinary addition (tropical ⊗). Any tropical ⊕ appears only as Control-level choice. Keep NonGroup uninhabited until this is ratified. Clarify whether Symbolic and String `+` are Data operations.
+* *Q15. IFC for the diode.* Default: an integrity-dual (Biba) instance of secret-types' generic TINI for the injection story, with confidentiality optional. Host the instance in secret-types (its IS) with a JtV-specific bridge rule plus audited declassification per D154.
+* *Q16. Epistemic boundary.* Default: the noninterference half of "Opaque" goes to secret-types and the knowledge/belief half to epistemic-types. Accept that ADR-0009 D3 orthogonality must be qualified.
+* *Q17. Partial-residue theory home* (residual-evidence-types vs epistemic-types "residual frame", DECISION-002). Default: wait on DECISION-002. Use echo-types totality + ResidueCell for the snapshot (fully-identifying) case now.
+* *Q18. absolute-zero.* Default: re-prove the reversibility↔CNO bridge in Agda, and bump stdlib to match echo-types. A JtV reversibility claim citing CNO depends on both.
+* *Q19. Template-mislabel repair* for occupancy-types and secret-types, and whether rsr-template-repo's generator gets fixed. Default: fix the generator at source, then regenerate both substrates. Owner-run.
+* *Q20. Licence items* (owner-only; no automated edits): the absolute-zero CNO.agda and Elm AGPL headers; the halting-islands placeholder LICENSE and AGPL text; maa LICENSES AGPL and aletheia PMPL. Default: flag only.
+* *Q21. MAA relationship.* Default: JtV is a candidate consumer language whose attestations Aletheia records and hypatia validates. It is not assimilated into Oblíbený.
+* *Q22. Reversal-token accountability.* Tokens are opaque u64 IDs with no cryptographic accountability. Default: defer; record it as OPEN in the capability matrix.
+* *Q23. Native/EVM backends* (Cranelift/LLVM/EVM, HIR/optimiser). Default: park them in favour of typed-wasm.
+* *Q24. Required status checks* (choreographic-types proof gate; januskey agda/idris; typed-wasm unstable-l15). Default: make them required once green. This is an owner action under the "squabble, don't bypass" rule.
+* *Q25. 007 producer status* in typed-wasm LEVEL-STATUS vs echo-types. Default: treat 007 as not a reference producer for JtV until verified in the 007 repo, which is not in scope.

@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+@total fn f(x: Int): Int {
+  return x + 1
+}
+module M {
+  fn f(x: Int): Int {
+    while x > 0 { x = x + 1 }
+    return x
+  }
+}
+y = f(1)
+print(y)

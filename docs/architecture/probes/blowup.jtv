@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+@total fn a0(x: Int): Int {
+  return x + 1
+}
+@total fn a1(x: Int): Int {
+  return a0(x) + a0(x)
+}
+@total fn a2(x: Int): Int {
+  return a1(x) + a1(x)
+}
+@total fn a3(x: Int): Int {
+  return a2(x) + a2(x)
+}
+@total fn a4(x: Int): Int {
+  return a3(x) + a3(x)
+}
+@total fn a5(x: Int): Int {
+  return a4(x) + a4(x)
+}
+@total fn a6(x: Int): Int {
+  return a5(x) + a5(x)
+}
+@total fn a7(x: Int): Int {
+  return a6(x) + a6(x)
+}
+@total fn a8(x: Int): Int {
+  return a7(x) + a7(x)
+}
+@total fn a9(x: Int): Int {
+  return a8(x) + a8(x)
+}
+@total fn a10(x: Int): Int {
+  return a9(x) + a9(x)
+}
+@total fn a11(x: Int): Int {
+  return a10(x) + a10(x)
+}
+@total fn a12(x: Int): Int {
+  return a11(x) + a11(x)
+}
+@total fn a13(x: Int): Int {
+  return a12(x) + a12(x)
+}
+@total fn a14(x: Int): Int {
+  return a13(x) + a13(x)
+}
+@total fn a15(x: Int): Int {
+  return a14(x) + a14(x)
+}
+@total fn a16(x: Int): Int {
+  return a15(x) + a15(x)
+}
+@total fn a17(x: Int): Int {
+  return a16(x) + a16(x)
+}
+@total fn a18(x: Int): Int {
+  return a17(x) + a17(x)
+}
+@total fn a19(x: Int): Int {
+  return a18(x) + a18(x)
+}
+@total fn a20(x: Int): Int {
+  return a19(x) + a19(x)
+}
+@total fn a21(x: Int): Int {
+  return a20(x) + a20(x)
+}
+@total fn a22(x: Int): Int {
+  return a21(x) + a21(x)
+}
+y = a22(0)
+print(y)
