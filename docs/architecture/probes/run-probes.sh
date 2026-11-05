@@ -57,8 +57,9 @@ fi
 for d in ${NEST_DEPTHS:-8 12 16 18}; do
   [[ -n "$tmp" ]] || { prep_failed "sweep depth $d (no temp dir)"; continue; }
   open="$(printf '(%.0s' $(seq 1 "$d"))"; close="$(printf ')%.0s' $(seq 1 "$d"))"
-  printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv" && [[ -s "$tmp/n.jtv" ]] \
-    || { prep_failed "sweep file for depth $d"; continue; }
+  if ! { printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv" && [[ -s "$tmp/n.jtv" ]]; }; then
+    prep_failed "sweep file for depth $d"; continue
+  fi
   s=$(date +%s%N); timeout 120 "$jtv" check "$tmp/n.jtv" >/dev/null 2>&1; e=$?
   echo "  $d $e $(( ($(date +%s%N) - s) / 1000000 ))"
   if crashed "$e"; then bad=$((bad + 1)); fi

@@ -139,7 +139,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |recorded; Q36 sent
 |===
 
-*Gate 0.* All four reports exist. Owner packet sent. *STOP rule:* if Q26/Q39 are unanswered and the census shows the default arm would reject legitimate corpus programs beyond the already-failing set, land only H2, H11, H12, H13 and an *interim H1* and wait. The interim H1 does not depend on lane C. It is required `entry-interim` work: that lane must make every host (`JtvWasm::run`/`run_and_collect`, the REPL, jtv-debug) call the existing `TypeChecker` and `PurityChecker` before `Interpreter::run`. Today only the CLI does this. The `CheckedProgram` typestate follows once C lands.
+*Gate 0.* All four reports exist. Owner packet sent. *STOP rule:* if Q26/Q39 are unanswered and the census shows the default arm would reject legitimate corpus programs beyond the already-failing set, land only H2, H11, H12, H13 and an *interim H1* and wait. The interim H1 does not depend on lane C. It is required `entry-interim` work: that lane must make every host (`JtvWasm::run`/`run_and_collect`, the REPL, jtv-debug) call the existing `TypeChecker` and `PurityChecker` before `Interpreter::run`. Today only the CLI does this. jtv-debug must also print the captured program output on error paths (today it drains it only after success); the control falsifier `debug_output_on_error.jtv` (expect `visible-on-error`) proves it can show a sentinel, so the sentinel's absence in `impure_in_data_debug.jtv` really means the check ran first. The `CheckedProgram` typestate follows once C lands.
 
 *Expected PRs:* none.
 
@@ -198,6 +198,8 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 * `cargo test --workspace` (passed count ≥ the raw W0 count, passed in as `baselineTests` and never adjusted; tests may move between crates but not disappear; 0 failed). The W0 receipt records the count as `cargo_test_passed`; the gate agent and the verifier each read it from the receipt, and both values must equal `baselineTests`.
 * the H23 check (no `fn check_reversibility` anywhere under `crates/`) re-runs here, because a later merge or conflict resolution could reintroduce it
 * the census is compared bucket by bucket with the Wave 0 results in `census-w0.md`, which the gate agent and the verifier both receive
+* `run-corpus.sh --baseline receipts/corpus-w0.txt` reruns every example, `conformance/valid` and stdlib program and exits 1 if any whose `jtv check` or `jtv run` passed at Wave 0 now fails or is missing; `census_new_failures` is the count it prints
+* the Wave 0 outputs (falsifiers, census copy, receipts) sit in the writable scratch directory, so every lane and Gate 1 first re-hashes them and must match the `w0Digest` the lead pinned after reviewing them; an edited, added, renamed or deleted file fails the run
 * Gate 1's `base` is the immutable SHA of the pre-Wave-1 commit that Wave 0 recorded in `receipts/pre-wave1.sha`, not the moving integration branch or any later ancestor; Gate 1 checks that `base` equals that receipt and that `git merge-base --is-ancestor <base> HEAD` holds, and every commit in `<base>..HEAD` must be signed
 * the WASM dependency boundary (`WASM_BOUNDARY_CMD`) re-runs at Gate 1, because a later manifest edit or conflict resolution could reintroduce `wasm-bindgen`
 * `run-probes.sh` lists every probe by name and exits 2 in both modes when any input cannot be prepared (a missing, renamed, unlisted or unreadable probe, or a failed temporary write), so a Wave 0 baseline can never be recorded from probes that did not run
@@ -324,24 +326,24 @@ Plain JavaScript for the Workflow tool. Like any Workflow script it is an async 
 |Run |What it does
 
 |`{ mode: 'wave0', repo, scratch }`
-|Run with HEAD at the pre-Wave-1 commit. Records that commit's SHA in `<scratch>/receipts/pre-wave1.sha`, then writes the W0 receipt, the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline` and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
+|Run with HEAD at the pre-Wave-1 commit. Records that commit's SHA in `<scratch>/receipts/pre-wave1.sha`, then writes the W0 receipt, the corpus baseline (`receipts/corpus-w0.txt`, from `run-corpus.sh`), the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. It returns `w0DigestCommand`: after reviewing the Wave 0 outputs, the lead runs it and passes the 64-hex result as `w0Digest` to every later run, which re-hashes the outputs before using them. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline` and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
 
-|`{ mode: 'lanes', repo, scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
+|`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
 
-|`{ mode: 'lanes', repo, scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
+|`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
 |Dependent lanes start from an integration branch that already contains their prerequisites. The script refuses to start a lane whose prerequisites are not listed as merged.
 
-|`{ mode: 'lanes', repo, scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
+|`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
 |After `reversible-if` merges. Both lanes own `interpreter.rs`, so outside the STOP rule `entry-interim` starts from a base that already contains it.
 
-|`{ mode: 'lanes', repo, scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
+|`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
 |The `CheckedProgram` typestate, after the purity lane. Outside the STOP rule `reversible-if` is a direct prerequisite too, because an `entry-interim` built under the STOP rule does not contain it and both lanes edit `interpreter.rs`.
 
-|`{ mode: 'lanes', repo, scratch, baseline, baselineTests, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
+|`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
-|`{ mode: 'gate1', repo, scratch, baseline, baselineTests, openHoles: [], integration, base: '<the SHA in receipts/pre-wave1.sha>', signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
+|`{ mode: 'gate1', repo, scratch, baseline, w0Digest, baselineTests, openHoles: [], integration, base: '<the SHA in receipts/pre-wave1.sha>', signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
 |Gate 1 on the merged branch: full test, lint, format and wasm32 build; trybuild; probes in `--gate` mode; the Lean axiom audit; every falsifier with its expectation; census delta against the baseline. With `stopRule: true`, `merged` may hold only the STOP lanes and only their falsifiers are judged. A second agent tries to refute the report. `green` is true only if the report lists exactly the required Gate 1 commands, each exited 0, each falsifier appears exactly once with its expectation met, the test count is at least the baseline count, every commit is signed under the Q36 ruling, neither agent reported a new hole, and the refutation failed.
 |===
 
@@ -378,6 +380,8 @@ export const meta = {
 //   integration  branch that Gate 1 tests ('gate1' mode)
 //   baselineTests  raw test count passed in the W0 receipt (integer, 'gate1' mode); never adjusted
 //   signing      'environment' or 'owner-key', per the Q36 ruling ('lanes' and 'gate1' modes)
+//   w0Digest     REQUIRED by 'lanes' and 'gate1': the 64-hex digest of every Wave 0 output, which
+//                the lead computes with W0_DIGEST_CMD after reviewing them (wave0 returns it)
 //   No defaults: 'lanes' and 'gate1' both require base and merged.
 // ---------------------------------------------------------------------------
 const A = args || {}
@@ -440,7 +444,7 @@ const GATE = {
     }, required: ['file', 'expect', 'runner', 'observed', 'ok'] } },
     census_delta: { type: 'string' },
     receipt_test_count: { type: 'integer', description: 'cargo_test_passed read from the W0 receipt file' },
-    census_new_failures: { type: 'integer', description: 'programs (examples, conformance, stdlib) that pass in the W0 baseline and fail on this branch' },
+    census_new_failures: { type: 'integer', description: 'N from the last line ("new failures: N") of run-corpus.sh --baseline: corpus programs (examples, conformance/valid, stdlib) whose check or run passed in the W0 baseline and fails on this branch' },
     test_count: { type: 'integer', description: 'tests passed by cargo test --workspace' },
     baseline_test_count: { type: 'integer', description: 'the raw W0 test count, copied from args.baselineTests' },
     signatures_ok: { type: 'boolean', description: 'every commit on the branch since base is signed per the Q36 ruling' },
@@ -473,6 +477,11 @@ const GATE1_VERDICT = {
 //                         expected rejection, so a passing test means the hole is closed.
 //   'reject-or-roundtrip' .jtv program printing the state before and after reverse: either
 //                         rejected by jtv check (exit 1), or it runs with exit 0 and both prints match.
+//   'visible-on-error'    .jtv program that passes jtv check, prints PREFIX_RAN, then stops with a
+//                         runtime JtvError: the host exits 0 or 1, shows the error, and PREFIX_RAN
+//                         appears. It is the control for 'reject-before-run': a host that hides
+//                         captured output on error could not show PREFIX_RAN, so its absence there
+//                         would prove nothing.
 // Everywhere, a rejection means the CLI's handled JtvError status 1; 101 (panic), 134 (abort),
 // 124 (timeout) or any other status is a crash and fails the falsifier.
 const RAW_FALSIFIERS = [
@@ -495,6 +504,7 @@ const RAW_FALSIFIERS = [
   { file: 'impure_in_data_wasm.test.js', lane: 'entry-interim', expect: 'pass' },
   { file: 'impure_in_data_wasm_collect.test.js', lane: 'entry-interim', expect: 'pass' },
   { file: 'impure_in_data_debug.jtv', lane: 'entry-interim', runner: 'jtv-debug', expect: 'reject-before-run' },
+  { file: 'debug_output_on_error.jtv', lane: 'entry-interim', runner: 'jtv-debug', expect: 'visible-on-error' },
   { file: 'deep_impure_recursion.jtv', lane: 'entry-interim', expect: 'reject-run' },
   { file: 'blowup_tree.jtv', lane: 'entry', expect: 'reject-run' },
   { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if', expect: 'reject-check' },
@@ -513,7 +523,7 @@ const exactFalsifiers = (results, list) => Array.isArray(results) && results.len
 // The Q36 signature check, quoted into every prompt that verifies commits.
 const signingCheck = (range) => `Check that every commit in ${range} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail.`
 // One shared definition, quoted into every prompt that judges a falsifier.
-const EXPECT_MEANING = "Expectations: 'reject-check' = jtv check itself exits 1 (a handled JtvError); passing check and failing only at run time fails, and so does any other non-zero status (101 panic, 134 abort, 124 timeout). 'reject-run' = jtv check exits 0 and jtv run exits 1 with a JtvError within 10 s; a check-time rejection or an abort (134) fails. 'reject-before-run' = the host rejects the program with the checker's handled JtvError: its purity or type diagnostic appears in the output, the host process exits 0 or 1 (never a panic 101, abort 134 or timeout 124), and the sentinel PREFIX_RAN, printed before the bad call, never appears. 'reject' = a .jtv program that jtv check rejects (exit 1) or that jtv run stops with a JtvError (exit 1); exit 0 or any status other than 1 (e.g. 101, 134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = jtv check exits 1, or the program runs with exit 0 and its before/after prints match. Runners: 'jtv' = jtv check then jtv run; 'repl' = printf ':load <absolute path of the file>\n:quit\n' | jtv repl, so the REPL takes the whole file as one program (it must reject it); 'jtv-debug' = run the file through jtv-debug (it must reject before executing); 'bun' = bun test on the file, after cargo build -p jtv-wasm --target wasm32-unknown-unknown --release and wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm, with JTV_WASM_JS set to the absolute path of target/jtv-wasm-js/jtv_wasm.js in the worktree. Judge each file only with its own runner and report that runner in the result."
+const EXPECT_MEANING = "Expectations: 'reject-check' = jtv check itself exits 1 (a handled JtvError); passing check and failing only at run time fails, and so does any other non-zero status (101 panic, 134 abort, 124 timeout). 'reject-run' = jtv check exits 0 and jtv run exits 1 with a JtvError within 10 s; a check-time rejection or an abort (134) fails. 'reject-before-run' = the host rejects the program with the checker's handled JtvError: its purity or type diagnostic appears in the output, the host process exits 0 or 1 (never a panic 101, abort 134 or timeout 124), and the sentinel PREFIX_RAN, printed before the bad call, never appears. 'reject' = a .jtv program that jtv check rejects (exit 1) or that jtv run stops with a JtvError (exit 1); exit 0 or any status other than 1 (e.g. 101, 134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = jtv check exits 1, or the program runs with exit 0 and its before/after prints match. 'visible-on-error' = jtv check exits 0, and the runner shows the program's runtime JtvError, exits 0 or 1 (never 101, 134 or 124), and shows PREFIX_RAN, which the program printed before the error. Runners: 'jtv' = jtv check then jtv run; 'repl' = printf ':load <absolute path of the file>\n:quit\n' | jtv repl, so the REPL takes the whole file as one program (it must reject it); 'jtv-debug' = printf 'run\nquit\n' | jtv-debug <absolute path of the file>, judged on its whole output; 'bun' = bun test on the file, after cargo build -p jtv-wasm --target wasm32-unknown-unknown --release and wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm, with JTV_WASM_JS set to the absolute path of target/jtv-wasm-js/jtv_wasm.js in the worktree. Judge each file only with its own runner and report that runner in the result."
 
 // Every lane report lists laneCommands(n): the lane's own gate commands, then these.
 const LANE_REQUIRED_COMMANDS = [
@@ -533,6 +543,13 @@ const PROOF_GREP_CMD = String.raw`test -d jtv_proofs && { grep -rnw -e sorry -e 
 const PROOF_GREP_G1_CMD = String.raw`test -d jtv_proofs && test -d theory && { grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs theory; test $? -eq 1; }`
 const UNSAFE_CMD = String.raw`test -d crates/jtv-wasm/src && { grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs; test $? -eq 1; }`
 const WASM_BOUNDARY_CMD = String.raw`out="$(cargo tree --workspace --exclude jtv-wasm -e normal --target all)" && { printf '%s\n' "$out" | grep -q wasm-bindgen; test $? -eq 1; }`
+// The Wave 0 outputs (falsifiers, census copy, receipts) live in the shared, writable scratch
+// directory, so every lane and Gate 1 first re-hashes them against the digest the lead pinned
+// in args. Any edited, added or deleted file changes the digest; a missing directory does too.
+const W0_DIGEST_CMD = `(cd ${SCRATCH} && find falsifiers census receipts census-w0.md -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) | sha256sum | cut -d' ' -f1`
+const W0_SEAL_CMD = `${W0_DIGEST_CMD} | grep -qx ${A.w0Digest}`
+// Gate 1 reruns the Wave 0 corpus and fails on any program that passed then and fails now.
+const CORPUS_CMD = `docs/architecture/probes/run-corpus.sh --baseline ${SCRATCH}/receipts/corpus-w0.txt`
 // Every purity falsifier is also committed as an in-repo fixture with the same name.
 const PURITY_FIXTURES_CMD = String.raw`( for f in ` + FALSIFIERS.filter((f) => f.lane === 'purity').map((f) => f.file).join(' ') + String.raw`; do test -f crates/jtv-core/tests/fixtures/purity/"$f" || exit 1; done ) && cargo test -p jtv-core --test purity_fixtures`
 // JS bindings for the bun falsifiers, at a fixed path they load through JTV_WASM_JS.
@@ -549,6 +566,8 @@ const GATE1_COMMANDS = [
   'cargo test --release -p jtv-core --test parse_budget',
   'cargo build -p jtv-cli',
   'docs/architecture/probes/run-probes.sh --gate',
+  CORPUS_CMD,
+  W0_SEAL_CMD,
   PROOF_GREP_G1_CMD,
   ...(Array.isArray(MERGED) && MERGED.includes('purity') ? [PURITY_FIXTURES_CMD] : []),
   ...(Array.isArray(MERGED) && MERGED.includes('proof-hygiene') ? ['bash scripts/check-lean-axioms.sh'] : []),
@@ -609,7 +628,7 @@ const LANES = {
   // fullPrereqs apply only outside the STOP rule: both lanes own interpreter.rs, so
   // entry-interim starts from a base that already contains reversible-if (merge order G before E-interim).
   'entry-interim': { prereqs: ['wasm'], fullPrereqs: ['reversible-if'], owns: 'crates/jtv-cli/src/repl.rs, crates/jtv-debug/src/main.rs, crates/jtv-wasm/src/** (run call sites only), crates/jtv-core/src/interpreter.rs (call-depth cap only), crates/jtv-core/tests/call_depth.rs',
-    task: 'Interim H1 + H11: every host calls the existing TypeChecker and PurityChecker before Interpreter::run, as the CLI does; add a call-depth cap returning JtvError (tests/call_depth.rs). No typestate yet.',
+    task: 'Interim H1 + H11: every host calls the existing TypeChecker and PurityChecker before Interpreter::run, as the CLI does; jtv-debug prints the captured program output on every path, including a check or runtime error (today it drains it only after success, which would hide a sentinel printed before a late rejection); add a call-depth cap returning JtvError (tests/call_depth.rs). No typestate yet.',
     gate: [
       'cargo test -p jtv-core --test call_depth',
     ] },
@@ -633,7 +652,7 @@ const prereqCommands = (n) => requiredPrereqs(n).map((p) => `git fetch origin ${
 const LANE_INPUTS = { grammar: ['depth.md'], carrier: ['x11.md'], 'entry-interim': ['depth.md'], entry: ['depth.md'] }
 const inputPaths = (n) => (LANE_INPUTS[n] || []).map((f) => `${SCRATCH}/receipts/${f}`)
 const inputCommands = (n) => inputPaths(n).map((p) => `test -s ${p}`)
-const laneCommands = (n) => [...inputCommands(n), ...prereqCommands(n), ...LANES[n].gate, ...LANE_REQUIRED_COMMANDS]
+const laneCommands = (n) => [W0_SEAL_CMD, ...inputCommands(n), ...prereqCommands(n), ...LANES[n].gate, ...LANE_REQUIRED_COMMANDS]
 // The branch is fixed by the workflow, never taken from a report.
 const laneBranch = (n) => `claude/jtv-w1-${n}`
 
@@ -644,19 +663,21 @@ const holesOf = (reports) => reports.filter(Boolean).flatMap((r) => r.new_holes 
 if (A.mode === 'wave0') {
   phase('Wave0')
   const reports = await parallel([
-    () => agent(`Repo ${REPO}, read-only. First write the full 40-hex output of git rev-parse HEAD (the pre-Wave-1 commit; Gate 1 requires its base to equal it) to ${SCRATCH}/receipts/pre-wave1.sha. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts, with the passed count as the integer field cargo_test_passed; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; cargo build -p jtv-cli (cargo test does not produce target/debug/jtv), then docs/architecture/probes/run-probes.sh output in report mode. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Repo ${REPO}, read-only. First write the full 40-hex output of git rev-parse HEAD (the pre-Wave-1 commit; Gate 1 requires its base to equal it) to ${SCRATCH}/receipts/pre-wave1.sha. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts, with the passed count as the integer field cargo_test_passed; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; cargo build -p jtv-cli (cargo test does not produce target/debug/jtv), then docs/architecture/probes/run-probes.sh output in report mode, then docs/architecture/probes/run-corpus.sh > ${SCRATCH}/receipts/corpus-w0.txt (the per-file check and run exit codes that Gate 1 compares against). Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
     () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md and copy the test file to ${SCRATCH}/census/census.rs so later gates can run the same census. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip, and write the result to ${SCRATCH}/receipts/x11.md (one line per carrier: name, Safe or not, round-trips or not).`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep, debug and release: depths 1, 2, 4, 8, ... up to 5000 with a 20 s timeout per run; at the first timeout in a mode, stop doubling and bisect between the last passing and first timing-out depth (at most 12 further runs), then report the largest depth under 20 s and the timings. Never resume a sequential sweep past a timeout. Also bisect the max safe call depth (X-depth). Write both results to ${SCRATCH}/receipts/depth.md (lines: parse_max_depth_debug, parse_max_depth_release, call_max_safe_depth). No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
-    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. ${EXPECT_MEANING} (keyword_prefix_identifier is the program "int_a = 42; print(int_a)" printing 42; reversible_if_tok_roundtrip prints x, runs a tokened reversible if whose branch does x += 1, reverses the token, and prints x again). The .test.js files are bun tests that load the bindings with require(process.env.JTV_WASM_JS) (generated by: ${WASM_JS_CMD}): impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program that prints PREFIX_RAN and then evaluates a Data expression calling an impure function; each asserts that the call throws the binding's JtvError (not a WebAssembly.RuntimeError trap or other crash, and its message names the purity or type check), and that PREFIX_RAN never appears in the output. total_self_recursion is an @total function that calls itself directly (a one-node cycle). impure_in_data_repl.jtv and impure_in_data_debug.jtv are the same program (PREFIX_RAN first); deep_impure_recursion and blowup_tree must pass jtv check today and stop only at run time; impure_in_data_debug.jtv is the same program run through jtv-debug; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. ${EXPECT_MEANING} (keyword_prefix_identifier is the program "int_a = 42; print(int_a)" printing 42; reversible_if_tok_roundtrip prints x, runs a tokened reversible if whose branch does x += 1, reverses the token, and prints x again). The .test.js files are bun tests that load the bindings with require(process.env.JTV_WASM_JS) (generated by: ${WASM_JS_CMD}): impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program that prints PREFIX_RAN and then evaluates a Data expression calling an impure function; each asserts that the call throws the binding's JtvError (not a WebAssembly.RuntimeError trap or other crash, and its message names the purity or type check), and that PREFIX_RAN never appears in the output. total_self_recursion is an @total function that calls itself directly (a one-node cycle). impure_in_data_repl.jtv and impure_in_data_debug.jtv are the same program (PREFIX_RAN first); deep_impure_recursion and blowup_tree must pass jtv check today and stop only at run time; impure_in_data_debug.jtv is the same program run through jtv-debug; debug_output_on_error.jtv prints PREFIX_RAN and then runs a Control loop (while 1 == 1 { x = x + 1 }) until the interpreter's iteration cap stops it with a runtime JtvError; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
   ])
-  return { mode: 'wave0', reports, newHoles: holesOf(reports) }
+  // The lead reviews these outputs, then runs w0DigestCommand and passes its output as args.w0Digest.
+  return { mode: 'wave0', reports, newHoles: holesOf(reports), w0DigestCommand: W0_DIGEST_CMD }
 }
 
 // Every later mode needs the Wave 0 baseline and an explicit, empty list of open holes.
 if (!A.baseline) throw new Error('Run mode wave0 first and pass its receipt path as args.baseline')
 if (!Array.isArray(A.openHoles)) throw new Error('Pass args.openHoles: the untriaged holes from earlier runs ([] once triaged)')
 if (A.openHoles.length) throw new Error(`Frozen: ${A.openHoles.length} untriaged hole(s); triage them before running ${A.mode}`)
+if (typeof A.w0Digest !== 'string' || !/^[0-9a-f]{64}$/.test(A.w0Digest)) throw new Error('Pass args.w0Digest: the 64-hex digest of the Wave 0 outputs (run the w0DigestCommand that wave0 returned)')
 
 // ---- mode: lanes ----------------------------------------------------------
 if (A.mode === 'lanes') {
