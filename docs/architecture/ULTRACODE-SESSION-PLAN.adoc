@@ -633,7 +633,11 @@ const LANES = {
   // entry-interim starts from a base that already contains reversible-if (merge order G before E-interim).
   'entry-interim': { prereqs: ['wasm'], fullPrereqs: ['reversible-if'], owns: 'crates/jtv-cli/src/repl.rs, crates/jtv-debug/src/main.rs, crates/jtv-wasm/src/** (run call sites only), crates/jtv-core/src/interpreter.rs (call-depth cap only), crates/jtv-core/tests/call_depth.rs',
     task: 'Interim H1 + H11: every host calls the existing TypeChecker and PurityChecker before Interpreter::run, as the CLI does; jtv-debug prints the captured program output on every path, including a check or runtime error (today it drains it only after success, which would hide a sentinel printed before a late rejection); add a call-depth cap returning JtvError (tests/call_depth.rs). No typestate yet.',
+    // Its bun falsifiers load JTV_WASM_JS, so the lane rebuilds the module and the bindings
+    // first: a reused worktree must never judge them against stale glue.
     gate: [
+      'cargo build -p jtv-wasm --target wasm32-unknown-unknown --release',
+      WASM_JS_CMD,
       'cargo test -p jtv-core --test call_depth',
     ] },
   // reversible-if is a direct full-mode prerequisite: an entry-interim built under the STOP
