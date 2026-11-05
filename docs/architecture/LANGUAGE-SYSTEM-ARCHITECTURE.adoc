@@ -496,7 +496,7 @@ Corrections applied (from the judges and red team):
 |PR0 Hygiene
 |Axiom audit (`#print axioms`; allowed: propext, Quot.sound, Classical.choice). `Pins.lean` with exact-statement pins, so a gate cannot be satisfied by `theorem x : True`. Pin elan-init and idris2-pack to SHAs (both fetched from moving branches today, proof-regression.yml:68, 126). Widen path filter. Remove the "skipping Lean" branch (cheap, though the lakefile exists today).
 |Lean, jtv-lang
-|`grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h 'elan/master' .github/workflows/*.yml \| wc -l` = 0; Lean CI conclusion success
+|`grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h -e 'elan/master' -e 'idris2-pack/main' .github/workflows/*.yml \| wc -l` = 0; `grep -hoE '(leanprover/elan\|stefan-hoeck/idris2-pack)/[^/]+/' .github/workflows/*.yml` lists at least 2 fetches and piping it to `grep -vcE '/[0-9a-f]{40}/$'` prints 0 (both elan-init and idris2-pack pinned to a full commit SHA); `lake env lean jtv_proofs/Pins.lean` exits 0 and `grep -c 'True' jtv_proofs/Pins.lean` prints 0 (each pin restates its theorem's exact statement); Lean CI conclusion success
 
 |PR1 JtvRank
 |FunTable, rank certificate (with loop-bound field), decidable `CertValid`, fuel semantics `evalFuel` mirroring the interpreter *under the lexical-scoping ADR*. `checkCert_sound`, `cert_terminates`, `evalFuel_mono`, `data_call_state_preserving`, `islands_no_divergence`, negative `cyclic_table_diverges`.
@@ -577,7 +577,7 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 |Step |Work |Gate
 
 |E0 Baseline
-|Receipts: 592 tests; examples 3/15; conformance/valid 20/31; stdlib 0/4; wasm32 failure; all probes (H6, H7, H10, H13–H16, H19).
+|Receipts: 592 tests; examples 3/15; conformance/valid 20/31; stdlib 0/4; wasm32 failure; all probes (H6, H7, H10, H13–H16, H19, H20–H24).
 |`cargo test --workspace` exit 0 with 592 passed; `docs/architecture/probes/run-probes.sh` exit 0 with its table matching the H-register. Comparing the counts is a manual precondition until E4 adds `xtask verify-claims`.
 
 |E0p Read-only census
@@ -1015,7 +1015,7 @@ Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconci
 |ELEGANT and DEPENDABLE
 
 |Q28
-|Toolchain permission (elan/Lean 4.12.0, Agda 2.6.3 + stdlib 2.3, wasm-bindgen-cli)
+|Toolchain permission (elan/Lean 4.12.0; Agda 2.7.0.1 + stdlib 2.4 for JtV's own `theory/agda/`; Agda 2.6.3 + stdlib 2.3 only for the echo-types and absolute-zero drafts; wasm-bindgen-cli)
 |Ask once; else CI-only, rows say "CI-pending"
 |DEPENDABLE
 
