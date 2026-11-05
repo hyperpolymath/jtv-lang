@@ -602,7 +602,7 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 
 |E5 jtv-wasm (H12) — before E1a
 |cdylib, forbid unsafe, index shim, re-entry guard.
-|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -nE 'unsafe (impl\|fn\|\{)' crates/jtv-wasm/src/*.rs \| wc -l` = 0
+|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs \| wc -l` = 0
 
 |E1a Typestate + fuel (H1, H11, H16)
 |`CheckedProgram`; all hosts routed; `ReversibleInterpreter` sealed; step fuel, depth cap, size budget, per-run reset.

@@ -159,7 +159,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |B-wasm (H12) — must merge before E-entry
 |new `crates/jtv-wasm/`, move of `wasm.rs`, `lib.rs` re-export lines, `Cargo.toml` workspace
 |cdylib, `#![forbid(unsafe_code)]`, `thread_local` index shim, re-entry guard returning `JtvError`; js-sys/wasm-bindgen target-specific here only.
-|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -nE 'unsafe (impl\|fn\|\{)' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree -p jtv-core -e normal \| grep wasm-bindgen \| wc -l` = 0
+|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree -p jtv-core -e normal \| grep wasm-bindgen \| wc -l` = 0
 
 |C-resolve+purity (H14, H15 interim, H6, H7, H17, H18) — one agent, serial
 |new `resolve.rs`, `purity.rs`, `typechecker.rs` (Data-call rule moved to a post-purity pass; for-over-List), `ast.rs` comment, fixtures, `tests/callgraph_props.rs`, `spec/jtv-totalcert-v0.adoc`, ADR-0013/0017 drafts
@@ -197,7 +197,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 * `cargo clippy --workspace --all-targets -- -D warnings`
 * `cargo fmt --all -- --check`
 * `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`
-* every Wave 1 fixture non-zero on check; every falsifier rejected
+* every Wave 1 fixture non-zero on check; every falsifier meets its declared expectation and runner (reject, accept, pass or reject-or-roundtrip; see the skeleton's EXPECT_MEANING)
 * trybuild compile-fail tests pass
 * signatures per the Q36 ruling
 
@@ -270,7 +270,7 @@ Then re-run the census and compare with W0.
 
 |C5 producer first
 |E18-lite: minimal Int-island lowering (all-i64 per-node rule, or wasm-encoder sign-test traps if the owner approves path (c)). Then E17 `jtv-cert` against real output; X8 mutants incl. deleted call edge.
-|count of *compiled* islands ≥ agreed minimum; `cargo tree -p jtv-cert \| grep -E 'jtv-core\|pest' \| wc -l` = 0; mutants 100%
+|count of *compiled* islands ≥ agreed minimum; `cargo tree -p jtv-cert \| grep -e jtv-core -e pest \| wc -l` = 0; mutants 100%
 |===
 
 *Gate 3.* Lane gates. A red Lean run blocks only the claims that depend on it.
@@ -391,8 +391,8 @@ const GATE = {
     commands: { type: 'array', items: { type: 'string' } },
     exit_codes: { type: 'array', items: { type: 'integer' } },
     falsifier_results: { type: 'array', items: { type: 'object', properties: {
-      file: { type: 'string' }, expect: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
-    }, required: ['file', 'expect', 'observed', 'ok'] } },
+      file: { type: 'string' }, expect: { type: 'string' }, runner: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
+    }, required: ['file', 'expect', 'runner', 'observed', 'ok'] } },
     census_delta: { type: 'string' },
     census_new_failures: { type: 'integer', description: 'programs (examples, conformance, stdlib) that pass in the W0 baseline and fail on this branch' },
     test_count: { type: 'integer', description: 'tests passed by cargo test --workspace' },
@@ -427,10 +427,10 @@ const RAW_FALSIFIERS = [
   { file: 'reverse_in_function.jtv', lane: 'purity' },
   { file: 'extern_intrinsic_in_data.jtv', lane: 'purity' },
   { file: 'reentrant_js_callback.test.js', lane: 'wasm', expect: 'pass' },
-  { file: 'impure_in_data_repl.jtv', lane: 'entry-interim' },
+  { file: 'impure_in_data_repl.jtv', lane: 'entry-interim', runner: 'repl' },
   { file: 'impure_in_data_wasm.test.js', lane: 'entry-interim', expect: 'pass' },
   { file: 'impure_in_data_wasm_collect.test.js', lane: 'entry-interim', expect: 'pass' },
-  { file: 'impure_in_data_debug.jtv', lane: 'entry-interim' },
+  { file: 'impure_in_data_debug.jtv', lane: 'entry-interim', runner: 'jtv-debug' },
   { file: 'deep_impure_recursion.jtv', lane: 'entry-interim' },
   { file: 'blowup_tree.jtv', lane: 'entry' },
   { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if' },
@@ -438,9 +438,13 @@ const RAW_FALSIFIERS = [
   { file: 'reversible_if_tok_roundtrip.jtv', lane: 'reversible-if', expect: 'reject-or-roundtrip' },
 ]
 // Normalise so every entry carries an explicit expect (JSON.stringify drops undefined fields).
-const FALSIFIERS = RAW_FALSIFIERS.map((f) => ({ expect: 'reject', ...f }))
+const FALSIFIERS = RAW_FALSIFIERS.map((f) => ({
+  expect: 'reject',
+  runner: f.file.endsWith('.test.js') ? 'bun' : 'jtv',
+  ...f,
+}))
 // One shared definition, quoted into every prompt that judges a falsifier.
-const EXPECT_MEANING = "Expectations: 'reject' = a .jtv program that jtv check rejects (exit != 0) or that jtv run stops with a JtvError (exit 1); exit 0 or a host abort (134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = rejected by jtv check, or runs with exit 0 and its before/after prints match."
+const EXPECT_MEANING = "Expectations: 'reject' = a .jtv program that jtv check rejects (exit != 0) or that jtv run stops with a JtvError (exit 1); exit 0 or a host abort (134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = rejected by jtv check, or runs with exit 0 and its before/after prints match. Runners: 'jtv' = jtv check then jtv run; 'repl' = feed the file to jtv repl on stdin (the REPL must reject the program); 'jtv-debug' = run the file through jtv-debug (it must reject before executing); 'bun' = bun test on the file. Judge each file only with its own runner and report that runner in the result."
 
 // Every lane report must list these commands (exact labels) plus the label 'lane gate'.
 const LANE_REQUIRED_COMMANDS = [
@@ -459,6 +463,7 @@ const GATE1_COMMANDS = [
   'cargo build -p jtv-wasm --target wasm32-unknown-unknown --release',
   ...(MERGED.includes('entry') ? ['cargo test -p jtv-core --test entry_point_ui'] : []),
   'docs/architecture/probes/run-probes.sh',
+  'proof hygiene: grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs theory | wc -l = 0',
   'census (crates/jtv-core/tests/census.rs, --ignored)',
 ]
 
@@ -472,7 +477,7 @@ const LANES = {
     gate: 'symbolic/string/bool/any reverse falsifiers non-zero on jtv check; cargo test -p jtv-core carrier' },
   wasm: { prereqs: [], owns: 'crates/jtv-wasm/**, wasm.rs move, lib.rs re-exports, workspace Cargo.toml',
     task: 'H12: jtv-wasm cdylib, forbid(unsafe_code), thread_local index shim, re-entry guard returning JtvError.',
-    gate: 'cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; forbid line count 1; unsafe impl/fn/block count 0' },
+    gate: "cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; grep -c '^#![forbid(unsafe_code)]' crates/jtv-wasm/src/lib.rs = 1; grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs piped to wc -l = 0" },
   purity: { prereqs: [], owns: 'resolve.rs, purity.rs, typechecker.rs, ast.rs comment, fixtures, callgraph_props.rs, totalcert spec, ADR-0013/0017 drafts',
     task: 'H14, H15 interim, H6, H7, H17, H18: resolver with FnIds; fail-closed scoping; purity LFP over SCC; Data-call rule on computed level; bodiless callees Impure; for over List; jtv check --cert --json.',
     gate: 'all purity falsifiers non-zero; callgraph_props >= 1000 graphs; no new failures vs the W0 baseline' },
@@ -499,7 +504,7 @@ if (A.mode === 'wave0') {
   phase('Wave0')
   const reports = await parallel([
     () => agent(`Repo ${REPO}, read-only. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; docs/architecture/probes/run-probes.sh output. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
-    () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
+    () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md and copy the test file to ${SCRATCH}/census/census.rs so later gates can run the same census. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip.`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep 1..5000 (20 s timeout per run, debug and release) and X-depth bisect of the max safe call depth. No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. ${EXPECT_MEANING} (keyword_prefix_identifier is the program "int_a = 42; print(int_a)" printing 42; reversible_if_tok_roundtrip prints x, runs a tokened reversible if whose branch does x += 1, reverses the token, and prints x again). The .test.js files are bun tests on the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program whose Data expression calls an impure function; impure_in_data_debug.jtv is the same program run through jtv-debug; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
@@ -551,7 +556,7 @@ if (A.mode === 'gate1') {
   if (!A.integration) throw new Error('gate1 needs args.integration (the merged branch)')
   if (!A.signing) throw new Error('gate1 needs args.signing per the Q36 ruling')
   phase('Gate1')
-  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run EVERY falsifier in ${SCRATCH}/falsifiers against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(FALSIFIERS)}. Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). Check that every commit on the branch since ${BASE} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
+  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run EVERY falsifier in ${SCRATCH}/falsifiers against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). Check that every commit on the branch since ${BASE} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
   const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. Re-run any command whose result looks implausible, in your own detached worktree of that branch. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
   const newHoles = holesOf([gate, check])
   // Coverage: the exact command list, and each falsifier exactly once with its expectation.
@@ -560,7 +565,7 @@ if (A.mode === 'gate1') {
     && gate.exit_codes.length === GATE1_COMMANDS.length
   const resultFor = (f) => (gate ? gate.falsifier_results.filter((r) => r.file === f.file) : [])
   const falsifiersExact = Boolean(gate) && gate.falsifier_results.length === FALSIFIERS.length
-    && FALSIFIERS.every((f) => { const rs = resultFor(f); return rs.length === 1 && rs[0].expect === f.expect && rs[0].ok })
+    && FALSIFIERS.every((f) => { const rs = resultFor(f); return rs.length === 1 && rs[0].expect === f.expect && rs[0].runner === f.runner && rs[0].ok })
   const green = Boolean(gate && check && !check.refuted
     && commandsExact && gate.exit_codes.every((c) => c === 0)
     && falsifiersExact
