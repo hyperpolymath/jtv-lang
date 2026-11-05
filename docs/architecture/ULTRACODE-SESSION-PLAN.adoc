@@ -202,6 +202,8 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 * the Wave 0 outputs (falsifiers, census copy, receipts) sit in the writable scratch directory, so every lane and Gate 1 first re-hashes them and must match the `w0Digest` the lead pinned after reviewing them; an edited, added, renamed or deleted file fails the run
 * Gate 1's `base` is the immutable SHA of the pre-Wave-1 commit that Wave 0 recorded in `receipts/pre-wave1.sha`, not the moving integration branch or any later ancestor; Gate 1 checks that `base` equals that receipt and that `git merge-base --is-ancestor <base> HEAD` holds, and every commit in `<base>..HEAD` must be signed
 * the WASM dependency boundary (`WASM_BOUNDARY_CMD`) re-runs at Gate 1, because a later manifest edit or conflict resolution could reintroduce `wasm-bindgen`
+* Gate 1 judges one immutable commit: `args.integrationSha`. Both the gate agent and the verifier check out exactly that SHA, the first Gate 1 command proves `HEAD` equals it, and the result names it as the only commit eligible to merge, so a push to the integration branch between the two agents cannot mix two commits' results
+* every lane listed in `merged` must really be in that history: Gate 1 runs `git fetch origin claude/jtv-w1-<lane> && git merge-base --is-ancestor FETCH_HEAD HEAD` for each one
 * more generally, Gate 1 re-runs every merged lane's own gate commands on the integrated branch (deduplicated), so a merge or conflict resolution cannot silently undo a lane's invariant: the Lean pins, `#![forbid(unsafe_code)]` and the `unsafe` grep, the H23 deletion, jtv-debug streaming, and so on
 * `list-tests.sh --baseline receipts/tests-w0.txt` checks that every test name recorded at Wave 0 still exists, because a count alone cannot show it (new lane tests can hide a deleted one)
 * *trust boundary:* each falsifier's `ok` is still an agent's judgement of the output it observed; no code re-derives it from exit statuses or the `PREFIX_RAN` sentinel. Lane readiness and Gate 1 both require two independent agents to agree, which narrows that dependency but does not remove it. The planned replacement is a fixed falsifier runner, `probes/run-falsifiers.sh`, built in Wave 0 alongside the falsifiers. It runs each file with its runner and writes a machine record per file (check and run exit codes, and whether `PREFIX_RAN` appeared). The script then derives `ok` from that record for each `expect`, and agents only relay it. Until that runner lands, agent-reported `ok` values are the trust boundary for lane readiness and Gate 1.
@@ -329,7 +331,7 @@ Plain JavaScript for the Workflow tool. Like any Workflow script it starts with 
 |Run |What it does
 
 |`{ mode: 'wave0', repo, scratch }`
-|Run with HEAD at the pre-Wave-1 commit on a clean tree (`git status --porcelain` empty; otherwise the receipts agent stops and reports a hole). Records that commit's SHA in `<scratch>/receipts/pre-wave1.sha`, then writes the W0 receipt, the corpus baseline (`receipts/corpus-w0.txt`, from `run-corpus.sh`), the test-name list (`receipts/tests-w0.txt`, from `list-tests.sh`), the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. It returns `w0DigestCommand` only when Wave 0 is sealable: all five reports exist, every reported command exited 0, and the receipts agent ran exactly `W0_RECEIPT_COMMANDS`, the commands that produce the sealed files. Measurements that are expected to fail today, such as the wasm32 check, are recorded inside `w0.json` instead. Otherwise it returns `sealable: false` and no digest. After reviewing the Wave 0 outputs, the lead runs it and passes the 64-hex result as `w0Digest` to every later run, which re-hashes the outputs before using them. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline`, which must be exactly the sealed `<scratch>/receipts/w0.json`, and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
+|Run with HEAD at the pre-Wave-1 commit on a clean tree (`git status --porcelain` empty; otherwise the receipts agent stops and reports a hole). Records that commit's SHA in `<scratch>/receipts/pre-wave1.sha`, then writes the W0 receipt, the corpus baseline (`receipts/corpus-w0.txt`, from `run-corpus.sh`), the test-name list (`receipts/tests-w0.txt`, from `list-tests.sh`), the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. It returns `w0DigestCommand` only when Wave 0 is sealable: all five reports exist, every reported command exited 0, the receipts agent ran exactly `W0_RECEIPT_COMMANDS`, and a final read-only agent ran exactly `W0_ARTIFACT_COMMANDS` with every one exiting 0. Those check that each sealed artifact exists and is well formed: the receipts, `depth.md` with all four keys, `x11.md` naming every carrier, the census, and every falsifier file. That last check matters because the digest hashes only files that exist. Measurements that are expected to fail today, such as the wasm32 check, are recorded inside `w0.json` instead. Otherwise it returns `sealable: false` and no digest. After reviewing the Wave 0 outputs, the lead runs it and passes the 64-hex result as `w0Digest` to every later run, which re-hashes the outputs before using them. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline`, which must be exactly the sealed `<scratch>/receipts/w0.json`, and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
 
 |`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
@@ -346,7 +348,7 @@ Plain JavaScript for the Workflow tool. Like any Workflow script it starts with 
 |`{ mode: 'lanes', repo, scratch, baseline, w0Digest, baselineTests, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
-|`{ mode: 'gate1', repo, scratch, baseline, w0Digest, baselineTests, openHoles: [], integration, base: '<the SHA in receipts/pre-wave1.sha>', signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
+|`{ mode: 'gate1', repo, scratch, baseline, w0Digest, baselineTests, openHoles: [], integration, integrationSha: '<40-hex SHA of the integration commit to judge>', base: '<the SHA in receipts/pre-wave1.sha>', signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
 |Gate 1 on the merged branch: full test, lint, format and wasm32 build; trybuild; probes in `--gate` mode; the Lean axiom audit; every falsifier with its expectation; census delta against the baseline. With `stopRule: true`, `merged` may hold only the STOP lanes and only their falsifiers are judged. A second agent tries to refute the report. `green` is true only if the report lists exactly the required Gate 1 commands, each exited 0, each falsifier appears exactly once with its expectation met, the test count is at least the baseline count, every commit is signed under the Q36 ruling, neither agent reported a new hole, and the refutation failed.
 |===
 
@@ -570,6 +572,16 @@ const WASM_BOUNDARY_CMD = String.raw`out="$(cargo tree --workspace --exclude jtv
 // fail the whole digest instead of letting cut report success over an incomplete tree.
 const W0_DIGEST_CMD = `( set -o pipefail; (cd ${SCRATCH} && find falsifiers census receipts census-w0.md -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) | sha256sum | cut -d' ' -f1 )`
 const W0_SEAL_CMD = `test "$( ${W0_DIGEST_CMD} )" = ${A.w0Digest}`
+// After the five producers finish, one more agent checks that every sealed artifact exists and is
+// well formed. The digest hashes only files that exist, so a missing artifact must fail here.
+const W0_X11_CARRIERS = ['Int', 'Hex', 'Binary', 'Rational', 'Symbolic', 'Complex', 'Float', 'String', 'Bool', 'List', 'Tuple', 'Any']
+const W0_ARTIFACT_COMMANDS = [
+  ...['receipts/w0.json', 'receipts/pre-wave1.sha', 'receipts/corpus-w0.txt', 'receipts/tests-w0.txt', 'receipts/x11.md', 'receipts/depth.md', 'census-w0.md', 'census/census.rs'].map((f) => `test -s ${SCRATCH}/${f}`),
+  `grep -Eqx '[0-9a-f]{40}' ${SCRATCH}/receipts/pre-wave1.sha`,
+  ...['parse_max_depth_debug', 'parse_max_depth_release', 'call_max_safe_depth_debug', 'call_max_safe_depth_release'].map((k) => `grep -q '^${k}' ${SCRATCH}/receipts/depth.md`),
+  ...W0_X11_CARRIERS.map((c) => `grep -qw ${c} ${SCRATCH}/receipts/x11.md`),
+  ...FALSIFIERS.map((f) => `test -s ${SCRATCH}/falsifiers/${f.file}`),
+]
 // The commands that produce the sealed Wave 0 files. Each must exit 0, or Wave 0 is not sealable.
 const W0_RECEIPT_COMMANDS = [
   'test -z "$(git status --porcelain)"',
@@ -693,7 +705,15 @@ const LANES = {
 }
 // Gate 1 re-runs every merged lane's own gate on the integrated branch, so a merge or conflict
 // resolution cannot silently undo a lane's invariant (Lean pins, forbid(unsafe_code), ...).
-const GATE1_COMMANDS = [...new Set([...GATE1_BASE_COMMANDS, ...(Array.isArray(MERGED) ? MERGED : []).flatMap((n) => (LANES[n] ? LANES[n].gate : []))])]
+const laneBranch = (n) => `claude/jtv-w1-${n}`
+// Gate 1 first proves both agents are on the one pinned integration commit, then that every
+// claimed lane's reviewed head is in that history, then re-runs the base and lane gates.
+const GATE1_COMMANDS = [...new Set([
+  ...(A.mode === 'gate1' && typeof A.integrationSha === 'string' ? [`test "$(git rev-parse HEAD)" = ${A.integrationSha}`] : []),
+  ...(Array.isArray(MERGED) ? MERGED : []).filter((n) => LANES[n]).map((n) => `git fetch origin ${laneBranch(n)} && git merge-base --is-ancestor FETCH_HEAD HEAD`),
+  ...GATE1_BASE_COMMANDS,
+  ...(Array.isArray(MERGED) ? MERGED : []).flatMap((n) => (LANES[n] ? LANES[n].gate : [])),
+])]
 const STOP_ALLOWED = ['grammar', 'wasm', 'entry-interim']
 const requiredPrereqs = (n) => LANES[n].prereqs.concat(A.stopRule ? [] : (LANES[n].fullPrereqs || []))
 // Each claimed prerequisite must really be in the lane's history: its branch head is an
@@ -705,7 +725,6 @@ const inputPaths = (n) => (LANE_INPUTS[n] || []).map((f) => `${SCRATCH}/receipts
 const inputCommands = (n) => inputPaths(n).map((p) => `test -s ${p}`)
 const laneCommands = (n) => [W0_SEAL_CMD, ...inputCommands(n), ...prereqCommands(n), ...LANES[n].gate, ...LANE_REQUIRED_COMMANDS]
 // The branch is fixed by the workflow, never taken from a report.
-const laneBranch = (n) => `claude/jtv-w1-${n}`
 
 const lanesFor = (name) => FALSIFIERS.filter((f) => f.lane === name)
 const holesOf = (reports) => reports.filter(Boolean).flatMap((r) => r.new_holes || [])
@@ -728,7 +747,10 @@ if (A.mode === 'wave0') {
   const receiptsExact = Boolean(reports[0]) && Array.isArray(reports[0].gate_commands)
     && reports[0].gate_commands.length === W0_RECEIPT_COMMANDS.length
     && W0_RECEIPT_COMMANDS.every((c, i) => reports[0].gate_commands[i] === c)
-  const sealable = reports.length === 5 && reports.every(okReport) && receiptsExact
+  const artifacts = await agent(`Repo ${REPO}, read-only; change nothing. Run each of these commands exactly once and report them as gate_commands, in this order, each with its exit code: ${JSON.stringify(W0_ARTIFACT_COMMANDS)}.`, { label: 'w0-artifacts', phase: 'Wave0', schema: REPORT })
+  const artifactsExact = okReport(artifacts) && artifacts.gate_commands.length === W0_ARTIFACT_COMMANDS.length
+    && W0_ARTIFACT_COMMANDS.every((c, i) => artifacts.gate_commands[i] === c)
+  const sealable = reports.length === 5 && reports.every(okReport) && receiptsExact && artifactsExact
   // The lead reviews these outputs, then runs w0DigestCommand and passes its output as args.w0Digest.
   return sealable
     ? { mode: 'wave0', sealable, reports, newHoles: holesOf(reports), w0DigestCommand: W0_DIGEST_CMD }
@@ -802,6 +824,7 @@ if (A.mode === 'lanes') {
 // ---- mode: gate1 ----------------------------------------------------------
 if (A.mode === 'gate1') {
   if (typeof A.integration !== 'string' || !SAFE_BRANCH.test(A.integration)) throw new Error('gate1 needs args.integration: the merged branch (alphanumeric first, then [A-Za-z0-9._/-])')
+  if (typeof A.integrationSha !== 'string' || !/^[0-9a-f]{40}$/.test(A.integrationSha)) throw new Error('gate1 needs args.integrationSha: the full 40-hex commit of args.integration to judge; both agents check out exactly this commit, and only it may merge')
   if (!Number.isInteger(A.baselineTests) || A.baselineTests <= 0) throw new Error('gate1 needs args.baselineTests: the raw W0 test count (a positive integer)')
   if (!SIGNING_RULINGS.includes(A.signing)) throw new Error(`gate1 needs args.signing set to one of ${SIGNING_RULINGS.join(', ')} per the Q36 ruling`)
   if (typeof BASE !== 'string' || !/^[0-9a-f]{40}$/.test(BASE)) throw new Error('gate1 needs args.base as the full 40-hex SHA of the pre-Wave-1 commit (an immutable signature-range start, not a branch name)')
@@ -816,8 +839,8 @@ if (A.mode === 'gate1') {
   // Falsifiers of lanes not merged here are expected to still reproduce, so they are not judged.
   const GATE_FALSIFIERS = FALSIFIERS.filter((f) => MERGED.includes(f.lane))
   phase('Gate1')
-  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The Wave 0 census results are in ${SCRATCH}/census-w0.md; compare this run's census output with them bucket by bucket (islands, free identifiers, would-be Q26 rejections) when writing census_delta. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed by cargo test --workspace (test_count) and set baseline_test_count to ${A.baselineTests}, the raw W0 count; it is never adjusted (tests may move between crates but not disappear). Read cargo_test_passed from the receipt ${A.baseline} and report it as receipt_test_count. ${signingCheck(`${BASE}..HEAD`)} Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
-  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. The report must list exactly these commands, in order: ${JSON.stringify(GATE1_COMMANDS)}. The falsifiers live in ${SCRATCH}/falsifiers and must be judged exactly as listed (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The census test is ${SCRATCH}/census/census.rs (copy it to crates/jtv-core/tests/census.rs, do not commit) and the baseline receipt is ${A.baseline}; the Wave 0 census results are in ${SCRATCH}/census-w0.md, so re-run the census and check census_delta and census_new_failures against them; recompute census_new_failures and test_count; the baseline count is fixed at ${A.baselineTests}; read cargo_test_passed from the receipt yourself and report it as receipt_test_count. ${signingCheck(`${BASE}..HEAD`)} Re-run every command in that list yourself, in order, and report your own commands and exit_codes; judge every listed falsifier yourself and report falsifier_results; report test_count, baseline_test_count (= ${A.baselineTests}), census_delta, census_new_failures, signatures_ok and signature_detail from your own runs, not copied from the report; list in surviving_falsifiers any falsifier you can make fail. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: GATE1_VERDICT, isolation: 'worktree', effort: 'high' })
+  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration} && git checkout --detach ${A.integrationSha}. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The Wave 0 census results are in ${SCRATCH}/census-w0.md; compare this run's census output with them bucket by bucket (islands, free identifiers, would-be Q26 rejections) when writing census_delta. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed by cargo test --workspace (test_count) and set baseline_test_count to ${A.baselineTests}, the raw W0 count; it is never adjusted (tests may move between crates but not disappear). Read cargo_test_passed from the receipt ${A.baseline} and report it as receipt_test_count. ${signingCheck(`${BASE}..HEAD`)} Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
+  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. In your own worktree run: git fetch origin ${A.integration} && git checkout --detach ${A.integrationSha}. The report must list exactly these commands, in order: ${JSON.stringify(GATE1_COMMANDS)}. The falsifiers live in ${SCRATCH}/falsifiers and must be judged exactly as listed (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The census test is ${SCRATCH}/census/census.rs (copy it to crates/jtv-core/tests/census.rs, do not commit) and the baseline receipt is ${A.baseline}; the Wave 0 census results are in ${SCRATCH}/census-w0.md, so re-run the census and check census_delta and census_new_failures against them; recompute census_new_failures and test_count; the baseline count is fixed at ${A.baselineTests}; read cargo_test_passed from the receipt yourself and report it as receipt_test_count. ${signingCheck(`${BASE}..HEAD`)} Re-run every command in that list yourself, in order, and report your own commands and exit_codes; judge every listed falsifier yourself and report falsifier_results; report test_count, baseline_test_count (= ${A.baselineTests}), census_delta, census_new_failures, signatures_ok and signature_detail from your own runs, not copied from the report; list in surviving_falsifiers any falsifier you can make fail. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: GATE1_VERDICT, isolation: 'worktree', effort: 'high' })
   const newHoles = holesOf([gate, check])
   // Coverage: the exact command list, and each falsifier exactly once with its expectation.
   const commandsExact = Boolean(gate) && Array.isArray(gate.commands) && Array.isArray(gate.exit_codes)
@@ -847,7 +870,7 @@ if (A.mode === 'gate1') {
     && gate.census_new_failures === 0
     && gate.signatures_ok
     && newHoles.length === 0)
-  return { mode: 'gate1', green, gate, check, newHoles }
+  return { mode: 'gate1', green, integrationSha: A.integrationSha, gate, check, newHoles }
 }
 
 throw new Error(`unknown mode ${A.mode}; use wave0, lanes or gate1`)
