@@ -204,6 +204,7 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 * the WASM dependency boundary (`WASM_BOUNDARY_CMD`) re-runs at Gate 1, because a later manifest edit or conflict resolution could reintroduce `wasm-bindgen`
 * more generally, Gate 1 re-runs every merged lane's own gate commands on the integrated branch (deduplicated), so a merge or conflict resolution cannot silently undo a lane's invariant: the Lean pins, `#![forbid(unsafe_code)]` and the `unsafe` grep, the H23 deletion, jtv-debug streaming, and so on
 * `list-tests.sh --baseline receipts/tests-w0.txt` checks that every test name recorded at Wave 0 still exists, because a count alone cannot show it (new lane tests can hide a deleted one)
+* *trust boundary:* each falsifier's `ok` is still an agent's judgement of the output it observed; no code re-derives it from exit statuses or the `PREFIX_RAN` sentinel. Lane readiness and Gate 1 both require two independent agents to agree, which narrows that dependency but does not remove it. The planned replacement is a fixed falsifier runner, `probes/run-falsifiers.sh`, built in Wave 0 alongside the falsifiers. It runs each file with its runner and writes a machine record per file (check and run exit codes, and whether `PREFIX_RAN` appeared). The script then derives `ok` from that record for each `expect`, and agents only relay it. Until that runner lands, agent-reported `ok` values are the trust boundary for lane readiness and Gate 1.
 * `run-probes.sh` lists every probe by name and exits 2 in both modes when any input cannot be prepared (a missing, renamed, unlisted or unreadable probe, or a failed temporary write), so a Wave 0 baseline can never be recorded from probes that did not run
 * the verifier re-runs every command and falsifier itself and reports its own commands, exit codes, falsifier results, test and census counts and signature result; `green` needs both reports to pass, so a thin verifier verdict cannot carry the gate
 * count checks never read a failed producer as zero: grep must exit 1 (no match, no error), and `cargo tree` must succeed before its output is scanned
@@ -524,6 +525,11 @@ const FALSIFIERS = RAW_FALSIFIERS.map((f) => ({
   ...f,
 }))
 // Exact coverage: one result per expected file, with the same expect and runner, and ok.
+// TRUST BOUNDARY: each falsifier's ok is the agent's own judgement of its observed output; no
+// code here re-derives it from exit statuses or sentinel lines. Two independent agents (the
+// implementer or gate agent, then the reviewer or verifier) must both report ok, which narrows
+// but does not remove that dependency. A fixed falsifier runner producing a machine record per
+// file (exit codes, PREFIX_RAN present or not) is the planned replacement; see the plan text.
 const exactFalsifiers = (results, list) => Array.isArray(results) && results.length === list.length
   && list.every((f) => { const rs = results.filter((r) => r.file === f.file); return rs.length === 1 && rs[0].expect === f.expect && rs[0].runner === f.runner && rs[0].ok === true })
 // The Q36 signature check, quoted into every prompt that verifies commits.
@@ -552,8 +558,10 @@ const WASM_BOUNDARY_CMD = String.raw`out="$(cargo tree --workspace --exclude jtv
 // The Wave 0 outputs (falsifiers, census copy, receipts) live in the shared, writable scratch
 // directory, so every lane and Gate 1 first re-hashes them against the digest the lead pinned
 // in args. Any edited, added or deleted file changes the digest; a missing directory does too.
-const W0_DIGEST_CMD = `(cd ${SCRATCH} && find falsifiers census receipts census-w0.md -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) | sha256sum | cut -d' ' -f1`
-const W0_SEAL_CMD = `${W0_DIGEST_CMD} | grep -qx ${A.w0Digest}`
+// Agents run these strings in bash; pipefail makes a failed cd, find, sort, xargs or sha256sum
+// fail the whole digest instead of letting cut report success over an incomplete tree.
+const W0_DIGEST_CMD = `( set -o pipefail; (cd ${SCRATCH} && find falsifiers census receipts census-w0.md -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) | sha256sum | cut -d' ' -f1 )`
+const W0_SEAL_CMD = `test "$( ${W0_DIGEST_CMD} )" = ${A.w0Digest}`
 // Gate 1 reruns the Wave 0 corpus and fails on any program that passed then and fails now.
 const CORPUS_CMD = `docs/architecture/probes/run-corpus.sh --baseline ${SCRATCH}/receipts/corpus-w0.txt`
 // A test count cannot show that a pre-Wave-1 test survived (new tests can hide a deleted one),

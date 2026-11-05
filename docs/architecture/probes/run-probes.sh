@@ -58,9 +58,11 @@ else
 fi
 for d in ${NEST_DEPTHS:-8 12 16 18}; do
   [[ -n "$tmp" ]] || { prep_failed "sweep depth $d (no temp dir)"; continue; }
-  # A depth must be a positive integer, or seq fails and printf would still write a depth-one input.
-  [[ "$d" =~ ^[1-9][0-9]*$ ]] || { prep_failed "sweep depth $d (not a positive integer)"; continue; }
-  open="$(printf '(%.0s' $(seq 1 "$d"))"; close="$(printf ')%.0s' $(seq 1 "$d"))"
+  # A depth must be an integer in 1..999999; the brackets are built without seq and their length
+  # is checked, so a failed build can never write a shallower input under the requested depth.
+  [[ "$d" =~ ^[1-9][0-9]{0,5}$ ]] || { prep_failed "sweep depth $d (not an integer in 1..999999)"; continue; }
+  open="$(printf '%*s' "$d" '' | tr ' ' '(')"; close="$(printf '%*s' "$d" '' | tr ' ' ')')"
+  if [[ ${#open} -ne $d || ${#close} -ne $d ]]; then prep_failed "sweep depth $d (bracket build failed)"; continue; fi
   if ! { printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv" && [[ -s "$tmp/n.jtv" ]]; }; then
     prep_failed "sweep file for depth $d"; continue
   fi
