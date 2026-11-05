@@ -8,9 +8,11 @@
 # temporary directory. Usage: docs/architecture/probes/run-probes.sh [--gate] [path/to/jtv]
 #
 # Report mode (default, Wave 0 baseline) always exits 0: the holes are expected to
-# reproduce. --gate mode exits 1 if any probe or sweep step ends with anything other
+# reproduce. --gate mode exits 1 if any input cannot be prepared (missing or unreadable
+# probe, failed mktemp or sweep write) or any probe or sweep step ends with anything other
 # than 0 (success) or 1 (a handled JtvError): a timeout (124), a Rust panic (101), a
-# host abort (134) or any other status counts as a crash, so none can pass Gate 1. Whether each probe's behaviour is correct is judged per file by the Gate 1
+# host abort (134) or any other status counts as a crash, so none can pass Gate 1.
+# Whether each probe's behaviour is correct is judged per file by the Gate 1
 # falsifiers, not by this script.
 set -u
 gate=0
@@ -18,26 +20,40 @@ if [[ "${1:-}" == "--gate" ]]; then gate=1; shift; fi
 here="$(cd "$(dirname "$0")" && pwd)"
 jtv="${1:-$here/../../../target/debug/jtv}"
 bad=0
+# crashed CODE: true when CODE is neither 0 (success) nor 1 (handled JtvError).
 crashed() { local code="$1"; [[ "$code" -ne 0 && "$code" -ne 1 ]]; }
+# prep_failed WHAT: an input could not be prepared, so its check never ran; count it.
+prep_failed() { local what="$1"; echo "  preparation failed: $what"; bad=$((bad + 1)); }
 [[ -x "$jtv" ]] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
+shopt -s nullglob
+probes=("$here"/*.jtv)
+[[ "${#probes[@]}" -gt 0 ]] || prep_failed "no probe files in $here"
 printf '%-20s %6s %6s  %s\n' probe check run 'output (all lines, joined with |)'
-for p in "$here"/*.jtv; do
+for p in "${probes[@]}"; do
   n="$(basename "$p" .jtv)"
+  # The CLI also exits 1 when it cannot read a file, so check readability first.
+  [[ -f "$p" && -r "$p" ]] || { prep_failed "unreadable probe $p"; continue; }
   timeout 30 "$jtv" check "$p" >/dev/null 2>&1; c=$?
   out="$(timeout 30 "$jtv" run "$p" 2>&1)"; r=$?
   joined="$(printf '%s\n' "$out" | head -n 8 | paste -sd '|' | cut -c1-140)"
   printf '%-20s %6s %6s  %s\n' "$n" "$c" "$r" "$joined"
   if crashed "$c" || crashed "$r"; then bad=$((bad + 1)); fi
 done
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 echo; echo "H13 parse sweep (depth, check exit, ms):"
+if tmp="$(mktemp -d)" && [[ -d "$tmp" ]]; then
+  trap 'rm -rf "$tmp"' EXIT
+else
+  prep_failed "mktemp -d"; tmp=""
+fi
 for d in ${NEST_DEPTHS:-8 12 16 18}; do
+  [[ -n "$tmp" ]] || { prep_failed "sweep depth $d (no temp dir)"; continue; }
   open="$(printf '(%.0s' $(seq 1 "$d"))"; close="$(printf ')%.0s' $(seq 1 "$d"))"
-  printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv"
+  printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv" && [[ -s "$tmp/n.jtv" ]] \
+    || { prep_failed "sweep file for depth $d"; continue; }
   s=$(date +%s%N); timeout 120 "$jtv" check "$tmp/n.jtv" >/dev/null 2>&1; e=$?
   echo "  $d $e $(( ($(date +%s%N) - s) / 1000000 ))"
   if crashed "$e"; then bad=$((bad + 1)); fi
 done
-echo; echo "hung or crashed steps: $bad"
+echo; echo "hung, crashed or unprepared steps: $bad"
 if [[ "$gate" -eq 1 && "$bad" -ne 0 ]]; then exit 1; fi
 exit 0
