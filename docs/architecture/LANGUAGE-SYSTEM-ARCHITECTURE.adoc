@@ -1,0 +1,1343 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= JtV Language System — Architecture and Fastest Routes
+:revdate: 2026-11-04
+:toc: left
+:toclevels: 3
+:sectnums:
+
+[IMPORTANT]
+====
+Plan, not a status claim. Every status below was ground-truthed on 2026-11-04 or is marked stated-only.
+
+* *verified* means re-run or re-read in this session (2026-11-04).
+* *stated-only* means it rests on repo docs, CI text or a red-team note that was not re-run here.
+* *PROPOSED* means it does not exist yet.
+====
+
+== What the system is
+
+=== One-paragraph summary
+
+JtV is a Harvard-architecture language. Control is Turing-complete. Data is meant to be total and addition-only. The reference implementation is jtv-lang (Rust).
+
+The plan puts every surface (CLI, REPL, wasm embedding, playground, LSP) behind one checked, fuelled entry point. Each supported single-carrier exact Data island then gets one semantic identity: its normal form (NF) in the free model of its carrier. Float, Complex and mixed-carrier islands have no NF theorem. Totality comes from one rank certificate. Compiled islands are checked per artefact by an independent checker, not by a compiler-correctness proof. Lean runs in CI and gates *wording*, never function.
+
+=== Layers
+
+[cols="1,3,1",options="header"]
+|===
+|Layer |Content |Owner
+
+|L0 Surface syntax
+|`grammar.pest` is canonical. `spec/grammar.ebnf`, the tmLanguage keyword list and a new `spec/data-fragment.ebnf` are generated from it (`xtask gen-grammar`) and drift-checked in CI.
+|jtv-lang
+
+|L1 Front end
+|Parser produces the AST with statement spans. A new resolver pass assigns every call a resolved function id (fixes H14). A new zero-dependency `jtv-types` crate holds the type lattice.
+|jtv-lang
+
+|L2 Checked gate
+|`jtv_core::check(&Program) -> Result<CheckedProgram>`: resolve → types → purity as a least fixpoint over the call-graph SCC condensation → Data-call rule on the *computed* level → annotations checked as upper bounds → epistemic grading with pc-tracking. Emits a `TotalCert` (frozen JSON schema). `CheckedProgram` has a private constructor.
+|jtv-lang (load-bearing)
+
+|L3 Execution
+|`Interpreter::run(&CheckedProgram)` only. Fuel: one step counter (every eval step and call), a call-depth cap, a value-size budget. All per-run, all embedder-configurable. `ReversibleInterpreter` is no longer a public unchecked surface.
+|jtv-lang
+
+|L4 Normal-form engine (`nf.rs`, PROPOSED)
+|Per-function summaries composed by substitution, with hash-consed sharing. Carriers: LinForm over ℤ (Int/Hex/Binary), over ℕ (purist), over ℚ (Rational); a word/term algebra for Symbolic/String/List; piecewise-linear (PwLin) for islands calling `@total` functions with `if`; none for Float/Complex. Projections: support, reverse-gate class, loss class, cost, per-node overflow bound.
+|jtv-lang
+
+|L5 Hosts
+|`jtv-cli` (run/check/repl/`--cert`); `jtv-wasm` (new cdylib, `#![forbid(unsafe_code)]`, js-sys/wasm-bindgen only here); `jtv-lsp`; `jtv-debug` later.
+|jtv-lang
+
+|L6 Products
+|Playground: plain-JS ESM on Bun, Web Worker plus watchdog, strict CSP, no network, accessible Router visualisation. Editor extension in plain JS. *Location is an owner decision (Q38):* `playground/` today is a vendored copy of the separate `jtv-playground` identity (verified: `playground/CLAUDE.md:7`, 74 tracked files).
+|jtv-lang (subject to Q38)
+
+|L7 Language growth
+|Local modules behind `--unstable-modules`. stdlib tier 2. Host IO through a *separate* host-capability mechanism, not `extern coproc` (ADR-0001 Decision 1 is CLOSED: coproc is ISA-extension only, verified `0001…adoc:62`).
+|jtv-lang
+
+|L8 Certificate and target
+|`jtv-twasm` lowers Int islands to zero-import, memory-free, table-free wasm modules plus a `.jtvcert` JSON sidecar. `jtv-cert` is an independent checker (own Data parser, wasm symbolic execution, rank-edge and per-node-bound checks; no jtv-core or pest dependency).
+|jtv-lang; typed-wasm coordinated
+
+|L9 Assurance
+|Conformance corpus; proptests; CLI↔wasm parity; Lean 4.12 `jtv_proofs` with an axiom audit and statement pins; one executable claims ledger (`xtask verify-claims`) that *extends* the existing authoritative `verification/PROOF-CAPABILITY-MATRIX.adoc` rather than creating a rival.
+|jtv-lang
+
+|L10 Family kernel (cited, not bridged)
+|echo-types (loss-class citation), secret-types (IFC instance, owner reopen), epistemic-types (later), resource-algebra/occupancy-types (cost, later).
+|named repo, owner-gated
+|===
+
+=== IS / IS-NOT and ownership
+
+* *jtv-lang IS* the reference implementation of JtV plus its operational proofs. It owns L0–L9 and the JtV type schema.
+* *jtv-lang IS-NOT* the family type theory. Echo theory lives in echo-types. IFC lives in secret-types (not epistemic-types, not anytype).
+* *typed-wasm* never depends on jtv. The `jtv-twasm → typed-wasm` direction is allowed (CONTRACT I1). No `typedwasm.*` wire change on the critical path (CONTRACT I3).
+* *jtv-halting-islands-ct* is frozen. No code is merged from it. Its diode cases may only enter jtv-lang after an owner licence grant (its LICENSE is a placeholder that grants nothing, verified), or as clean-room rewrites.
+* *anytype* is off-path (Echo is an effect; Q5).
+* *patacl-core* is never a workspace dependency.
+* *typell-jtv*'s "Julia-the-Viper" is not renamed.
+* *Tropical* is not an Echo modality.
+
+=== Architecture (target)
+
+[source,mermaid]
+----
+flowchart TB
+  subgraph JTV["jtv-lang"]
+    SRC[".jtv source"] --> PEST["grammar.pest (canonical, left-factored, depth-limited)"]
+    PEST -.gen.-> EBNF["grammar.ebnf + tmLanguage + data-fragment.ebnf (CI diff)"]
+    PEST --> AST["AST + statement spans"]
+    AST --> RES["resolve: call sites -> FnId (H14)"]
+    TYPES["jtv-types (preorder + separate Any consistency)"] --> CHECK
+    RES --> CHECK["check(): types, purity LFP over SCC, DataCall = computed Total, epistemic(pc)"]
+    CHECK -->|"CheckedProgram (private ctor)"| INT["Interpreter::run: step fuel + depth cap + size budget"]
+    CHECK -->|"TotalCert JSON"| CERTJ["cert data"]
+    CHECK --> NF["nf.rs: LinForm Z/N/Q | term words (shared DAG) | PwLin | none"]
+    NF --> PROJ["support, reverse class, loss class, cost, per-node bound"]
+    INT --> CLI["jtv-cli run/check/repl"]
+    INT --> JW["jtv-wasm cdylib (forbid unsafe, index shim)"]
+    JW --> PG["playground (Bun, plain JS, Worker, CSP)"]
+    PROJ --> PG
+    CHECK --> LSP["jtv-lsp (spans, hover = island card)"]
+    NF --> TWP["jtv-twasm: zero-import Int islands"]
+    TWP --> WASM["x.wasm"]
+    TWP --> JC["x.jtvcert"]
+    WASM --> CHK["jtv-cert (independent parser + symexec + rank + per-node bound)"]
+    JC --> CHK
+    SRC -->|"island text"| CHK
+    LEDGER["PROOF-CAPABILITY-MATRIX (extended) + xtask verify-claims"]
+  end
+  subgraph LEAN["jtv_proofs Lean 4.12 (CI)"]
+    AUD["JtvAxiomAudit + Pins.lean"] --- RANK["JtvRank"]
+    RANK --> NFL["JtvNormalForm"]
+    NFL --> CEV["JtvCheckedEval"]
+    CEV --> TV["JtvWasmTV"]
+    ORA["lake exe jtv-cert-check (rank-consistency oracle)"]
+    GOLD["Generated tables (decide)"]
+  end
+  CERTJ -.-> ORA
+  NF -.golden.-> GOLD
+  ORA --> LEDGER
+  GOLD --> LEDGER
+  subgraph TW["typed-wasm (owner-governed)"]
+    GATE["gate: + core Validator (H9), i64 compares, L15-C, TotalModule"]
+  end
+  WASM --> GATE
+  TYPES -.pinned SHA.-> TYPELL["typell-jtv"]
+  NFL -. citation row .- ECHO["echo-types (Agda)"]
+  CHECK -. implicit flows .- SEC["secret-types (Agda, owner reopen)"]
+  LEDGER -.presence.-> MAA["Aletheia"]
+----
+
+=== Dependency graph (today, cross-repo)
+
+Solid = exists. Dashed = citation, proposal or blocker. Condensed from graph.md §1.
+
+[source,mermaid]
+----
+flowchart LR
+  CORE["jtv-core (592 tests)"]
+  CLI["jtv-cli"] --> CORE
+  REPL["REPL (repl.rs:310, unchecked)"] --> CORE
+  WASMB["wasm.rs bindings (unchecked, wasm32 broken)"] --> CORE
+  LSP["jtv-lsp (stub)"] --> CORE
+  LEAN["jtv_proofs Lean 4.12 (Int model)"] -->|proof-shadow| CORE
+  IDR["Idris2 ABI (unlinked)"] -.-> CORE
+  TW["typed-wasm (197 tests)"] -.->|target, proposed| CORE
+  TW -.->|blocked| TWGAP["no i64 compares; caps erased; gate lacks Validator"]
+  ECHO["echo-types (Agda)"] -.->|citation| CORE
+  LEAN -->|partial shadow| ECHO
+  ECHO --> AZ["absolute-zero (Agda CNO; 5 believe_me in Idris ABI)"]
+  SEC["secret-types (TINI)"] -.->|proposed| CORE
+  EPI["epistemic-types"] -.->|proposed| CORE
+  EPI --> ECHO
+  CHO["choreographic-types"] --> RA["resource-algebra (not mapped)"]
+  OCC["occupancy-types (MkH forgeable)"] --> RA
+  TROP["tropical-types"] --> RA
+  JAN["januskey (FFI returns JK_OK on stubs)"] --> RA
+  HI["jtv-halting-islands-ct (frozen POC)"] -.->|claims + diode cases| CORE
+  TYPELL["typell-jtv (discriminant coercion)"] -.->|re-encoding| CORE
+  MAA["Aletheia (19/26)"] --> CORE
+  ANY["anytype (golden path red)"] -.->|off-path| CORE
+----
+
+== Reconciliation with main (#123) and the estate proof policy
+
+This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before it and change parts of it: #123 (commit `2c9b74c`, 2026-11-03) and the proof policy summarised in this repo's `CLAUDE.md`. The normative source is `hyperpolymath/standards` `3-practice/PROOF-POLICY.adoc` (owner ruling 2026-10-26). Where this plan disagrees with them, they win.
+
+=== What changed
+
+* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. They are at *Grade 3* per `verification/receipts/2026-11-01-agda.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Not re-run here: no Agda toolchain in this session.
+* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and carry no grade. Quote grades only from `verification/PROOF-STATUS.adoc` §2.1b, in the estate vocabulary (`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1`), never as percentages.
+* *Aeneas is not adoptable* for the proof-to-interpreter gap (audit §9.4). This plan's test-based refinement tables (B7, PR4) stay; they are evidence, not a proof.
+
+=== Prover assignment (supersedes the "Home" column below and Q1)
+
+[cols="2,2,3",options="header"]
+|===
+|Rung |Obligation class (policy) |Prover
+
+|PR1 rank certificate, fuel semantics, `cert_terminates`
+|Theory (soundness of a calculus)
+|Agda in `theory/agda/`, rechecked in Rocq and Lean
+
+|PR2 normal forms, projections; PR3 checked arithmetic
+|Theory
+|Agda, rechecked in Rocq and Lean
+
+|PR1' oracle, PR5 grammar↔AST table, `.jtvcert` format, PR6 translation validation statement
+|Totality, dispatch, round-trip and wire-format properties of this system
+|Idris2
+
+|`check()`, purity LFP, resolver, `jtv-cert` checker, interpreter refinement (PR4, PR7)
+|Contracts on first-party Rust
+|Creusot; Kani for the `jtv-wasm` shim and any `unsafe`/FFI
+
+|PR8 reversibility round-trip
+|Rust proptest now; the theorem is Theory
+|proptest, then Agda (extending `Jtv.Reversal`/`Jtv.Conditional`)
+
+|PR9, PR10
+|Family theory
+|Agda in echo-types / secret-types (unchanged)
+|===
+
+The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim Grade 2i until the statement reconciliation in `verification/PROOF-STATUS.adoc` is done.
+
+=== Audit findings added to the hole register
+
+The 2026-11-01 audit (`docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1) lists F1–F7. F4 is this plan's H1; F7 was closed by #123. The others become H20–H24 below. F1–F3 were reproduced in this session with the probes `rev_if_overwrite`, `rev_if_tok` and `rev_if_tokenless`.
+
+== Ground truth today
+
+=== Headline numbers (verified unless marked)
+
+* `cargo test --workspace`: 592 pass. clippy and fmt clean. (lead, this session)
+* Examples: 3/15 pass `jtv run` (12 fail). (lead)
+* `conformance/valid`: 20/31 pass `jtv check`, 11 fail. (verified)
+* stdlib: 4/4 files fail `jtv check`. (verified)
+* `cargo check -p jtv-core --target wasm32-unknown-unknown` fails. (lead)
+* Commit signing: `git log -1 --format=%G?` on jtv-lang main gives `E`. The signer is `/tmp/code-sign`; the configured key file is 0 bytes; no `allowedSignersFile`. (verified) The doctrine-9 gate cannot pass locally as written.
+* `gh auth status`: the `GH_TOKEN` is invalid. (verified)
+* `aletheia` is not on PATH. The 19/26 result came from a scratch build. (verified)
+* Toolchains: cargo/rustc, the wasm32 target and bun 1.4.4 only. Lean, Agda, Idris2, Coq, Zig, wasm-pack, just are absent. Installing elan by `curl|sh` was denied. (lead)
+
+=== Hole register (one numbering)
+
+H1–H12 come from the merged plan. H13–H19 are red-team findings checked this session.
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Hole |Evidence |Status
+
+|H1
+|Unchecked execution. `JtvWasm::run`/`run_and_collect`, the REPL and jtv-debug call `interpreter.run(&program)` with no type or purity check. `ReversibleInterpreter` is also public (`pub use reversible::*`) with `pub fn with_state/execute_forward/execute_and_reverse`.
+|wasm.rs:73-74, 91-92 (chained across lines); repl.rs:310; jtv-debug main.rs:65; lib.rs:43; reversible.rs:110-164
+|verified
+
+|H2
+|Keyword prefix. `identifier = @{ !keyword ~ …}` has no word boundary, so `int_a` fails. *The proposed fix `!(keyword ~ !(ALNUM|"_"))` is wrong under PEG ordered choice:* `"in"` precedes `"intrinsic"` and `"insn"` in the keyword list, so those reserved words would become identifiers.
+|grammar.pest:196-202 (keyword order verified); red-team scratch pest crate
+|verified (order); stated (crate run)
+
+|H3
+|Corpus failures: examples 12/15, conformance/valid 11/31, stdlib 4/4.
+|loops over `jtv check` this session
+|verified
+
+|H4
+|Epistemic grader under-reports (If/While conditions ignored; `x+1` graded Partial).
+|graph.md R12
+|stated-only
+
+|H5
+|Doc overclaims: "WASM backend DONE", coproc 12/12, LSP DONE, IFC "Verified", JtvEcho "verified". *Also* "Data totality Verified" while the Lean theorem is `∃ n, evalTerm t σ = n` proved by `⟨n, rfl⟩`, true for any total Lean function.
+|SECURITY_PROOFS.adoc:510; JtvTheorems.lean:29; PROOF-CAPABILITY-MATRIX.adoc:86
+|verified
+
+|H6
+|Recursive `@total`/`@pure` accepted. Root cause: `purity.rs` pre-registers *declared* levels (L63-67), then checks bodies against them (circular assume-guarantee).
+|purity.rs:60-68; probes rec_total/rec_mutual: check 0, run 134
+|verified
+
+|H7
+|Data may call a looping `@pure`. `typechecker.rs:680` rejects only `Impure` callees, and reads the *declared* purity set at L325. Definitions disagree: purity.rs:13 "Pure may not terminate (has loops)", ast.rs:247 "@pure - no loops", conformance fixture `pure_function_with_loop.jtv` "@pure functions may contain loops … Expected: PASS".
+|lines verified
+|verified
+
+|H8
+|Coercion lattice is not a preorder (Hex→Int→Float but not Hex→Float). `Any` is both top and bottom (`(Any,_)|(_,Any) ⇒ true`), so transitive closure would make every type coercible to every other. typell-jtv uses `mem::discriminant` (rules.rs:25).
+|typechecker.rs:31-55; typell rules.rs:25
+|verified
+
+|H9
+|typed-wasm `gate_module` and `self_verify` run no `wasmparser::Validator`; only the `tw-verify` binary does. (cross-repo)
+|grep: Validator only in tw-verify.rs and tests
+|verified
+
+|H10
+|Symbolic misgraded Safe. `reverse { x += y }` gives `a + b + -(b)`, not `a`, and `jtv check` passes. ADR-0010 D2 table says Safe (L58). The value-models doc says "non-group → Breaking" (L22, L79). Code follows the ADR; the ADR is the source to amend. Complex is statically suspect (f64 parts) but not probed.
+|sym_rev3 probe; number.rs:409 pins Safe
+|verified (Symbolic)
+
+|H11
+|No call-depth fuel; deep Impure recursion aborts the host (exit 134).
+|interpreter.rs:11 only `MAX_ITERATIONS`
+|verified
+
+|H12
+|wasm32 build broken: `unsafe impl Send/Sync for JsCallback` under `#![forbid(unsafe_code)]`, and `js_sys` with no dependency. All `JtvWasm` items are `#[cfg(target_arch="wasm32")]`, so native tests cannot exercise the wasm half of H1.
+|wasm.rs:23-49, 343-344; lib.rs:50-51
+|verified
+
+|H13 (new)
+|Parser DoS. Nested parentheses parse in exponential time (~2× per level) and overflow the stack at depth. No fuel covers parse or check. Every host that parses untrusted text inherits it (LSP per keystroke, playground share-links, jtv-cert's own parser).
+|nest_16 `jtv check` 0.93 s; nest_20000 `jtv check` exit 134
+|verified
+
+|H14 (new)
+|Name-resolution split. The interpreter stores module functions under both `M::f` and bare `f` (interpreter.rs:238-248). The checker registers only top-level names. A later `module M { fn f }` silently replaces a top-level `@total fn f`. `y = f(1)` passes check and prints from inside a Data expression.
+|probe shadow.jtv: check ✓, run prints 666; shadow_loop.jtv: check ✓, run hits iteration cap
+|verified
+
+|H15 (new)
+|Dynamic scoping. `get_variable` scans every call-stack frame and then globals. A `@total` function can read a caller's local: `f(5)`=6 but `g(5)`=105 with the same `f`. `reverse {}` inside a function runs on `self.globals.clone()` and ignores parameters: `h(10,3)` returns 99.
+|probes dyn.jtv, fn_rev.jtv; interpreter.rs:430, 455, 511, 701
+|verified
+
+|H16 (new)
+|Work and size blow-up. An acyclic, loop-free tree of 23 `@total` functions (`a_i = a_{i-1}+a_{i-1}`) does 2^22 work, increments no counter, and hangs every host. The same pattern over words makes an NF exponentially large. `iteration_count` is reset only by `reset()`, not by `run()`, so long REPL/wasm sessions eventually fail every loop.
+|probe blowup.jtv: 16.5 s debug for 23 functions, prints 4194304 (verified 2026-11-04; time doubles per added function, so ~30 functions is ~35 min); `run()` at interpreter.rs:183-190 has no reset (verified)
+|verified
+
+|H17 (new)
+|Bodiless callees. Coproc `intrinsic`/`insn` carry a *declared* purity marker (ast.rs:66, 76). Native impls dispatch before any purity information. Making stdlib/coproc work under `check()` invites trusting a marker that an arbitrary JS callback backs.
+|ast.rs:62-78; red-team cites interpreter.rs:639-647
+|partly verified
+
+|H18 (new)
+|`for x in xs` over a List is typechecked as a range ("Range start must be Int, got List<Int>").
+|conformance/valid/pure_function_with_loop.jtv
+|verified
+
+|H19 (new)
+|Reverse gate fails open. `carrier_echo` maps "no additive algebra" (String, Bool) to `Safe`. `reverse { s += t }` on Strings passes check and fails at runtime ("Cannot negate String"). `Any`-typed reverse also passes check.
+|echo.rs:118-131; probes str_rev.jtv, any_rev.jtv
+|verified
+
+|H20 (audit F1)
+|Echo grades a plain assignment inside a reversible `if` branch as `Safe`, so an overwrite is admitted into a reversible block.
+|echo.rs:223-232; probe rev_if_overwrite.jtv: check 0; `x = 5`, branch sets 7, `reverse tok` leaves 7
+|verified
+
+|H21 (audit F2)
+|Branch assignments in `reversible {}` are not recorded, so `reverse tok` silently skips the branch.
+|reversible.rs:313-340; probe rev_if_tok.jtv: check 0; 0 becomes 1, `reverse tok` leaves 1
+|verified
+
+|H22 (audit F3)
+|Tokenless `reverse {}` over an `if` is not the identity and raises no error.
+|reversible.rs:203-224; probe rev_if_tokenless.jtv: check 0; prints 1 with no inverse applied
+|verified (silent no-op observed)
+
+|H23 (audit F5)
+|`check_reversibility` is dead in production; the effective gate is a differently shaped Echo check.
+|reversible.rs:471
+|stated (audit)
+
+|H24 (audit F6)
+|Tokenless `reversible {}` keeps an unreachable log forever.
+|interpreter.rs:466-470
+|stated (audit)
+|===
+
+=== Stated vs verified (selected)
+
+[cols="2,2,1",options="header"]
+|===
+|Claim in repo |Reality |Source of truth
+|"WASM backend — DONE (591 LOC)" |756 LOC of interpreter bindings; wasm32 build fails |verified
+|coproc 12/12 tests |5/12 run; `--features patacl` fails |graph.md (stated)
+|LSP DONE |stub, diagnostics at 0:0 |graph.md
+|"Data totality — Verified" |Lean statement is definitional; no calls in the Lean model; H6/H7 refute it operationally |verified
+|"Information flow — Verified" |no pc rule; unchecked tick |verified (table row)
+|JtvEcho "fibre correspondence verified" |no classifier mechanised |graph.md
+|531 tests |592 |lead
+|LICENSING.adoc per-file header for code |says `CC-BY-SA-4.0` (L25) while the table says MPL-2.0 for code (L8-10); 29 .rs files use MPL-2.0 |verified; owner-only
+|===
+
+== Route options compared
+
+Ratings are 0–10, from the two judges (average, rounded). Order of priority: elegance+correctness first, then dependability+security.
+
+[cols="2,1,1,1,1,3",options="header"]
+|===
+|Route |Elegance + correctness |Dependability + security |Speed to value |Honesty |Verdict
+
+|P1 Engineering-first (typestate, SCC, fuel, jtv-wasm, Bun playground, claims ledger)
+|6.8 |7.8 |8.5 |7.8
+|*Recommended ordering spine.* Finds the REPL bypass and depth DoS. Proof layer is fragmented.
+
+|P2 Proof-first (Lean rank certificate, compiled oracle, golden tables)
+|8.0 |8.3 |4.5 |8.0
+|Best totality core. Critical path toolchain-blocked (elan denied). Keep the certificate and oracle.
+
+|P3 Target-first (typed-wasm producer, zero-import islands, checked-trap semantics)
+|7.0 |7.0 |4.5 |8.3
+|Best target semantics (Err ⇔ trap). Critical path needs owner-governed typed-wasm merges.
+
+|P4 Normal-Form Islands (one NF identity per island, independent checker)
+|8.5 |6.8 |6.3 |6.5
+|Most elegant. Had two correctness errors (final-NF overflow bound; Symbolic as LinForm). Corrected below.
+
+|Out-of-the-box: 2LTT re-foundation (Data = object level, Control = meta level)
+|9 (est.) |n/a |2 (est.) |n/a
+|Phase-2 target on top of the NF theory. Not started now.
+
+|Out-of-the-box: divergence as a graded effect (Koka-style `div` in ADR-0009 EffectGrade)
+|8 (est.) |7 (est.) |5 (est.) |n/a
+|ADR candidate after the Rust fix. Makes totality compositional typing instead of a pass.
+|===
+
+=== LABELLED ELEGANT DEFAULT ARM
+
+*P4 Normal-Form Islands, corrected, on P2's rank certificate.*
+
+* Each single-carrier exact Data island has one identity: its NF in the free model of its carrier's additive theory.
+* One well-foundedness argument: a rank certificate that strictly decreases on every call edge (and, for `for`, a structural length measure).
+* Everything else is a projection: support (explicit dependence), reverse class, loss class, cost.
+* Compiled code is checked per artefact by NF equality, not by a compiler proof.
+
+Corrections applied (from the judges and red team):
+
+. The overflow witness is per AST node, never on the final NF. Falsifier: `(x+C)+(-C)` has NF `x`, yet the checked interpreter errors when `x+C` overflows.
+. Symbolic is a word/term algebra (free semigroup over atoms closed under a formal `-(…)`), not a LinForm. The value-models doc says "no identity".
+. Summaries compose by substitution with hash-consed sharing. Words do not compress, so a DAG representation is needed to keep NF size polynomial (H16).
+. Scope: "single-carrier exact islands". PwLin, Float/Complex and mixed-carrier islands have no NF theorem. Their properties are not projections of a proved identity.
+
+=== Recommended hybrid (and the departure)
+
+* *Ordering:* P1. Holes first, cargo-only gates, one checked entry point, one executable ledger.
+* *Soundness core:* P2. Computed purity levels, an emitted `TotalCert`, a Lean-compiled oracle that checks *rank consistency of the extracted call graph*.
+* *Proof architecture:* the elegant arm above.
+* *Target:* P3's checked-trap semantics and zero-import modules, checked by P4's independent `jtv-cert`.
+
+*Departure, stated:* the order follows P1, not the elegant arm's R0 → rank → oracle path. Reasons: the product promise is broken on live paths today (H1, H6, H7, H13–H16), and elan was denied, so the elegant critical path cannot go green locally while every hole fix can. The `TotalCert` schema is frozen early, so the oracle drops in later without rework.
+
+*Second departure (D6):* until typed-wasm has i64 compare/eqz/unreachable, the dependable lowering compiles only islands whose per-node bound holds for *all* i64 inputs. That is close to nothing (any `x + c` with c ≠ 0 fails). JtV has no syntax for input bounds (verified: grammar.pest has only `range_expr` for `for`). So the target lane depends on either (a) typed-wasm IR ops (owner), (b) the wasm-encoder escape hatch emitting sign-test traps now, with tw-verify as a post-check, or (c) an owner-approved checked range refinement `x: Int[lo..hi]` enforced by guard code. The elegant long-term arm is trap-preserving lowering (Err ⇔ trap).
+
+=== Decisions inside the route
+
+[cols="1,2,2,2",options="header"]
+|===
+|Topic |ELEGANT arm |DEPENDABLE arm |Recommended now
+
+|D2 `@pure` meaning (Q26)
+|Three *computed* levels Total ⊑ Pure ⊑ Impure. Data calls need computed Total. Annotations are upper bounds. Bounded `for` over a range or collection evaluated once is Total if its body is Total (length measure in `TotalCert`).
+|`@pure ≡ @total`. *Not* "zero spec change": the conformance fixture `pure_function_with_loop.jtv` says `@pure` may loop, and stdlib `@pure` functions use `for`.
+|Elegant. Security outcome is the same; accept/reject sets differ.
+
+|D3 Recursion
+|Size-change termination
+|Forbid every cycle reaching Total
+|Dependable for v1 (hole is live). Revisit after the X1 census.
+
+|D4 wasm Send/Sync (Q33)
+|Separate `jtv-wasm`; JS callbacks in a `thread_local` registry; a Send+Sync shim captures an index. Re-entry returns an error, never a panic.
+|Drop the `Send + Sync` bound in jtv-core (nothing threads today)
+|Elegant. `#[allow]` under `forbid` is impossible, so P3's "scoped allow" is rejected.
+
+|D6 Compiled overflow (Q29)
+|Trap-preserving lowering, Err ⇔ trap
+|Per-node bound for all i64 inputs, else refuse and run in the embedding
+|Dependable now; it compiles little. See departure above.
+
+|D7 Symbolic/Complex (Q31)
+|Symbolic stays Safe with a *cancellative* inverse: reverse of `x += y` strips the suffix `y` from the word (partial; Err on mismatch, like overflow). Complex → ApproxGroup → Neutral after X11.
+|Symbolic → Neutral (token-admissible; `Snapshot` restores it exactly). Complex → Neutral after X11.
+|Wave 1: fail-closed interim (reject token-free reverse on Symbolic). Owner picks. Recommend dependable for v1: no new partial operation, reuses existing residue machinery. *Rejected:* the earlier "FreeMonoid → Breaking but token-admitted" default. Breaking is rejected even with a token (echo.rs:81-83), so it would ban every Symbolic reverse.
+
+|D8 Reverse-gate projection
+|Token-free iff x ∉ supp(nf e)
+|Keep x ∉ freeVars(e)
+|Dependable until the per-node bound is checked at reverse time. Over checked i64, `(x+y)+(-x)` can error during reverse.
+
+|Scoping (Q39, new)
+|Lexical scoping: function bodies see parameters and locals only; reverse blocks act on the current frame. One ADR shared by Lean, NF and cert.
+|Fail closed: reject free non-parameter identifiers in `@total`/`@pure` bodies; make `reverse` inside functions a check error
+|Dependable in Wave 1; elegant by ADR.
+
+|Name resolution (Q40, new)
+|A resolver pass yields `FnId`s used by checker, purity, interpreter, cert and NF. Duplicate bare names are an error unless qualified.
+|Reject any module function name that collides; stop inserting the bare alias
+|Elegant (small, and every later layer needs FnIds).
+
+|Parser DoS (H13)
+|Left-factor the parenthesis and data/control alternatives; add depth and token limits
+|Depth and size limits only
+|Elegant; gated by a linear-time bench.
+|===
+
+== Proof ladder
+
+*Superseded in part:* the prover for each rung is set by §Reconciliation (estate PROOF-POLICY: theory in Agda, rechecked in Rocq and Lean; system properties in Idris2; Rust in Creusot). The "Home" column below records where each rung was first designed. Isabelle stays unused.
+
+[cols="1,3,1,3",options="header"]
+|===
+|Rung |Content |Home |Gate (exit codes)
+
+|PR0 Hygiene
+|Axiom audit (`#print axioms`; allowed: propext, Quot.sound, Classical.choice). `Pins.lean` with exact-statement pins, so a gate cannot be satisfied by `theorem x : True`. Pin elan-init and idris2-pack to SHAs (both fetched from moving branches today, proof-regression.yml:68, 126). Widen path filter. Remove the "skipping Lean" branch (cheap, though the lakefile exists today).
+|Lean, jtv-lang
+|`grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h -e 'elan/master' -e 'idris2-pack/main' .github/workflows/*.yml \| wc -l` = 0; `grep -hoE '(leanprover/elan\|stefan-hoeck/idris2-pack)/[^/]+/' .github/workflows/*.yml` lists at least 2 fetches and piping it to `grep -vcE '/[0-9a-f]{40}/$'` prints 0 (both elan-init and idris2-pack pinned to a full commit SHA); `lake env lean jtv_proofs/Pins.lean` exits 0 and `grep -c 'True' jtv_proofs/Pins.lean` prints 0 (each pin restates its theorem's exact statement); Lean CI conclusion success
+
+|PR1 JtvRank
+|FunTable, rank certificate (with loop-bound field), decidable `CertValid`, fuel semantics `evalFuel` mirroring the interpreter *under the lexical-scoping ADR*. `checkCert_sound`, `cert_terminates`, `evalFuel_mono`, `data_call_state_preserving`, `islands_no_divergence`, negative `cyclic_table_diverges`.
+|Lean
+|Pins.lean compiles; axiom audit clean; CI success
+
+|PR1' Oracle
+|`lake exe jtv-cert-check` over `jtv check --cert --json`. *Claim limit:* it checks rank consistency of the extracted graph. Extraction stays trusted unless the cert carries a source hash plus call-site spans that `jtv-cert` re-extracts (edge-set equality).
+|Lean exe
+|`scripts/cert-oracle-diff.sh` prints "disagreements: 0"; an edge-deletion mutant is rejected
+
+|PR2 JtvNormalForm
+|LinForm over ℤ (core Lean, no Mathlib): `nf_sound`, `nf_complete`, `dataExpr_equiv_decidable`. Projections: `support_noninterference` (error-free runs, explicit flows), `reverse_gate_sound`, `lossClass_sound`. Separate modules: term-word NF for Symbolic/String/List; ℚ as a setoid. `cost_eq_size` dropped unless cost is defined independently (e.g. step count).
+|Lean
+|Pins compile; audit clean
+
+|PR3 JtvCheckedEval
+|Option-exact i64 (`checked_add`, `checked_neg` incl. `-(i64::MIN)`). `nf_sound_checked` under a per-node bound.
+|Lean
+|Pins compile
+
+|PR4 Golden tables
+|Rust-generated NF, refinement, call-graph, lattice tables checked by `decide`/`rfl`. No `native_decide`.
+|Lean + Rust
+|regenerate then `git diff --exit-code jtv_proofs/Generated`
+
+|PR5 Grammar↔AST table
+|Every Data subtree is DataOnly, per row. Wording: "table-validated (N rows)", never "proved".
+|Lean
+|`cargo run -p xtask -- gen-ast-table --check`
+
+|PR6 JtvWasmTV
+|`tv_sound` with per-node bound and "inputs within bound". Matrix wording: "sound for callers honouring the bound"; never "translation-validated" for unguarded exports.
+|Lean
+|Pins compile
+
+|PR7 Checker refinement
+|`jtv-cert` verdicts vs the Lean spec, mutants included
+|Lean + Rust
+|`cargo test -p jtv-cert --test cert_golden`
+
+|PR8 Reversibility round-trip
+|Rust proptest first (cargo-only, Wave 2), Lean later. Pinned negatives: float `x += 0.1`; Symbolic; String.
+|Rust, then Lean
+|`PROPTEST_CASES=10000 cargo test -p jtv-core --test reversibility_roundtrip_props`
+
+|PR9 Echo framing + loss-class citation
+|ADR-0011 wording; echo-types `EchoJtvAffine.agda` (owner Q2/Q3/Q4). JtvEcho authority unchanged until the owner rules.
+|jtv ADR; Agda in echo-types
+|echo-types `agda.yml` green; `kernel-guard.sh` PASS
+
+|PR10 Implicit flows
+|secret-types instance with pc rule. *Owner reopen:* secret-types D153 defines secrets by a confidentiality label and selects no consumer. TINI leaves the termination channel open; fuel exhaustion is an observable channel.
+|Agda, secret-types
+|secret-types CI at HEAD
+
+|PR11 ABI honesty
+|Mark `dataAdditionOnly` vacuous; DNeg behind purist; ffi/zig recorded as foreign
+|Idris2
+|matrix row "ABI/FFI seal: OPEN"
+|===
+
+Cross-prover bridges:
+
+* *B1* Lean JtvEcho ↔ Agda echo-types: citation-level table only (sound Agda→Lean).
+* *B2, B3, B4* avoided (abstract-store theorem stays in Agda; Coq avoided; tropical stays provenance).
+* *B5, B6* transcription only.
+* *B7* Rust ↔ Lean: test-based golden tables, not a prover bridge.
+
+Research tier (off path): R11 token reversibility over an abstract store; R12 epistemic revelation; R14 cost/occupancy; R15 Harvard choreography; full `compile_correct`; 2LTT.
+
+== Engineering ladder
+
+Every gate is a command with an exit code. Steps are grouped by wave; the session plan has the agent briefs.
+
+[cols="1,3,3",options="header"]
+|===
+|Step |Work |Gate
+
+|E0 Baseline
+|Receipts: 592 tests; examples 3/15; conformance/valid 20/31; stdlib 0/4; wasm32 failure; all probes (H6, H7, H10, H13–H16, H19, H20–H24).
+|`cargo test --workspace` exit 0 with 592 passed; `docs/architecture/probes/run-probes.sh` exit 0 with its table matching the H-register. Comparing the counts is a manual precondition until E4 adds `xtask verify-claims`.
+
+|E0p Read-only census
+|`#[ignore]` probes: prototype SCC analysis that *reports* would-be rejections (incl. for-loop and free-variable reads); carrier round-trip falsifier (X11); parse depth sweep; host stack bisection.
+|`cargo test -p jtv-core -- --ignored census` exits 0 and writes a report
+
+|E1g Grammar (H2, H13)
+|Keyword boundary *inside each alternative* (ordering alone is insufficient: `int_a` begins with `in`); test generated from the keyword list (every keyword rejected; every keyword+`_x` accepted). Left-factor `(`-alternatives; depth/token limits returning `JtvError`.
+|`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn` rejected; `cargo test --release -p jtv-core --test parse_budget` (nest_200 under 50 ms; nest_20000 returns a JtvError)
+
+|E1r Resolve + scope (H14, H15)
+|`resolve.rs` with `FnId`s; fail-closed scoping interim per Q39.
+|`module_shadows_total.jtv`, `total_reads_global.jtv`, `reverse_in_fn.jtv` fail check; resolution proptest passes
+
+|E1b Purity (H6, H7, H17, H18)
+|LFP over SCC condensation; `PurityTable` consumed by a separate DataCallRule pass; bodiless callees Impure; for-over-List typed correctly; `TotalCert` frozen.
+|invalid fixtures non-zero; `callgraph_props` ≥ 1000 graphs; no *new* failures vs the E0 baseline set
+
+|E1c Carrier fail-closed (H10, H19)
+|Reject token-free reverse on Symbolic, String, Bool, Any. Complex pending X11. ADR-0015 drafted, owner-gated.
+|sym_rev3, str_rev, any_rev fail check
+
+|E5 jtv-wasm (H12) — before E1a
+|cdylib, forbid unsafe, index shim, re-entry guard.
+|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs \| wc -l` = 0
+
+|E1a Typestate + fuel (H1, H11, H16)
+|`CheckedProgram`; all hosts routed; `ReversibleInterpreter` sealed; step fuel, depth cap, size budget, per-run reset.
+|trybuild compile-fail: `Interpreter::run(&Program)` does not compile outside jtv-core; deep_recursion exit 1; blowup exits 1 within 1 s; REPL runs 2×MAX_ITERATIONS across inputs
+
+|E1x Triage
+|conformance split into `conformance/parse` (fragments) and `conformance/check` (programs), moved not deleted. stdlib triage.
+|every `conformance/check` file passes; stdlib parses
+
+|E2 Lattice (H8)
+|Preorder proptest over the full lattice; `Any` as a separate consistency relation; `jtv-types` crate.
+|`cargo test -p jtv-types coercion_is_preorder`
+
+|E3 Examples
+|Repair or move to `examples/aspirational/` (moved, never deleted).
+|`cargo test -p jtv-cli --test examples`
+
+|E4 Ledger
+|Extend `verification/PROOF-CAPABILITY-MATRIX.adoc`; `xtask verify-claims`. Downgrades incl. Data totality ("definitional; calls not modelled").
+|`cargo run -p xtask -- verify-claims`
+
+|E6 CI hardening
+|Through `actions.lock` (verified: machine-generated by `gh actions-lock`; a workflow missing from the lock fails at startup). New lanes go into existing lock-listed workflows. Patacl tests stay `cfg`-gated, plus one always-compiled `#[ignore]` sentinel per file.
+|lock consistent; uses-grep on `^\s*-?\s*uses:` excludes comments
+
+|E7 nf.rs
+|Corrections built in; DAG words; per-node bound.
+|`nf_differential` 0 mismatches; `(x+C)+(-C)` falsifier passes
+
+|E8 Grading from NF
+|After X4 and X7 (not X3) and ADR-0011.
+|0 unexplained deltas
+
+|E9 Canonical grammar
+|`xtask gen-grammar` + halting caveat.
+|`gen-grammar --check`
+
+|E10 Epistemic pc (H4)
+|pc taint; NI oracle.
+|0 false-Opaque over ≥ 10^4 programs
+
+|E11 Playground
+|Full CSP (`default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; require-trusted-types-for 'script'`); textContent only; trace and output caps; no auto-run from share-links; recycle Worker after any trap.
+|`bun test playground/app`; axe in headless Chromium with "incomplete" = fail
+
+|E12 Spans/LSP
+|Span refactor moved to Wave 2; LSP features Wave 4; request timeout.
+|`cargo test -p jtv-lsp` ≥ 6
+
+|E13 Extension
+|Plain JS; ReScript archived with owner approval.
+|`bun test editors/vscode`
+
+|E14 Diode corpus
+|Clean-room negatives from jtv-lang's grammar, or transcription after an owner licence grant.
+|≥ 3 (target 10) diode files fail check
+
+|E15–E16 Modules, stdlib tier 2
+|Host IO via a separate capability table + ADR (not coproc).
+|module and stdlib tests
+
+|E17–E19 Target
+|E18-lite producer before or with E17; then `jtv-cert`, cert lanes.
+|build → `jtv-cert verify` → tw-verify VERIFIED; minimum count of *compiled* (not refused) islands
+
+|E20 Dialect, E21 Aletheia
+|E20 after X9 (needs nf.rs). E21 gate pins an explicit Aletheia build at a recorded maa SHA.
+|Bronze MET or owner-only remainder
+|===
+
+== Critical path and parallel lanes
+
+[source,mermaid]
+----
+flowchart LR
+  W0["Wave 0: receipts + read-only census + owner packet"] --> G["E1g grammar H2/H13"]
+  W0 --> R["E1r resolve+scope H14/H15"]
+  W0 --> C["E1c carrier fail-closed H10/H19"]
+  W0 --> WS["E5 jtv-wasm H12"]
+  R --> P["E1b purity H6/H7/H17/H18 + TotalCert"]
+  P --> A["E1a typestate + fuel H1/H11/H16"]
+  WS --> A
+  G --> A
+  C --> A
+  A --> X["E1x triage + census rerun"]
+  X --> E3["E3 examples"]
+  E3 --> PG["E11 playground MVP"]
+  A -.-> LT["Lane T: E2, E4, E10, E14"]
+  A -.-> LN["Lane N: spans, E7, PR8, E18-lite, E17"]
+  A -.-> LP["Lane P: PR0, PR1, PR1', PR2-PR7 (CI)"]
+  A -.-> LC["Lane C: E6, E9, E20"]
+  PG -.-> LL["Lane L: E12, E13"]
+  PG -.-> LG["Lane G: E15, E16, E21"]
+----
+
+Critical path (cargo + Bun only): W0 → {E1g ‖ E1r→E1b ‖ E1c ‖ E5} → E1a → E1x → E3 → E11. About 7–10 focused sessions, longer than the merged plan's 6–8 because seven holes were added.
+
+Which proofs gate which claims:
+
+. Every H-fix precedes every feature. A new hole freezes feature lanes.
+. PR1 green before: modules leave `--unstable-modules`; any "Data provably halts" wording; any typed-wasm totality pass.
+. E10 green before the playground shows epistemic grades. PR10 before "noninterference".
+. PR8 green before reverse demos beyond per-op. E1c before any Symbolic reverse demo.
+. PR2 + E7 before the island card says "proved" ("Rust-witnessed" until then).
+. PR6 + mutants 100% before "translation-validated", and only for guarded or all-i64-bounded exports.
+. PR1' before "rank independently checked". "Extraction independently checked" needs the edge re-extraction.
+
+Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, anytype, absolute-zero re-proof, full compile_correct, 2LTT.
+
+== What else needs creating
+
+[cols="1,3,2",options="header"]
+|===
+|Repo |Artefact (all PROPOSED) |IS-NOT check
+
+|jtv-lang
+|`check.rs`, `resolve.rs`, rewritten `purity.rs`, `nf.rs`, `analysis.rs`; crates `jtv-types`, `jtv-wasm`, `jtv-cert`, `jtv-twasm`, `xtask`; specs `jtv-totalcert-v0.adoc`, `jtv-cert-v0.adoc`, `data-fragment.ebnf`; conformance fixtures for H6–H19; tests (entry_point trybuild, callgraph_props, nf_differential, nf_golden, epistemic_ni_oracle, reversibility_roundtrip_props, carrier_reversal, parse_linear bench, cert mutants); Lean modules JtvAxiomAudit, Pins, JtvRank, JtvNormalForm(+Words, Rat), JtvCheckedEval, JtvWasmTV, Generated/*; ADRs 0011–0018.
+|Inside IS (reference implementation + its proofs). New docs carry CC-BY-SA-4.0; new code MPL-2.0, per the LICENSING.adoc table.
+
+|jtv-lang ADRs
+|0011 Echo framing; 0012 checked entry point / API break; 0013 computed purity and recursion; 0014 scope-arrest superseded; 0015 ADR-0010 D2 amendment (Symbolic/Complex); 0016 jtvcert sidecar; 0017 lexical scoping and name resolution; 0018 host IO capabilities (separate from coproc); candidate 0019 divergence-as-effect.
+|0015 amends a do_not_reopen ADR: owner-gated.
+
+|echo-types
+|`EchoJtvAffine.agda` + bridge row (drafts)
+|Inside IS: it hosts consumer bridges.
+
+|secret-types
+|JtV instance with pc rule (draft)
+|Owner reopen of D153 / "no consumer selected".
+
+|typed-wasm
+|Validator in gate (H9); i64 compare/eqz/unreachable; capabilities field; L15-C; TotalModule; all-features CI (drafts only)
+|Never depends on jtv. Wire changes need ADR + abi bump.
+
+|typell
+|consume `jtv-types` at a pinned SHA; `Any` consistency split
+|Extend-not-redefine; no rename.
+
+|jtv-halting-islands-ct
+|README truth fix; nesting-bomb negative; licence grant
+|Frozen POC; no code moves.
+
+|januskey / absolute-zero / occupancy-types
+|`JK_ERR_UNIMPLEMENTED`; discharge or quarantine 5 `believe_me`; private `MkH`
+|Their own holes; owner-run.
+|===
+
+== Type, logic and proof tropes worth pursuing
+
+[cols="2,3,2",options="header"]
+|===
+|Trope |What it buys |Issue it could finally solve
+
+|Parse, don't validate (typestate)
+|`CheckedProgram` makes unchecked execution a compile error.
+|H1 for good, including future hosts.
+
+|Least fixpoint over SCC condensation (abstract interpretation)
+|Purity is computed, not assumed. Annotations become checked upper bounds.
+|H6, H7, H17 at source.
+
+|Rank / size-change certificates (proof-carrying code)
+|One measure for source checker, Lean semantics and wasm TotalModule gate.
+|"Data halts" wording; typed-wasm totality pass.
+
+|Normal forms in free models (equivalence as identity)
+|One object per island; decidable equivalence; projections instead of separate theorems.
+|R3/R9/R13-Data/R10-classifier fragmentation; translation validation by NF equality.
+
+|Option-exact refinement of checked arithmetic
+|Overflow becomes part of the semantics.
+|D6/D8 overflow caveats; Err ⇔ trap parity.
+
+|Cancellative semigroups / term algebras
+|Exact token-free inverse for Symbolic without changing its algebra.
+|H10 (elegant arm of Q31).
+
+|Lexical scoping as a stated semantics (closure conversion if globals stay)
+|Function summaries over parameters become sound.
+|H15; prerequisite for NF, cert, NI oracle.
+
+|Gradual typing: consistency ≠ subtyping
+|Keeps the coercion preorder law real while `Any` stays usable.
+|H8 and typell's inherited hole.
+
+|Graded effects (Koka `div`, ADR-0009 EffectGrade)
+|Totality by typing, compositional across modules.
+|D3 long term; module-level totality.
+
+|2LTT (two-level type theory)
+|Diode and Data totality follow from the level split.
+|The whole Harvard claim, Phase 2.
+
+|Independent checker / N-version parsing (LCF/PCC style)
+|Smallest trust base for compiled islands.
+|Trust in pest, jtv-core and lowering; H2-class grammar bugs.
+
+|Packrat or Pratt parsing (linear-time by construction)
+|No backtracking blow-up.
+|H13 (out-of-the-box arm).
+|===
+
+== Experiments and benches before big work
+
+[cols="1,2,2,2,2",options="header"]
+|===
+|ID |Hypothesis |Method |Metric |Decides
+
+|X1 (Wave 0)
+|The computed-Total rule rejects few legitimate programs once bounded `for` is admitted
+|Read-only prototype SCC + loop analysis over examples, stdlib, conformance
+|false rejections per corpus; island buckets IntZ/ℕ/ℚ/words/PwLin/none
+|Q26 fallout, D3 urgency, E18 scope, Wave 1 STOP rule
+
+|X11 (Wave 0)
+|Every carrier graded Safe round-trips exactly
+|forward-then-reverse per carrier incl. String/List/Bool/Any
+|exact round-trip rate
+|H10/H19 scope, Complex grade, Q31
+
+|X-parse (Wave 0)
+|Parse time is exponential in nesting today and linear after left-factoring
+|doubling depths 1, 2, 4, … to 5000 (20 s timeout), then bounded bisection after the first timeout; debug and release
+|ms per depth; exit codes
+|H13 fix choice (left-factor vs Pratt)
+
+|X-depth (Wave 0/1)
+|One MAX_CALL_DEPTH is not safe across hosts
+|bisect max safe depth: native debug/release, wasm32 under bun
+|depth with ≥ 2× headroom
+|per-profile defaults
+
+|X-scope (Wave 0)
+|Few corpus functions read non-parameter variables
+|census of free identifiers in function bodies
+|count per corpus
+|Q39 arm
+
+|X2
+|Checked entry adds < 20% median; REPL < 5 ms
+|criterion
+|median overhead
+|memoisation need
+
+|X3
+|wasm ≤ 1 MiB gzipped, cold start p50 < 100 ms
+|build variants
+|bytes, ms
+|editor choice, feature split
+
+|X4
+|Final-NF bound is insufficient; per-node bound suffices
+|generated `(x+C)+(-C)` and `-(i64::MIN)` islands
+|counterexamples found
+|D6, D8
+
+|X4b
+|Under the all-i64 per-node rule almost no island is compilable
+|count over corpus
+|compilable fraction
+|urgency of typed-wasm i64 compares vs wasm-encoder path
+
+|X5
+|`decide` scales to 5k rows in ≤ 60 s
+|1k/5k/20k tables
+|seconds
+|table size vs oracle exe
+
+|X6
+|Statement spans give ≥ 90% correct lines with ≤ 300 lines churn
+|spike
+|% correct
+|span granularity
+
+|X7
+|Grader has ≥ 1 false-Opaque before the fix and 0 after
+|NI oracle over inputs −3..3
+|false-Opaque count
+|wording; PR10 urgency
+
+|X8
+|`jtv-cert` rejects every mutant, including a deleted call edge
+|mutation suite
+|kill rate 100%
+|whether it may be called a checker
+
+|X9
+|ℕ-carrier reverse decisions equal reversible.rs decisions
+|differential (needs nf.rs)
+|disagreements 0
+|Q30
+
+|X10
+|Playground survives hostile programs and share-links
+|headless Chromium: infinite loop, deep recursion, list growth, blow-up tree, nesting bomb, `<img onerror>` string
+|terminated ≤ 2 s; 0 post-load requests; inert output
+|web fuel profile; caps
+
+|X12
+|thread_local index shim builds for wasm32 with no unsafe
+|compile check
+|exit 0
+|D4
+
+|X13
+|Lean CI leg is fast enough for CI-only proving
+|time the *Lean leg* (red-team: ~18 s; Idris leg ~21 min, stated-only)
+|minutes
+|whether to split the Lean workflow; no extra elan ask if fast
+
+|X14
+|typed-wasm TotalModule has few false positives; L15-C kills mutants
+|scratch clone only
+|FP count, kill rate
+|owner's typed-wasm decision
+|===
+
+== Cross-repo and beyond-repo action list
+
+[cols="1,3,1,2",options="header"]
+|===
+|Repo / scope |Action |Owner-only? |Blocking
+
+|typed-wasm
+|H9: run `wasmparser::Validator` in `gate_module` and `self_verify`, with the stray-End fixture
+|yes (PR) |any claim that a `VerifiedModule` is core-valid
+
+|typed-wasm
+|i64 compare/eqz/xor/unreachable; capabilities field; L15-C; gate wiring; `GatePolicy::TotalModule`; all-features CI; add `jtv` to CONTRACT_FORBIDDEN_DEPS; doc truth (WasmGC, Zig, STATE, 22 vs 33)
+|yes |E18 trap lowering (now on the target critical path)
+
+|typell
+|consume `jtv-types`; `Any` consistency split; regression `list_int_to_list_string_rejected`; no rename
+|PR needs owner |typell-jtv soundness
+
+|echo-types
+|rebase on remote main; `EchoJtvAffine.agda` + bridge row; maintenance items (PROOF-STATUS label, verify.sh, EchoJanusBridge paths, CLAUDE.md bridge path)
+|yes (Q2–Q4) |PR9
+
+|secret-types
+|JtV instance with pc rule and declassification; termination-channel note; substrate mislabel
+|yes (reopen of D153 scope; Q15) |PR10, "noninterference" wording
+
+|epistemic-types
+|graded-revelation module
+|yes (Q16) |research tier
+
+|jtv-halting-islands-ct
+|README truth fix; licence grant for diode cases (placeholder LICENSE); nesting-bomb negative
+|yes (licence: Q20) |E14 transcription
+
+|occupancy-types
+|Agda CI lane; private `MkH` smart constructor
+|yes |R14; any token-template citation
+
+|januskey
+|unimplemented FFI ops return `JK_ERR_UNIMPLEMENTED`, not `JK_OK` (main.zig:288, 305 verified)
+|yes |any citation as a reversible-IO precedent
+
+|absolute-zero
+|discharge or quarantine 5 `believe_me` (Layout.idr:270; DivMod.idr:92, 104, 114, 124 verified); reconcile coordination.k9; Agda CNO re-proof; stdlib bump; CNO.agda AGPL header
+|yes |R11; any CNO citation
+
+|anytype
+|stale abi.ipkg path
+|yes |its own golden path (off JtV path)
+
+|maa-framework / Aletheia
+|pinned Aletheia release or reusable action; receipt-presence check; absolute-zero gitlink
+|yes |E21 gate
+
+|standards / estate CI
+|SHA policy owned by `actions.lock`; reusable SHA-pinned Lean/Agda provisioning; rsr-template generator fix (Q19); jtvcert pattern as estate proposal
+|yes |E6, PR0
+
+|GitHub settings
+|required checks once green (Q24)
+|yes |doctrine 5
+
+|Estate policy (jtv-lang)
+|deno.yml removal; ReScript archive; CLAUDE.md refresh (GPL-3.0 misstatement; ReScript primary; Nix fallback); wokelang Deno mandate; LICENSING.adoc L25 self-contradiction
+|yes |E6 gate, E13
+
+|Hosting
+|where the playground is published; public at MVP; Q38 location
+|yes (stop-first) |E11 release
+
+|Session environment
+|signing key acceptable under doctrine 9 (Q36); toolchain install permission; valid GitHub credentials (gh token invalid)
+|yes |every landing; every PR
+|===
+
+== Owner decisions
+
+Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconciled questions:
+
+[cols="1,3,2,2",options="header"]
+|===
+|Q |Question |Default arm |Label
+
+|Q26
+|Meaning of `@pure`; Data-call totality; recursion; bounded `for`
+|Computed levels; Data calls need computed Total; bounded `for` with Total body is Total; forbid cycles in v1
+|ELEGANT (levels) + DEPENDABLE (no recursion)
+
+|Q27
+|Certificate format
+|jtv-owned `.jtvcert` sidecar + independent checker
+|ELEGANT and DEPENDABLE
+
+|Q28
+|Toolchain permission (elan/Lean 4.12.0; Agda 2.7.0.1 + stdlib 2.4 for JtV's own `theory/agda/`; Agda 2.6.3 + stdlib 2.3 only for the echo-types and absolute-zero drafts; wasm-bindgen-cli)
+|Ask once; else CI-only, rows say "CI-pending"
+|DEPENDABLE
+
+|Q29
+|Compiled-island overflow
+|Per-node bound for all i64 or refuse now; trap-preserving lowering long-term
+|DEPENDABLE now; ELEGANT later
+
+|Q30
+|"Choose the coefficient semiring" (ℕ/ℤ/ℚ) as ADR-0008/0010 restatement
+|Yes, after X9
+|ELEGANT
+
+|Q31
+|Symbolic/Complex grading (ADR-0010 D2 amendment)
+|Fail-closed interim now. Then: ELEGANT = cancellative suffix-strip inverse, Symbolic stays Safe; DEPENDABLE = Symbolic Neutral via Snapshot. Complex Neutral after X11. OUT-OF-THE-BOX = free abelian group over atoms.
+|Recommend DEPENDABLE for v1
+
+|Q32
+|Accept the semver-0.x API break (`Interpreter::run(&CheckedProgram)`)
+|Yes
+|ELEGANT
+
+|Q33
+|wasm host adapter
+|jtv-wasm + index shim
+|ELEGANT
+
+|Q34
+|Canonical conformance corpus; parse/check split
+|`conformance/` canonical, split into `parse/` and `check/`; the duplicate becomes a pointer
+|DEPENDABLE
+
+|Q35
+|Playground hosting, public at MVP
+|Not public until Gate 3 green
+|DEPENDABLE
+
+|Q36
+|Is the environment signer (`/tmp/code-sign`) acceptable under doctrine 9, or must the owner register a key?
+|Gate becomes "commit has a signature AND GitHub reports verified=true", or a local allowedSignersFile with an owner-approved key
+|DEPENDABLE; *blocks every landing*
+
+|Q37
+|Divergence-as-effect ADR candidate
+|Record after E1b; do not implement in v1
+|ELEGANT (deferred)
+
+|Q38 (new)
+|Where the Bun playground lives: absorb the vendored `jtv-playground` identity, a new top-level `web/`, or the `jtv-playground` repo
+|New jtv-lang-owned dir; vendored copy archived by the owner
+|ELEGANT
+
+|Q39 (new)
+|Function scoping semantics
+|Lexical scoping ADR (elegant); Wave 1 fail-closed interim (dependable)
+|ELEGANT default; DEPENDABLE interim
+
+|Q40 (new)
+|Duplicate function names across modules
+|Resolver with FnIds; duplicates are an error unless qualified
+|ELEGANT
+
+|Q41 (new)
+|Host IO mechanism: new capability table + ADR, or explicitly reopen coproc D1
+|New mechanism
+|ELEGANT (keeps D1 closed)
+
+|Q42 (new)
+|Licence grant for halting-islands diode cases
+|Grant one-line note, or clean-room rewrite
+|DEPENDABLE (clean-room) until granted
+
+|Q43 (new)
+|Who regenerates `actions.lock` for new or edited workflows
+|Owner runs `gh actions-lock` once per batch
+|DEPENDABLE
+
+|Q44 (new)
+|What a reversible `if` may contain (H20–H22, audit F1–F3)
+|Branches are `+=`/`-=` only (the audit's recommendation); fail closed until decided
+|ELEGANT and DEPENDABLE
+|===
+
+*Top five, by what they block:* Q36 (signing; nothing lands), Q26 (purity semantics; Wave 1 core), Q39 (scoping; every semantic layer), Q31 (Symbolic; reverse claims and ADR-0010), Q28 (toolchains; proof lanes).
+
+== Contradictions and stale docs to fix
+
+=== jtv-lang
+
+* WASM "DONE" vs broken bindings; coproc 12/12 vs 5/12; LSP DONE vs stub; 531 vs 592 tests; four version numbers; 72% vs ~45–55%.
+* "Data totality Verified" vs a definitional Lean statement and live H6/H7.
+* `@pure` defined three ways (purity.rs:13, ast.rs:247, conformance fixture).
+* ADR-0010 D2 (Symbolic Safe) vs value-models doc (Breaking); number.rs:409 pins Safe.
+* Two "authoritative" matrices would exist if E4 added a new one; extend the existing one instead.
+* LICENSING.adoc L25 says code headers are CC-BY-SA-4.0; its table and the .rs files say MPL-2.0 (owner-only).
+* Root CLAUDE.md "LICENSE GPL-3.0" vs MPL-2.0 (owner-only); .claude/CLAUDE.md ReScript primary and Nix fallback; deno.yml present; wokelang handoff mandates Deno.
+* ADR-0007/0009 graded-comonad framing (retracted upstream); "tropical modality".
+* Reversibility status and mechanism docs disagree; dead `.md` references; grammar.ebnf called canonical but incomplete.
+* `playground/` carries another repo's identity and a ReScript stack list.
+
+=== Other repos
+
+* jtv-halting-islands-ct: Python README vs Rust code; "45/45 tests" vs 0; placeholder LICENSE.
+* typed-wasm: STATE stale; README WasmGC and Zig codegen; 22 vs 33 modules; "007 lowering DONE" vs echo-types.
+* echo-types: PROOF-STATUS comonad label, module count and date; broken verify.sh; bridge path `.md` vs `.adoc`.
+* typell: AFFIRMATION says it does not build (it does); ANCHOR placeholders.
+* secret-types, occupancy-types: substrates describe rsr-template-repo.
+* absolute-zero: "six provers" headlines; DECISION-T7 counts 10 `believe_me` (5 real uses); coordination.k9 "no-dangerous-proof-patterns" vs those 5.
+* januskey: counts and ffi header; maa-framework: "microkernel", test counts, Deno-only Mustfile, PMPL.
+* Full list: graph.md §6.
+
+[appendix]
+== Red-team findings applied or rejected
+
+Each finding was checked against the repos on 2026-11-04 where a check was possible. Duplicates are merged.
+
+[cols="3,1,3",options="header"]
+|===
+|Finding |Verdict |Note
+
+|Signing gate cannot pass (`%G?`=E; empty key file; `/tmp/code-sign`)
+|Applied
+|Verified. Q36 is now a Wave 0 blocker; gate restated.
+
+|Wave 1 cannot test the wasm half of H1 natively (cfg-gated)
+|Applied
+|Verified. E5 moves ahead of E1a.
+
+|conformance/valid 11/31 fail; conformance_tests uses PurityChecker only
+|Applied
+|Verified (`conformance_tests.rs:10, 98`). Parse/check split; baseline gate "no new failures".
+
+|Parser DoS (reported three times)
+|Applied as H13
+|Verified (0.93 s at depth 16; exit 134 at 20000).
+
+|D7 "FreeMonoid → Breaking but token" is contradictory
+|Applied
+|Verified (`admissible_with_residue` rejects Breaking). Default replaced.
+
+|D7 elegant arm: suffix-strip (one finding) vs Neutral (another)
+|Partly applied
+|Both kept. Suffix-strip labelled ELEGANT (exact, token-free). Neutral labelled DEPENDABLE and recommended for v1. The finding that called Neutral "elegant" is rejected on labelling only.
+
+|Symbolic is a free semigroup, not a monoid
+|Applied
+|Doc says "no identity"; Symbolic has a formal neg.
+
+|H10 is an ADR-0010 amendment, owner-gated; X11 first
+|Applied
+|Verified ADR-0010 L58.
+
+|Wave 1 files not disjoint; Data-call rule reads declared purity at L325
+|Applied
+|Verified. A2 then A1 serialised; E2 moved to Lane T.
+
+|`ReversibleInterpreter` is a second public unchecked surface
+|Applied
+|Verified. trybuild compile-fail replaces the grep.
+
+|X1/X11 must run before the semantics change; stdlib fails
+|Applied
+|Verified stdlib 4/4. Census is now Wave 0, read-only.
+
+|D6 needs input bounds that do not exist
+|Applied
+|Verified grammar. Departure stated; typed-wasm i64 ops on target path; E18-lite before E17.
+
+|SHA pinning must go through `actions.lock`; comment line breaks the gate
+|Applied
+|Verified lock header and deno.yml:34.
+
+|proof-regression has no dispatch/branch trigger; Idris dominates latency
+|Applied
+|Triggers verified. Latencies stated-only (gh token invalid). Split Lean into its own workflow (needs lock regeneration, Q43).
+
+|Removing the "skipping Lean" branch is cosmetic
+|Rejected (partly)
+|The lakefile exists, so it is not urgent. It still guards against a silent green if the lakefile moves; kept as a cheap PR0 item.
+
+|Spans to Wave 2
+|Applied
+|Ordering judgement.
+
+|Unscheduled items; E8 gate cites X3
+|Applied
+|E8 now after X4/X7; PR8 in Wave 2; E20 depends on E7.
+
+|Wave 0 owner packet; playground identity (Q38)
+|Applied
+|Verified `playground/CLAUDE.md:7`.
+
+|Depth calibration per host
+|Applied
+|X-depth added.
+
+|`aletheia` not on PATH
+|Applied
+|Verified.
+
+|for-over-List mistyped
+|Applied as H18
+|Verified.
+
+|Keyword fix wrong for `intrinsic`/`insn`
+|Applied
+|Keyword order verified.
+
+|Bounded `for` should be Total; "@pure ≡ @total" is not zero spec change
+|Applied
+|Verified purity.rs:159-166 and the fixture.
+
+|Data-totality overclaim and vacuous theorem
+|Applied
+|Verified.
+
+|Gates check theorem names, not statements
+|Applied
+|Pins.lean added.
+
+|Lean oracle does not remove trust in extraction
+|Applied
+|Claim narrowed; edge re-extraction option.
+
+|New files MPL-2.0 contradicts LICENSING
+|Applied
+|Verified. Docs CC-BY-SA-4.0, code MPL-2.0; L25 contradiction flagged owner-only.
+
+|Stdlib IO via coproc reopens ADR-0001 D1
+|Applied
+|Verified. Separate mechanism (Q41).
+
+|Second "only" matrix
+|Applied
+|Verified existing authority clause.
+
+|Halting-islands transcription is a licence decision
+|Applied
+|Verified placeholder LICENSE (Q42).
+
+|JtvEcho authority change reopens do_not_reopen
+|Applied
+|Only wording changes in E4.
+
+|PR10 cannot cover If/While flows
+|Partly applied
+|D153 scope verified; owner reopen recorded. Rejected in part: TINI with a pc rule does cover terminating implicit flows. Only the termination (and fuel-exhaustion) channel is missed.
+
+|Support gate errors at reverse time over i64
+|Applied
+|freeVars gate kept until the bound is checked at reverse time.
+
+|`cfg_attr(ignore)` breaks patacl tests
+|Applied
+|Verified file-level `#![cfg(feature = "patacl")]`. Count, do not assert 13.
+
+|Grep gates miss chained calls; `testing` feature is a bypass
+|Applied
+|Verified wasm.rs:73-74.
+
+|NF coverage overclaim
+|Applied
+|Scoped to single-carrier exact islands.
+
+|axe in happy-dom misses contrast
+|Applied
+|Chromium lane.
+
+|PR0 glob inconsistency
+|Applied
+|One recursive command excluding `.lake`.
+
+|Module function shadows top-level `@total`
+|Applied as H14
+|Verified probe.
+
+|Dynamic scoping; reverse in functions uses globals
+|Applied as H15
+|Verified probes.
+
+|Exponential work in acyclic trees; iteration count not reset; NF size
+|Applied as H16
+|`run()` no-reset verified; timing re-measured by the lead (16.5 s at 23 functions).
+
+|Bodiless callees trusted
+|Applied as H17
+|ast purity fields verified; dispatch lines stated-only.
+
+|`forbid` line defeats the `unsafe` grep
+|Applied
+|Gate rewritten.
+
+|`carrier_echo` fails open for String/Any
+|Applied as H19
+|Verified probes. List `+` is rejected at check, so List is not affected today.
+
+|`Any` makes the preorder test vacuous
+|Applied
+|Verified typechecker.rs:53-54.
+
+|elan fetched from `master`
+|Applied
+|Verified proof-regression.yml:68.
+
+|januskey / absolute-zero / occupancy holes missing from §11
+|Applied
+|Verified JK_OK scaffolds, 5 `believe_me`, `MkH`. Rule added: no citation row may point at an artefact with an open soundness hole.
+
+|jtvcert privacy overclaim (constants appear in NF)
+|Applied
+|Reworded; optional commitment mode.
+
+|Playground share-link attack surface
+|Applied
+|Full CSP, textContent, caps, no auto-run.
+|===
+
+[appendix]
+== Sources
+
+* `CROSS-REPO-MAP-2026-11-04.adoc` (this directory; called graph.md elsewhere in this file) §1 dependency graph (adjacency + Mermaid); §2 proof ladder R0–R20 and bridges B1–B7; §3 engineering ladder E0–E24; §4 critical-path candidates CP-A/B/C; §5 what else needs creating; §6 contradictions; §7 owner questions Q1–Q25 (defaults carried unchanged except Q15, now an explicit secret-types reopen, and Q20, now including LICENSING.adoc L25).
+* The 16 per-repo maps (session data, condensed into the cross-repo map; not committed) — jtv-lang (implementation), jtv-lang (design), jtv-halting-islands-ct, anytype, typell, typed-wasm, echo-types, epistemic-types, tropical-types, choreographic-types, occupancy-types, secret-types, residual-evidence-types, absolute-zero, januskey, maa-framework.
+* Probes: `probes/` in this directory (rec_total, mutual, pure_loop_in_data, sym_rev3, kw, shadow, shadow_loop, dyn, fn_rev, str_rev, any_rev, blowup). Re-run with `docs/architecture/probes/run-probes.sh`; it also regenerates the nested-parenthesis sweep for H13.
+* Repo files read this session: jtv-lang grammar.pest, echo.rs, typechecker.rs, purity.rs, ast.rs, interpreter.rs, reversible.rs, lib.rs, wasm.rs, number.rs, conformance_tests.rs, coproc_lower_tests.rs, proof-regression.yml, actions.lock, deno.yml, LICENSING.adoc, ADR-0001, ADR-0010, value-models doc, SECURITY_PROOFS.adoc, PROOF-CAPABILITY-MATRIX.adoc, JtvTheorems.lean, JtvEcho.lean, playground/CLAUDE.md; typed-wasm gate and codegen; typell rules.rs; januskey main.zig; absolute-zero ABI; occupancy-types Occ.idr; secret-types ADR 0004; halting-islands LICENSE.
