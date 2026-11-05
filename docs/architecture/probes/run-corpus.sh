@@ -15,8 +15,8 @@
 # baseline and is not 0 now. Files new since the baseline are reported but never count.
 #
 # Exit codes: 0 = no new failures (or a recording run); 1 = new failures, and the last line is
-# "new failures: N"; 2 = an input could not be prepared (no jtv binary, an empty corpus, or an
-# unreadable or malformed baseline).
+# "new failures: N"; 2 = an input could not be prepared (no jtv binary; a missing, unreadable
+# or empty corpus root; a failed find; or an unreadable or malformed baseline).
 set -u
 baseline=""
 if [[ "${1:-}" == "--baseline" ]]; then baseline="${2:-}"; shift 2 || { echo "--baseline needs a file" >&2; exit 2; }; fi
@@ -26,8 +26,17 @@ if [[ -n "$baseline" ]]; then
   [[ -f "$baseline" && -r "$baseline" && -s "$baseline" ]] || { echo "unreadable or empty baseline $baseline" >&2; exit 2; }
   if grep -qvE '^[^ ]+ [0-9]+ [0-9]+$' "$baseline"; then echo "malformed baseline $baseline" >&2; exit 2; fi
 fi
-mapfile -t files < <(find examples conformance/valid crates/jtv-core/stdlib -name '*.jtv' -type f 2>/dev/null | LC_ALL=C sort)
-[[ "${#files[@]}" -gt 0 ]] || { echo "empty corpus (run from the repository root)" >&2; exit 2; }
+# Every root must exist and contribute at least one program, and find must succeed: a missing,
+# unreadable or empty section would otherwise vanish from the baseline for good.
+roots=(examples conformance/valid crates/jtv-core/stdlib)
+files=()
+for root in "${roots[@]}"; do
+  [[ -d "$root" && -r "$root" ]] || { echo "missing or unreadable corpus root $root (run from the repository root)" >&2; exit 2; }
+  listing="$(find "$root" -name '*.jtv' -type f)" || { echo "find failed under $root" >&2; exit 2; }
+  [[ -n "$listing" ]] || { echo "empty corpus root $root" >&2; exit 2; }
+  mapfile -t -O "${#files[@]}" files <<<"$listing"
+done
+mapfile -t files < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
 current="$(for f in "${files[@]}"; do
   timeout 30 "$jtv" check "$f" >/dev/null 2>&1; c=$?
   timeout 30 "$jtv" run "$f" >/dev/null 2>&1; r=$?
