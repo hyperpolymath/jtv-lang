@@ -745,7 +745,7 @@ Every item below is PROPOSED and does not exist today.
 
 == 7. Owner questions, each with a default arm
 
-* *Q1. Prover home.*
+* *Q1. Prover home.* *Superseded:* the estate PROOF-POLICY (owner ruling 2026-10-26, summarised in jtv-lang `CLAUDE.md`) decides this. Theory goes to Agda, rechecked in Rocq and Lean. See LANGUAGE-SYSTEM-ARCHITECTURE.adoc §Reconciliation. The text below is the pre-policy analysis, kept for the record.
 ** Default (labelled most elegant long-term arm): one home per theorem. Lean holds JtV operational, parser and refinement theorems. Agda, the family kernel, holds grade, reversibility, IFC and epistemic semantics. Idris2 holds ABI layout only. No Coq or Isabelle. Lean↔Agda is linked by a citation-level correspondence table.
 ** Why: it keeps the 3,175 LOC Lean suite, reuses the landed Agda theory, and avoids mechanised bridges B2–B4.
 ** Alternative: migrate everything to Agda. That is more uniform, but it discards working Lean and reverses a jtv do_not_reopen.

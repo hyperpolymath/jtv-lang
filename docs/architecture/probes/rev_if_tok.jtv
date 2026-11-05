@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+x = 0
+reversible {
+  if x == 0 {
+    x = x + 1
+  }
+} -> tok
+print(x)
+reverse tok
+print(x)

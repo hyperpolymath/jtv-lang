@@ -22,7 +22,7 @@ Batch these into one message. Nothing in Wave 1 lands without Q36.
 . *Q39* scoping (lexical ADR vs fail-closed interim). *Q40* duplicate names.
 . *Q31* Symbolic/Complex (with the corrected arms).
 . *Q32* API break. *Q34* corpus location and parse/check split. *Q38* playground location.
-. *Q28* toolchains (below). *Q43* who regenerates `actions.lock`.
+. *Q28* toolchains (below). *Q43* who regenerates `actions.lock`. *Q44* what a reversible `if` may contain (H20–H22).
 . GitHub credentials: `gh auth status` reports the `GH_TOKEN` invalid. PRs need either a valid token or the GitHub MCP tools.
 
 === Toolchains
@@ -50,6 +50,16 @@ Batch these into one message. Nothing in Wave 1 lands without Q36.
 |PR0–PR7 locally
 |user-approved elan install (pinned installer SHA, not `curl\|sh` from `master`)
 |CI-only. Rows say "CI-pending", never "verified". No retry via another route.
+
+|Agda 2.7.0.1 + stdlib 2.4 (jtv-lang `theory/agda/`, per its receipt)
+|PR1–PR3 theory rungs (Agda is the theory source of truth)
+|user-approved install, or rely on `agda-proof-policy.yml` in CI
+|CI-only; rows stay `Open` until a receipt exists
+
+|Rocq, Creusot, Kani
+|theory rechecks; Rust contracts; `unsafe`/FFI
+|user-approved install
+|record "not run"; no grade claimed
 
 |Agda 2.6.3 + stdlib 2.3 (+ absolute-zero)
 |echo-types drafts (PR9)
@@ -156,6 +166,11 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |Resolver with FnIds; duplicate bare names rejected; fail-closed scoping interim (free identifiers in `@total`/`@pure` bodies rejected; `reverse` in functions rejected); purity LFP over SCC; bodiless callees Impure; bounded `for` per Q26; `jtv check --cert --json`.
 |fixtures `total_self_recursion`, `total_mutual_recursion`, `pure_loop_in_data_call`, `module_shadows_total`, `total_reads_global`, `reverse_in_fn`, `data_calls_extern_intrinsic` all exit non-zero on check; `callgraph_props` ≥ 1000 graphs; no new failures vs the W0 baseline set
 
+|G-reversible-if (H20, H21, H22) — owner design call first
+|`echo.rs`, `reversible.rs`, `grammar.pest` (`reversible_stmt` inside branches), `tests/reversible_if.rs`, ADR draft
+|Audit's recommended arm: reversible `if` branches are `+=`/`-=` only, which retires H20 and H21 together. Tokenless `reverse {}` over `if` either records the branch bit or is rejected at check (H22). Pending the owner's call, fail closed: reject `if` inside `reverse {}` and `reversible {}`.
+|probes rev_if_overwrite, rev_if_tok, rev_if_tokenless exit non-zero on check; round-trip tests for the admitted forms pass
+
 |D-carrier (H10, H19 interim)
 |`echo.rs`, `number.rs:409` test, `tests/carrier_reversal.rs`, ADR-0015 draft (owner-gated)
 |Fail closed: token-free reverse rejected on Symbolic, String, Bool and Any-typed targets. Complex unchanged unless X11 shows a failure. No Lean text edit in this wave.
@@ -172,7 +187,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |`grep -rnwE 'sorry\|admit\|native_decide' --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; script runs locally on the source (axiom check itself is CI-pending without Lean)
 |===
 
-*Adversarial reviewer (one agent, no worktree, read-only).* Writes falsifiers first, before implementers finish: mutual f→g→f; Data → `@total` → `@pure` loop; recursion via `M::f`; shadowing; caller-local read; reverse in function; impure-in-Data via wasm and REPL; Symbolic, String and Any reverse; deep Impure recursion; blow-up tree; nesting bomb; extern intrinsic in Data; re-entrant JS callback. Any surviving falsifier blocks merge.
+*Adversarial reviewer (one agent, no worktree, read-only).* Writes falsifiers first, before implementers finish: mutual f→g→f; Data → `@total` → `@pure` loop; recursion via `M::f`; shadowing; caller-local read; reverse in function; impure-in-Data via wasm and REPL; Symbolic, String and Any reverse; deep Impure recursion; blow-up tree; nesting bomb; extern intrinsic in Data; re-entrant JS callback; overwrite inside a reversible `if`; guard that flips under its own branch. Any surviving falsifier blocks merge.
 
 *Merge order.* A → D → B → C → E → F. E rebases on B and C. The lead resolves conflicts.
 
@@ -245,9 +260,9 @@ Then re-run the census and compare with W0.
 |E11 per Q38; full CSP; textContent only; trace/output caps; no auto-run from share-links; Worker recycled after any trap; X10 in headless Chromium.
 |`bun test playground/app`; axe "incomplete" counts as failure; 0 post-load requests
 
-|C4 Lean
-|PR1 against the frozen TotalCert spec and the scoping ADR. Diff the spec against the Rust rule first. Max 3 CI round-trips.
-|Pins compile in CI; else record "drafted, CI red"
+|C4 Proofs
+|PR1 in `theory/agda/` first, against the frozen TotalCert spec and the scoping ADR; Lean recheck after. Diff the spec against the Rust rule first. Max 3 CI round-trips.
+|`theory/agda/check.sh` exit 0 with a new receipt in `verification/receipts/`; else record "drafted, CI red"
 
 |C5 producer first
 |E18-lite: minimal Int-island lowering (all-i64 per-node rule, or wasm-encoder sign-test traps if the owner approves path (c)). Then E17 `jtv-cert` against real output; X8 mutants incl. deleted call edge.
@@ -424,6 +439,8 @@ Notes on the skeleton:
 * Any non-empty `newHoles` freezes later waves.
 
 == Theory, proving and solving ladders
+
+Prover choice follows LANGUAGE-SYSTEM-ARCHITECTURE.adoc §Reconciliation (estate PROOF-POLICY). Where the table below says Lean for a theory rung, read: Agda first, Lean and Rocq as rechecks.
 
 [cols="2,1,2,2",options="header"]
 |===

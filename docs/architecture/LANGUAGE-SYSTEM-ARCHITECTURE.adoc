@@ -168,6 +168,53 @@ flowchart LR
   ANY["anytype (golden path red)"] -.->|off-path| CORE
 ----
 
+== Reconciliation with main (#123) and the estate proof policy
+
+This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before it and change parts of it: #123 (commit `2c9b74c`, 2026-11-03) and the proof policy summarised in this repo's `CLAUDE.md`. The normative source is `hyperpolymath/standards` `3-practice/PROOF-POLICY.adoc` (owner ruling 2026-10-26). Where this plan disagrees with them, they win.
+
+=== What changed
+
+* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. They are at *Grade 3* per `verification/receipts/2026-11-01-agda.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Not re-run here: no Agda toolchain in this session.
+* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and carry no grade. Quote grades only from `verification/PROOF-STATUS.adoc` §2.1b, in the estate vocabulary (`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1`), never as percentages.
+* *Aeneas is not adoptable* for the proof-to-interpreter gap (audit §9.4). This plan's test-based refinement tables (B7, PR4) stay; they are evidence, not a proof.
+
+=== Prover assignment (supersedes the "Home" column below and Q1)
+
+[cols="2,2,3",options="header"]
+|===
+|Rung |Obligation class (policy) |Prover
+
+|PR1 rank certificate, fuel semantics, `cert_terminates`
+|Theory (soundness of a calculus)
+|Agda in `theory/agda/`, rechecked in Rocq and Lean
+
+|PR2 normal forms, projections; PR3 checked arithmetic
+|Theory
+|Agda, rechecked in Rocq and Lean
+
+|PR1' oracle, PR5 grammar↔AST table, `.jtvcert` format, PR6 translation validation statement
+|Totality, dispatch, round-trip and wire-format properties of this system
+|Idris2
+
+|`check()`, purity LFP, resolver, `jtv-cert` checker, interpreter refinement (PR4, PR7)
+|Contracts on first-party Rust
+|Creusot; Kani for the `jtv-wasm` shim and any `unsafe`/FFI
+
+|PR8 reversibility round-trip
+|Rust proptest now; the theorem is Theory
+|proptest, then Agda (extending `Jtv.Reversal`/`Jtv.Conditional`)
+
+|PR9, PR10
+|Family theory
+|Agda in echo-types / secret-types (unchanged)
+|===
+
+The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim Grade 2i until the statement reconciliation in `verification/PROOF-STATUS.adoc` is done.
+
+=== Audit findings added to the hole register
+
+The 2026-11-01 audit (`docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1) lists F1–F7. F4 is this plan's H1; F7 was closed by #123. The others become H20–H24 below. F1–F3 were reproduced in this session with the probes `rev_if_overwrite`, `rev_if_tok` and `rev_if_tokenless`.
+
 == Ground truth today
 
 === Headline numbers (verified unless marked)
@@ -284,6 +331,31 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |Reverse gate fails open. `carrier_echo` maps "no additive algebra" (String, Bool) to `Safe`. `reverse { s += t }` on Strings passes check and fails at runtime ("Cannot negate String"). `Any`-typed reverse also passes check.
 |echo.rs:118-131; probes str_rev.jtv, any_rev.jtv
 |verified
+
+|H20 (audit F1)
+|Echo grades a plain assignment inside a reversible `if` branch as `Safe`, so an overwrite is admitted into a reversible block.
+|echo.rs:223-232; probe rev_if_overwrite.jtv: check 0; `x = 5`, branch sets 7, `reverse tok` leaves 7
+|verified
+
+|H21 (audit F2)
+|Branch assignments in `reversible {}` are not recorded, so `reverse tok` silently skips the branch.
+|reversible.rs:313-340; probe rev_if_tok.jtv: check 0; 0 becomes 1, `reverse tok` leaves 1
+|verified
+
+|H22 (audit F3)
+|Tokenless `reverse {}` over an `if` is not the identity and raises no error.
+|reversible.rs:203-224; probe rev_if_tokenless.jtv: check 0; prints 1 with no inverse applied
+|verified (silent no-op observed)
+
+|H23 (audit F5)
+|`check_reversibility` is dead in production; the effective gate is a differently shaped Echo check.
+|reversible.rs:471
+|stated (audit)
+
+|H24 (audit F6)
+|Tokenless `reversible {}` keeps an unreachable log forever.
+|interpreter.rs:466-470
+|stated (audit)
 |===
 
 === Stated vs verified (selected)
@@ -415,7 +487,7 @@ Corrections applied (from the judges and red team):
 
 == Proof ladder
 
-One prover home per theorem. Lean = JtV operational. Agda = family theory. Idris2 = ABI layout only. No Coq, no Isabelle.
+*Superseded in part:* the prover for each rung is set by §Reconciliation (estate PROOF-POLICY: theory in Agda, rechecked in Rocq and Lean; system properties in Idris2; Rust in Creusot). The "Home" column below records where each rung was first designed. Isabelle stays unused.
 
 [cols="1,3,1,3",options="header"]
 |===
@@ -1021,6 +1093,11 @@ Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconci
 |Who regenerates `actions.lock` for new or edited workflows
 |Owner runs `gh actions-lock` once per batch
 |DEPENDABLE
+
+|Q44 (new)
+|What a reversible `if` may contain (H20–H22, audit F1–F3)
+|Branches are `+=`/`-=` only (the audit's recommendation); fail closed until decided
+|ELEGANT and DEPENDABLE
 |===
 
 *Top five, by what they block:* Q36 (signing; nothing lands), Q26 (purity semantics; Wave 1 core), Q39 (scoping; every semantic layer), Q31 (Symbolic; reverse claims and ADR-0010), Q28 (toolchains; proof lanes).
