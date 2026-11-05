@@ -196,10 +196,10 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 * `cargo test --workspace` (≥ 592 adjusted for moved tests; 0 failed)
 * `cargo clippy --workspace --all-targets -- -D warnings`
 * `cargo fmt --all -- --check`
-* `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`
-* every Wave 1 fixture non-zero on check; every falsifier of a merged lane meets its declared expectation and runner (reject-check, reject, accept, pass or reject-or-roundtrip; see the skeleton's EXPECT_MEANING). Checker holes use reject-check: failing only at run time does not count.
+* `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`, then `wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm` (wasm-bindgen-cli at the Cargo.lock version, 0.2.118); the bun falsifiers load `JTV_WASM_JS` = that `jtv_wasm.js`. Checked locally with a stub crate: the bindings load and a bun test passes.
+* every Wave 1 fixture non-zero on check; every falsifier of a merged lane meets its declared expectation and runner (reject-check, reject-run, reject-before-run, reject, accept, pass or reject-or-roundtrip; see the skeleton's EXPECT_MEANING). Checker holes use reject-check: failing only at run time does not count. Runtime limits (H11 call depth, H16 fuel) use reject-run: `jtv check` must pass and the run must stop with a JtvError, so a static ban does not count. Host falsifiers print `PREFIX_RAN` first and use reject-before-run: the sentinel must never appear, which proves the checkers ran before `Interpreter::run`.
 * `cargo test --release -p jtv-core --test parse_budget`, re-run here because `reversible-if` edits `grammar.pest` after the grammar lane
-* `cargo build -p jtv-cli`, then `docs/architecture/probes/run-probes.sh --gate` exits 0 (no probe hangs or aborts; the native binary is built first because `cargo test` does not produce it)
+* `cargo build -p jtv-cli`, then `docs/architecture/probes/run-probes.sh --gate` exits 0 (no probe step ends with anything but 0 or 1, so timeouts, panics (101) and aborts (134) all fail; the native binary is built first because `cargo test` does not produce it)
 * a full Gate 1 needs all eight Wave 1 lanes merged, including `proof-hygiene` and its axiom audit; a STOP-subset Gate 1 needs exactly `grammar`, `wasm` and `entry-interim`, and judges only their falsifiers
 * the verifier gets the falsifier directory, the census test and the baseline receipt, and recomputes the counts rather than trusting them
 * lane readiness also needs the reviewer's own per-file falsifier results (one per expected file, matching expect and runner) and signed commits under the Q36 ruling
@@ -430,6 +430,12 @@ const GATE = {
 // expect (default 'reject'):
 //   'reject-check'        .jtv program: jtv check itself rejects it (exit != 0). A checker hole
 //                         is closed only at check time; failing later at run time does not count.
+//   'reject-run'          .jtv program: jtv check exits 0 and jtv run stops with a JtvError (exit 1)
+//                         within 10 s. A runtime limit (call depth, fuel) must be what stops it;
+//                         a static ban at check time fails.
+//   'reject-before-run'   .jtv program that prints PREFIX_RAN before its bad Data call: the host
+//                         rejects it and PREFIX_RAN never appears, so the check ran before
+//                         Interpreter::run rather than a later runtime guard.
 //   'reject'              .jtv program: rejected by jtv check (exit != 0), or jtv run stops with
 //                         a JtvError (exit 1). Exit 0 or a host abort (134) is a failure.
 //   'accept'              .jtv program: jtv check and jtv run both exit 0.
@@ -452,12 +458,12 @@ const RAW_FALSIFIERS = [
   { file: 'reverse_in_function.jtv', lane: 'purity', expect: 'reject-check' },
   { file: 'extern_intrinsic_in_data.jtv', lane: 'purity', expect: 'reject-check' },
   { file: 'reentrant_js_callback.test.js', lane: 'wasm', expect: 'pass' },
-  { file: 'impure_in_data_repl.jtv', lane: 'entry-interim', runner: 'repl' },
+  { file: 'impure_in_data_repl.jtv', lane: 'entry-interim', runner: 'repl', expect: 'reject-before-run' },
   { file: 'impure_in_data_wasm.test.js', lane: 'entry-interim', expect: 'pass' },
   { file: 'impure_in_data_wasm_collect.test.js', lane: 'entry-interim', expect: 'pass' },
-  { file: 'impure_in_data_debug.jtv', lane: 'entry-interim', runner: 'jtv-debug' },
-  { file: 'deep_impure_recursion.jtv', lane: 'entry-interim' },
-  { file: 'blowup_tree.jtv', lane: 'entry' },
+  { file: 'impure_in_data_debug.jtv', lane: 'entry-interim', runner: 'jtv-debug', expect: 'reject-before-run' },
+  { file: 'deep_impure_recursion.jtv', lane: 'entry-interim', expect: 'reject-run' },
+  { file: 'blowup_tree.jtv', lane: 'entry', expect: 'reject-run' },
   { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if', expect: 'reject-check' },
   { file: 'reversible_if_guard_flip.jtv', lane: 'reversible-if', expect: 'reject-check' },
   { file: 'reversible_if_tok_roundtrip.jtv', lane: 'reversible-if', expect: 'reject-or-roundtrip' },
@@ -474,7 +480,7 @@ const exactFalsifiers = (results, list) => Array.isArray(results) && results.len
 // The Q36 signature check, quoted into every prompt that verifies commits.
 const signingCheck = (range) => `Check that every commit in ${range} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail.`
 // One shared definition, quoted into every prompt that judges a falsifier.
-const EXPECT_MEANING = "Expectations: 'reject-check' = jtv check itself exits != 0; passing check and failing only at run time is a failure. 'reject' = a .jtv program that jtv check rejects (exit != 0) or that jtv run stops with a JtvError (exit 1); exit 0 or a host abort (134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = rejected by jtv check, or runs with exit 0 and its before/after prints match. Runners: 'jtv' = jtv check then jtv run; 'repl' = feed the file to jtv repl on stdin (the REPL must reject the program); 'jtv-debug' = run the file through jtv-debug (it must reject before executing); 'bun' = bun test on the file. Judge each file only with its own runner and report that runner in the result."
+const EXPECT_MEANING = "Expectations: 'reject-check' = jtv check itself exits != 0; passing check and failing only at run time is a failure. 'reject-run' = jtv check exits 0 and jtv run exits 1 with a JtvError within 10 s; a check-time rejection or an abort (134) fails. 'reject-before-run' = the host rejects the program and the sentinel PREFIX_RAN, printed before the bad call, never appears in its output. 'reject' = a .jtv program that jtv check rejects (exit != 0) or that jtv run stops with a JtvError (exit 1); exit 0 or a host abort (134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = rejected by jtv check, or runs with exit 0 and its before/after prints match. Runners: 'jtv' = jtv check then jtv run; 'repl' = feed the file to jtv repl on stdin (the REPL must reject the program); 'jtv-debug' = run the file through jtv-debug (it must reject before executing); 'bun' = bun test on the file, after cargo build -p jtv-wasm --target wasm32-unknown-unknown --release and wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm, with JTV_WASM_JS set to the absolute path of target/jtv-wasm-js/jtv_wasm.js in the worktree. Judge each file only with its own runner and report that runner in the result."
 
 // Every lane report must list these commands (exact labels), after the lane's own gate,
 // which is reported under the exact label laneGateLabel(n).
@@ -484,6 +490,8 @@ const LANE_REQUIRED_COMMANDS = [
   'cargo fmt --all -- --check',
 ]
 
+// JS bindings for the bun falsifiers, at a fixed path they load through JTV_WASM_JS.
+const WASM_JS_CMD = 'wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm'
 // The commands Gate 1 must run, each exactly once, by this exact label. The trybuild
 // target exists only once the entry lane has merged, so it is required only then.
 const GATE1_COMMANDS = [
@@ -491,6 +499,7 @@ const GATE1_COMMANDS = [
   'cargo clippy --workspace --all-targets -- -D warnings',
   'cargo fmt --all -- --check',
   'cargo build -p jtv-wasm --target wasm32-unknown-unknown --release',
+  WASM_JS_CMD,
   ...(Array.isArray(MERGED) && MERGED.includes('entry') ? ['cargo test -p jtv-core --test entry_point_ui'] : []),
   'cargo test --release -p jtv-core --test parse_budget',
   'cargo build -p jtv-cli',
@@ -510,7 +519,7 @@ const LANES = {
     gate: 'symbolic/string/bool/any reverse falsifiers non-zero on jtv check; cargo test -p jtv-core carrier' },
   wasm: { prereqs: [], owns: 'crates/jtv-wasm/**, wasm.rs move, lib.rs re-exports, workspace Cargo.toml',
     task: 'H12: jtv-wasm cdylib, forbid(unsafe_code), thread_local index shim, re-entry guard returning JtvError.',
-    gate: "cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; grep -c '^#![forbid(unsafe_code)]' crates/jtv-wasm/src/lib.rs = 1; grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs piped to wc -l = 0; cargo tree -p jtv-core -e normal piped to grep -c wasm-bindgen = 0" },
+    gate: "cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm; grep -c '^#![forbid(unsafe_code)]' crates/jtv-wasm/src/lib.rs = 1; grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs piped to wc -l = 0; cargo tree -p jtv-core -e normal piped to grep -c wasm-bindgen = 0" },
   purity: { prereqs: [], owns: 'resolve.rs, purity.rs, typechecker.rs, ast.rs comment, fixtures, callgraph_props.rs, totalcert spec, ADR-0013/0017 drafts',
     task: 'H14, H15 interim, H6, H7, H17, H18: resolver with FnIds; fail-closed scoping; purity LFP over SCC; Data-call rule on computed level; bodiless callees Impure; for over List; jtv check --cert --json.',
     gate: 'all purity falsifiers non-zero; callgraph_props >= 1000 graphs; no new failures vs the W0 baseline' },
@@ -544,7 +553,7 @@ if (A.mode === 'wave0') {
     () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md and copy the test file to ${SCRATCH}/census/census.rs so later gates can run the same census. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip.`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep, debug and release: depths 1, 2, 4, 8, ... up to 5000 with a 20 s timeout per run; at the first timeout in a mode, stop doubling and bisect between the last passing and first timing-out depth (at most 12 further runs), then report the largest depth under 20 s and the timings. Never resume a sequential sweep past a timeout. Also bisect the max safe call depth (X-depth). No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
-    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. ${EXPECT_MEANING} (keyword_prefix_identifier is the program "int_a = 42; print(int_a)" printing 42; reversible_if_tok_roundtrip prints x, runs a tokened reversible if whose branch does x += 1, reverses the token, and prints x again). The .test.js files are bun tests on the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program whose Data expression calls an impure function; impure_in_data_debug.jtv is the same program run through jtv-debug; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. ${EXPECT_MEANING} (keyword_prefix_identifier is the program "int_a = 42; print(int_a)" printing 42; reversible_if_tok_roundtrip prints x, runs a tokened reversible if whose branch does x += 1, reverses the token, and prints x again). The .test.js files are bun tests that load the bindings with require(process.env.JTV_WASM_JS) (generated by: ${WASM_JS_CMD}): impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program that prints PREFIX_RAN and then evaluates a Data expression calling an impure function; each asserts a rejection and that PREFIX_RAN never appears in the output. impure_in_data_repl.jtv and impure_in_data_debug.jtv are the same program (PREFIX_RAN first); deep_impure_recursion and blowup_tree must pass jtv check today and stop only at run time; impure_in_data_debug.jtv is the same program run through jtv-debug; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
   ])
   return { mode: 'wave0', reports, newHoles: holesOf(reports) }
 }
