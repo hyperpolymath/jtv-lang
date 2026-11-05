@@ -203,7 +203,7 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 * Gate 1's `base` is the immutable SHA of the pre-Wave-1 commit that Wave 0 recorded in `receipts/pre-wave1.sha`, not the moving integration branch or any later ancestor; Gate 1 checks that `base` equals that receipt and that `git merge-base --is-ancestor <base> HEAD` holds, and every commit in `<base>..HEAD` must be signed
 * the WASM dependency boundary (`WASM_BOUNDARY_CMD`) re-runs at Gate 1, because a later manifest edit or conflict resolution could reintroduce `wasm-bindgen`
 * Gate 1 judges one immutable commit: `args.integrationSha`. Both the gate agent and the verifier check out exactly that SHA. The first Gate 1 command proves it is an ancestor of the freshly fetched integration branch, the second proves `HEAD` equals it, and the result names it as the only commit eligible to merge, so a push to the integration branch between the two agents cannot mix two commits' results
-* every lane listed in `merged` must really be in that history, at the exact commit its reviewer judged. Each lane's implementer reports `head_sha` and its reviewer reports `reviewed_sha`, and readiness requires them to match. A `lanes` run returns them as `reviewedShas`, and the lead passes them to Gate 1 as `args.laneShas`. Gate 1 then runs `git merge-base --is-ancestor <reviewed sha> HEAD` for each lane, so commits pushed after review cannot ride in unreviewed
+* every lane listed in `merged` must really be in that history, at the exact commit its reviewer judged. Each lane's implementer reports `head_sha` and its reviewer reports `reviewed_sha`, and readiness requires them to match. A `lanes` run returns them as `reviewedShas`, and the lead passes them to Gate 1 as `args.laneShas`. For each lane Gate 1 first checks that the reviewed SHA is still the lane branch tip on `origin` (`git ls-remote`), then runs `git merge-base --is-ancestor <reviewed sha> HEAD`. A commit pushed to the lane after review moves the tip and fails the first check, and an older SHA such as `base` fails it too, so unreviewed lane commits cannot ride in
 * more generally, Gate 1 re-runs every merged lane's own gate commands on the integrated branch (deduplicated), so a merge or conflict resolution cannot silently undo a lane's invariant: the Lean pins, `#![forbid(unsafe_code)]` and the `unsafe` grep, the H23 deletion, jtv-debug streaming, and so on
 * `list-tests.sh --baseline receipts/tests-w0.txt` checks that every test name recorded at Wave 0 still exists, because a count alone cannot show it (new lane tests can hide a deleted one)
 * *trust boundary:* each falsifier's `ok` is still an agent's judgement of the output it observed; no code re-derives it from exit statuses or the `PREFIX_RAN` sentinel. Lane readiness and Gate 1 both require two independent agents to agree, which narrows that dependency but does not remove it. The planned replacement is a fixed falsifier runner, `probes/run-falsifiers.sh`, built in Wave 0 alongside the falsifiers. It runs each file with its runner and writes a machine record per file (check and run exit codes, and whether `PREFIX_RAN` appeared). The script then derives `ok` from that record for each `expect`, and agents only relay it. Until that runner lands, agent-reported `ok` values are the trust boundary for lane readiness and Gate 1.
@@ -213,7 +213,7 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 * each lane's branch is fixed by the workflow (`claude/jtv-w1-<lane>`); a report naming another branch is not ready, and the reviewer fetches the fixed branch
 * lane readiness also needs an empty `outside_paths` list (not just `ownership_ok`), the reviewer's own read of `cargo_test_passed` from the W0 receipt matching `baselineTests`, and passing prerequisite-ancestry commands
 * H23 is deletion-only: the Echo grade is the single reversibility gate, and the check is that no `fn check_reversibility` exists in any crate; the `reversible-if` lane may move the `check_reversibility` cases in `contract_tests.rs` onto the Echo gate
-* Wave 0 writes its decision reports to `receipts/x11.md` (carrier round-trips) and `receipts/depth.md` (parser and call depth); the carrier, grammar, entry-interim and entry lanes must find them (`test -s`), follow them, and reviewers refute a lane that ignores them
+* Wave 0 writes its decision reports to `receipts/x11.md` (carrier round-trips) and `receipts/depth.md` (parser and call depth); Wave 0 seals only if `depth.md` has exactly four lines, one per required `<key>: <integer>`, and `x11.md` has exactly twelve, one full row per carrier. The carrier, grammar, entry-interim and entry lanes must find them (`test -s`), follow them, and reviewers refute a lane that ignores them
 * the wasm dependency boundary is checked with `cargo tree --target all`, so a wasm32-only `wasm-bindgen` dependency in another crate is still caught
 * reviewers diff and check signatures against the detached lane `HEAD`, because the prerequisite fetches overwrite `FETCH_HEAD`
 * `cargo clippy --workspace --all-targets -- -D warnings`
@@ -581,7 +581,10 @@ const W0_X11_CARRIERS = ['Int', 'Hex', 'Binary', 'Rational', 'Symbolic', 'Comple
 const W0_ARTIFACT_COMMANDS = [
   ...['receipts/w0.json', 'receipts/pre-wave1.sha', 'receipts/corpus-w0.txt', 'receipts/tests-w0.txt', 'receipts/x11.md', 'receipts/depth.md', 'census-w0.md', 'census/census.rs'].map((f) => `test -s ${SCRATCH}/${f}`),
   `grep -Eqx '[0-9a-f]{40}' ${SCRATCH}/receipts/pre-wave1.sha`,
-  ...['parse_max_depth_debug', 'parse_max_depth_release', 'call_max_safe_depth_debug', 'call_max_safe_depth_release'].map((k) => `grep -Eqx '${k}: [0-9]+' ${SCRATCH}/receipts/depth.md`),
+  // Exact line counts plus one line per required key or carrier: no duplicate or extra line passes.
+  `test "$(grep -c '' ${SCRATCH}/receipts/depth.md)" -eq 4`,
+  ...['parse_max_depth_debug', 'parse_max_depth_release', 'call_max_safe_depth_debug', 'call_max_safe_depth_release'].map((k) => `test "$(grep -Ecx '${k}: [0-9]+' ${SCRATCH}/receipts/depth.md)" -eq 1`),
+  `test "$(grep -c '' ${SCRATCH}/receipts/x11.md)" -eq ${W0_X11_CARRIERS.length}`,
   ...W0_X11_CARRIERS.map((c) => `test "$(grep -Ecx '${c} (Safe|NotSafe) (Safe|NotSafe) (roundtrips|fails)' ${SCRATCH}/receipts/x11.md)" -eq 1`),
   ...FALSIFIERS.map((f) => `test -s ${SCRATCH}/falsifiers/${f.file}`),
 ]
@@ -723,9 +726,14 @@ const GATE1_COMMANDS = [...new Set([
     `git fetch origin ${A.integration} && git merge-base --is-ancestor ${A.integrationSha} FETCH_HEAD`,
     `test "$(git rev-parse HEAD)" = ${A.integrationSha}`,
   ] : []),
-  // Each merged lane's reviewed commit (args.laneShas, from the lanes run) must be in the history.
+  // Each merged lane's reviewed commit (args.laneShas, from the lanes run) must still be the lane
+  // branch's tip, so no commit was added after review, and must be in the integration history.
+  // ls-remote leaves FETCH_HEAD alone; a deleted branch prints nothing and fails the equality.
   ...(A.mode === 'gate1' && A.laneShas && typeof A.laneShas === 'object' && Array.isArray(MERGED)
-    ? MERGED.filter((n) => LANES[n]).map((n) => `git merge-base --is-ancestor ${A.laneShas[n]} HEAD`) : []),
+    ? MERGED.filter((n) => LANES[n]).flatMap((n) => [
+      `test "$(git ls-remote origin refs/heads/${laneBranch(n)} | cut -f1)" = ${A.laneShas[n]}`,
+      `git merge-base --is-ancestor ${A.laneShas[n]} HEAD`,
+    ]) : []),
   ...GATE1_BASE_COMMANDS,
   ...(Array.isArray(MERGED) ? MERGED : []).flatMap((n) => (LANES[n] ? LANES[n].gate : [])),
 ])]

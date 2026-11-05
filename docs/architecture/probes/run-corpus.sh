@@ -21,13 +21,16 @@
 set -u
 # crashed CODE: true when CODE is neither 0 (success) nor 1 (a handled JtvError).
 crashed() { local code="$1"; [[ "$code" -ne 0 && "$code" -ne 1 ]]; }
+# split_record LINE: set rec_f, rec_c and rec_r from "<path> <check exit> <run exit>". The two
+# exit codes are taken from the end, so a path that contains spaces stays whole.
+split_record() { local line="$1"; rec_r="${line##* }"; line="${line% *}"; rec_c="${line##* }"; rec_f="${line% *}"; }
 baseline=""
 if [[ "${1:-}" == "--baseline" ]]; then baseline="${2:-}"; shift 2 || { echo "--baseline needs a file" >&2; exit 2; }; fi
 jtv="${1:-target/debug/jtv}"
 [[ -x "$jtv" ]] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
 if [[ -n "$baseline" ]]; then
   [[ -f "$baseline" && -r "$baseline" && -s "$baseline" ]] || { echo "unreadable or empty baseline $baseline" >&2; exit 2; }
-  if grep -qvE '^[^ ]+ [0-9]+ [0-9]+$' "$baseline"; then echo "malformed baseline $baseline" >&2; exit 2; fi
+  if grep -qvE '^.+ [0-9]+ [0-9]+$' "$baseline"; then echo "malformed baseline $baseline" >&2; exit 2; fi
 fi
 # Every root must exist and contribute at least one program, and find must succeed: a missing,
 # unreadable or empty section would otherwise vanish from the baseline for good.
@@ -48,22 +51,26 @@ current="$(for f in "${files[@]}"; do
   printf '%s %s %s\n' "$f" "$c" "$r"
 done)"
 if [[ -z "$baseline" ]]; then printf '%s\n' "$current"; exit 0; fi
+# Index both lists by the full path, so paths are compared as whole strings.
+declare -A cur_c cur_r in_base
+while IFS= read -r line; do split_record "$line"; cur_c[$rec_f]="$rec_c"; cur_r[$rec_f]="$rec_r"; done <<<"$current"
 new=0
-while read -r f bc br; do
-  line="$(printf '%s\n' "$current" | awk -v f="$f" '$1 == f')"
-  if [[ -z "$line" ]]; then echo "NEW FAILURE $f: missing (baseline check $bc, run $br)"; new=$((new + 1)); continue; fi
-  read -r _ c r <<<"$line"
+while IFS= read -r line; do
+  split_record "$line"; f="$rec_f"; bc="$rec_c"; br="$rec_r"; in_base[$f]=1
+  if [[ -z "${cur_c[$f]+set}" ]]; then echo "NEW FAILURE $f: missing (baseline check $bc, run $br)"; new=$((new + 1)); continue; fi
+  c="${cur_c[$f]}"; r="${cur_r[$f]}"
   # Crashes are counted separately below, for every file, so skip them here.
   if crashed "$c" || crashed "$r"; then continue; fi
   if [[ "$bc" -eq 0 && "$c" -ne 0 ]] || [[ "$br" -eq 0 && "$r" -ne 0 ]]; then
     echo "NEW FAILURE $f: check $bc->$c, run $br->$r"; new=$((new + 1))
   fi
 done < "$baseline"
-while read -r f c r; do
+for f in "${files[@]}"; do
+  c="${cur_c[$f]}"; r="${cur_r[$f]}"
   # Any status other than 0 or 1 is a crash (101 panic, 134 abort, 124 timeout, ...) and fails,
   # whatever the baseline recorded, including for a program that already failed with 1 or is new.
   if crashed "$c" || crashed "$r"; then echo "NEW FAILURE $f: crash (check $c, run $r)"; new=$((new + 1)); fi
-  awk -v f="$f" '$1 == f { found = 1 } END { exit !found }' "$baseline" || echo "new file (not counted unless it crashes): $f"
-done <<<"$current"
+  [[ -n "${in_base[$f]+set}" ]] || echo "new file (not counted unless it crashes): $f"
+done
 echo "new failures: $new"
 [[ "$new" -eq 0 ]]
