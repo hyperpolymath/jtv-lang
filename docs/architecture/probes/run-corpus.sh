@@ -37,6 +37,8 @@ for root in "${roots[@]}"; do
   mapfile -t -O "${#files[@]}" files <<<"$listing"
 done
 mapfile -t files < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+# The CLI exits 1 for a file it cannot read, which would look like a failing program.
+for f in "${files[@]}"; do [[ -f "$f" && -r "$f" ]] || { echo "unreadable corpus file $f" >&2; exit 2; }; done
 current="$(for f in "${files[@]}"; do
   timeout 30 "$jtv" check "$f" >/dev/null 2>&1; c=$?
   timeout 30 "$jtv" run "$f" >/dev/null 2>&1; r=$?

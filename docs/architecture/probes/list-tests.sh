@@ -23,15 +23,17 @@ if [[ -n "$baseline" ]]; then
 fi
 # cargo prints "Running <src> (<path>)" and "Doc-tests <crate>" on stderr before each binary's
 # listing, so merging the streams keeps every test under the binary it belongs to.
+# Duplicate lines are kept: two packages can hold a same-named target and test, and comm on
+# sorted (not deduplicated) lists compares them as multisets, so losing one copy is caught.
 raw="$(cargo test --workspace -- --list 2>&1)" || { echo "cargo test --list failed" >&2; exit 2; }
 current="$(printf '%s\n' "$raw" | awk '
   /^[[:space:]]+Running / { p = $NF; gsub(/[()]/, "", p); sub(/.*\//, "", p); sub(/-[0-9a-f]+$/, "", p); bin = p; next }
   /^[[:space:]]+Doc-tests / { bin = "doc-" $2; next }
   / (test|bench)$/ && bin != "" { name = $0; sub(/: (test|bench)$/, "", name); print bin "::" name }
-' | LC_ALL=C sort -u)"
+' | LC_ALL=C sort)"
 [[ -n "$current" ]] || { echo "no tests listed" >&2; exit 2; }
 if [[ -z "$baseline" ]]; then printf '%s\n' "$current"; exit 0; fi
-missing="$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$baseline") <(printf '%s\n' "$current"))"
+missing="$(LC_ALL=C comm -23 <(LC_ALL=C sort "$baseline") <(printf '%s\n' "$current"))"
 n=0
 if [[ -n "$missing" ]]; then
   while read -r t; do echo "MISSING $t"; n=$((n + 1)); done <<<"$missing"
