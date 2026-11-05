@@ -14,12 +14,12 @@
 # falsifiers, not by this script.
 set -u
 gate=0
-if [ "${1:-}" = "--gate" ]; then gate=1; shift; fi
+if [[ "${1:-}" == "--gate" ]]; then gate=1; shift; fi
 here="$(cd "$(dirname "$0")" && pwd)"
 jtv="${1:-$here/../../../target/debug/jtv}"
 bad=0
-crashed() { [ "$1" -ge 124 ]; }
-[ -x "$jtv" ] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
+crashed() { local code="$1"; [[ "$code" -ge 124 ]]; }
+[[ -x "$jtv" ]] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
 printf '%-20s %6s %6s  %s\n' probe check run 'output (all lines, joined with |)'
 for p in "$here"/*.jtv; do
   n="$(basename "$p" .jtv)"
@@ -39,5 +39,5 @@ for d in ${NEST_DEPTHS:-8 12 16 18}; do
   if crashed "$e"; then bad=$((bad + 1)); fi
 done
 echo; echo "hung or crashed steps: $bad"
-if [ "$gate" -eq 1 ] && [ "$bad" -ne 0 ]; then exit 1; fi
+if [[ "$gate" -eq 1 && "$bad" -ne 0 ]]; then exit 1; fi
 exit 0
