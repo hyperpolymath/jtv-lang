@@ -12,12 +12,15 @@
 # Without --baseline it prints one line per file, "<path> <check exit> <run exit>", sorted;
 # Wave 0 saves that as the baseline. With --baseline it reruns the corpus and counts a new
 # failure for every baseline file that is now missing, or whose check or run exit was 0 in the
-# baseline and is not 0 now. Files new since the baseline are reported but never count.
+# baseline and is not 0 now. Any current status other than 0 or 1 (a crash, panic or timeout)
+# also counts, whatever the baseline recorded. New files count only if they crash.
 #
 # Exit codes: 0 = no new failures (or a recording run); 1 = new failures, and the last line is
 # "new failures: N"; 2 = an input could not be prepared (no jtv binary; a missing, unreadable
 # or empty corpus root; a failed find; or an unreadable or malformed baseline).
 set -u
+# crashed CODE: true when CODE is neither 0 (success) nor 1 (a handled JtvError).
+crashed() { [[ "$1" -ne 0 && "$1" -ne 1 ]]; }
 baseline=""
 if [[ "${1:-}" == "--baseline" ]]; then baseline="${2:-}"; shift 2 || { echo "--baseline needs a file" >&2; exit 2; }; fi
 jtv="${1:-target/debug/jtv}"
@@ -50,12 +53,17 @@ while read -r f bc br; do
   line="$(printf '%s\n' "$current" | awk -v f="$f" '$1 == f')"
   if [[ -z "$line" ]]; then echo "NEW FAILURE $f: missing (baseline check $bc, run $br)"; new=$((new + 1)); continue; fi
   read -r _ c r <<<"$line"
+  # Crashes are counted separately below, for every file, so skip them here.
+  if crashed "$c" || crashed "$r"; then continue; fi
   if [[ "$bc" -eq 0 && "$c" -ne 0 ]] || [[ "$br" -eq 0 && "$r" -ne 0 ]]; then
     echo "NEW FAILURE $f: check $bc->$c, run $br->$r"; new=$((new + 1))
   fi
 done < "$baseline"
-while read -r f _ _; do
-  awk -v f="$f" '$1 == f { found = 1 } END { exit !found }' "$baseline" || echo "new file (not counted): $f"
+while read -r f c r; do
+  # Any status other than 0 or 1 is a crash (101 panic, 134 abort, 124 timeout, ...) and fails,
+  # whatever the baseline recorded, including for a program that already failed with 1 or is new.
+  if crashed "$c" || crashed "$r"; then echo "NEW FAILURE $f: crash (check $c, run $r)"; new=$((new + 1)); fi
+  awk -v f="$f" '$1 == f { found = 1 } END { exit !found }' "$baseline" || echo "new file (not counted unless it crashes): $f"
 done <<<"$current"
 echo "new failures: $new"
 [[ "$new" -eq 0 ]]
