@@ -27,7 +27,7 @@ Edge kinds: theory-feeds, proof-shadow-of, target-of, ABI/FFI-seals, consumes, b
 |jtv-lsp |consumes |jtv-core |EXISTS but a stub. Diagnostics are pinned at Range 0:0, hover is a constant string, formatting returns None. 0 tests.
 |jtv-debug |consumes |jtv-core |EXISTS but a stub. Breakpoints are recorded; stepping fields are `#[allow(dead_code)]`, "not yet wired up". 0 tests.
 |WASM bindings (crates/jtv-core/src/wasm.rs, 756 LOC) |consumes |jtv-core interpreter |EXISTS. `JtvWasm::run` and `run_and_collect` skip TypeChecker and PurityChecker (~L70/L88).
-|WASM bindings |blocked-by |wasm32 toolchain + static breakage |MISSING-TOOLCHAIN. Statically, `lib.rs` has `#![forbid(unsafe_code)]` while wasm.rs has `unsafe impl Send/Sync for JsCallback`, and `use js_sys::...` appears with no js-sys dependency declared. No CI job builds wasm32.
+|WASM bindings |blocked-by |source errors |BROKEN (verified 2026-11-04 after installing the wasm32 target): `cargo check -p jtv-core --target wasm32-unknown-unknown` fails with two `unsafe impl` errors under `forbid(unsafe_code)` and E0432 `js_sys`. Statically, `lib.rs` has `#![forbid(unsafe_code)]` while wasm.rs has `unsafe impl Send/Sync for JsCallback`, and `use js_sys::...` appears with no js-sys dependency declared. No CI job builds wasm32.
 |playground/PWA |consumes |WASM bindings |PROPOSED/absent. playground/jtv has only docs and 2 samples, both failing to parse at 1:1. www/ is empty.
 |playground/PWA |blocked-by |WASM bindings; owner stack decision |The ReScript/Deno plan conflicts with estate policy.
 |jtv_proofs (Lean 4 v4.12.0, 7 modules + JtvAll) |proof-shadow-of |jtv-core |PARTIAL. Int-only model (lit/var/add/neg). Correspondence is the Rust harness `interpreter.rs mod denotational_correspondence`: height ≤ 2, ~12k cases, plus a 7-point golden corpus mirrored by rfl.
@@ -134,7 +134,7 @@ flowchart LR
   ZIG -->|"target-of (unreachable stubs)"| COPROC
   COPROC -->|"consumes"| PATACL["patacl (external)"]
   COPROC -.->|"blocked-by"| PATACL
-  WASMB -.->|"blocked-by"| TCW["wasm32/wasm-pack missing + unsafe/js-sys"]
+  WASMB -.->|"blocked-by"| TCW["wasm32 build fails: unsafe impl under forbid + missing js-sys"]
   LEAN -.->|"blocked-by"| TCL["lean toolchain (env)"]
 
   TW["typed-wasm (197 tests; verifier/codegen/gate)"] -.->|"target-of (proposed)"| CORE
@@ -399,7 +399,7 @@ Default "one prover home per theorem" assignment (avoids B2, B3, B4 and most of 
 None of these steps has an external blocker. All are self-repo, Rust only, verifiable with cargo.
 
 * H1. Enforce typecheck and purity in JtvWasm::run/run_and_collect and in Interpreter::run (or a single checked entry point). This closes the totality/injection bypass.
-* H2. Add a word boundary to the keyword rule in grammar.pest. Put the boundary inside each keyword alternative, or order the alternatives longest-first. An outer `!(keyword ~ !ident_char)` is unsafe under PEG ordered choice, because `in` precedes `intrinsic` and `insn` (see LANGUAGE-SYSTEM-ARCHITECTURE.adoc H2).
+* H2. Add a word boundary to the keyword rule in grammar.pest. Put a word boundary inside every keyword alternative (each keyword must be followed by a non-identifier character). Longest-first ordering alone does not fix it: `int_a` still begins with `in`. An outer `!(keyword ~ !ident_char)` is unsafe under PEG ordered choice, because `in` precedes `intrinsic` and `insn` (see LANGUAGE-SYSTEM-ARCHITECTURE.adoc H2).
 * H3. Re-triage the 15 examples after H2. Repair them, or quarantine the aspirational ones (owner Q13), so `just ci` is honest.
 * H4. Fix the epistemic.rs under-reporting (If/While conditions, injective `x + 1`), or downgrade its claim. Without this, Opaque must not be read as noninterference.
 * H5. Truth pass: one capability matrix (ALIGNMENT G1) replacing the STATE "DONE" overclaims for WASM, coproc and LSP.
@@ -413,7 +413,7 @@ Gating dependencies:
 * the LSP needs typechecker spans;
 * module resolution needs owner Q10.
 
-External blockers: wasm32 target and wasm-pack (environment/CI); owner stack decision for playground and extension (Q8); owner module-system decision (Q10). PataCL is NOT on this path (E17 stays parked).
+External blockers: wasm-pack or wasm-bindgen-cli (environment/CI; the wasm32 build failure itself is a source fix, E12); owner stack decision for playground and extension (Q8); owner module-system decision (Q10). PataCL is NOT on this path (E17 stays parked).
 
 Outcome: an honest, usable, interpreter-backed language system with an embedding and a playground. No verified target.
 

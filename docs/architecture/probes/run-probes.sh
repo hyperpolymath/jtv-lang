@@ -10,13 +10,13 @@ set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 jtv="${1:-$here/../../../target/debug/jtv}"
 [ -x "$jtv" ] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
-printf '%-20s %6s %6s  %s\n' probe check run 'last output line'
+printf '%-20s %6s %6s  %s\n' probe check run 'output (all lines, joined with |)'
 for p in "$here"/*.jtv; do
   n="$(basename "$p" .jtv)"
   timeout 30 "$jtv" check "$p" >/dev/null 2>&1; c=$?
   out="$(timeout 30 "$jtv" run "$p" 2>&1)"; r=$?
-  last="$(printf '%s\n' "$out" | tail -n 1 | cut -c1-60)"
-  printf '%-20s %6s %6s  %s\n' "$n" "$c" "$r" "$last"
+  joined="$(printf '%s\n' "$out" | head -n 8 | paste -sd '|' | cut -c1-140)"
+  printf '%-20s %6s %6s  %s\n' "$n" "$c" "$r" "$joined"
 done
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 echo; echo "H13 parse sweep (depth, check exit, ms):"

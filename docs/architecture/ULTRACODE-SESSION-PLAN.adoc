@@ -153,7 +153,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 
 |A-grammar (H2, H13)
 |`grammar.pest`, `parser.rs` (limits only), `tests/pest_rule_tests.rs`, `benches/parse.rs`
-|Boundary inside each keyword alternative (or longest-first); keyword-list-generated test; left-factored `(`-rules and data/control choice; depth and token limits → `JtvError`.
+|Boundary inside each keyword alternative (ordering alone does not fix `int_a`); keyword-list-generated test; left-factored `(`-rules and data/control choice; depth and token limits → `JtvError`.
 |`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn`, `in` rejected as identifiers, `int_a` accepted; nest_200 check < 50 ms (release); nest_20000 exit 1; examples/basic/02 parses
 
 |B-wasm (H12) — must merge before E-entry
@@ -334,8 +334,9 @@ const VERDICT = {
     refuted: { type: 'boolean' },
     surviving_falsifiers: { type: 'array', items: { type: 'string' } },
     reason: { type: 'string' },
+    new_holes: { type: 'array', items: { type: 'string' } },
   },
-  required: ['refuted', 'surviving_falsifiers', 'reason'],
+  required: ['refuted', 'surviving_falsifiers', 'reason', 'new_holes'],
 }
 
 // ---- Wave 0 ----
@@ -354,12 +355,36 @@ if (!(args && args.proceedWave1)) {
 
 // ---- Falsifiers first ----
 phase('Falsifiers')
-const falsifiers = await agent(`Write .jtv falsifiers (do not fix anything) under ${SCRATCH}/falsifiers for: mutual recursion; Data -> @total -> looping @pure; recursion via M::f; module function shadowing a top-level @total; @total reading a caller local; reverse inside a function; impure-in-Data via REPL; Symbolic, String and Any token-free reverse; deep Impure recursion; acyclic blow-up tree; nesting bomb; extern intrinsic called from Data. Record current check/run exit codes.`, { label: 'falsifiers', schema: REPORT })
+// Each falsifier is tagged with the lane whose fix should reject it. Reviewers run
+// only their lane's files on the isolated branch; Gate 1 runs all of them after
+// the lanes are integrated.
+const FALSIFIERS = [
+  { file: 'keyword_prefix_identifier.jtv', lane: 'grammar' },
+  { file: 'nesting_bomb.jtv', lane: 'grammar' },
+  { file: 'symbolic_reverse.jtv', lane: 'carrier' },
+  { file: 'string_reverse.jtv', lane: 'carrier' },
+  { file: 'any_reverse.jtv', lane: 'carrier' },
+  { file: 'mutual_recursion.jtv', lane: 'purity' },
+  { file: 'data_calls_looping_pure.jtv', lane: 'purity' },
+  { file: 'recursion_via_module.jtv', lane: 'purity' },
+  { file: 'module_shadows_total.jtv', lane: 'purity' },
+  { file: 'total_reads_caller_local.jtv', lane: 'purity' },
+  { file: 'reverse_in_function.jtv', lane: 'purity' },
+  { file: 'extern_intrinsic_in_data.jtv', lane: 'purity' },
+  { file: 'reentrant_js_callback.test.js', lane: 'wasm' },
+  { file: 'impure_in_data_repl.jtv', lane: 'entry' },
+  { file: 'impure_in_data_wasm.test.js', lane: 'entry' },
+  { file: 'deep_impure_recursion.jtv', lane: 'entry' },
+  { file: 'blowup_tree.jtv', lane: 'entry' },
+  { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if' },
+  { file: 'reversible_if_guard_flip.jtv', lane: 'reversible-if' },
+]
+const falsifiers = await agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, using exactly these names and lanes: ${JSON.stringify(FALSIFIERS)}. The .jtv files are programs that the lane's fix must reject at check or stop safely at run. The two .test.js files are bun tests against the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run on a program whose Data expression calls an impure function (must return an error once H1 is fixed); reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run (must return a JtvError, never panic or abort). Record current check/run exit codes for each .jtv file.`, { label: 'falsifiers', schema: REPORT })
 
 // ---- Wave 1 lanes ----
 const LANES = [
   { name: 'grammar', owns: 'grammar.pest, parser.rs limits, pest_rule_tests.rs, benches/parse.rs',
-    task: 'H2 + H13: keyword boundary inside each alternative or longest-first; keyword-list-generated tests; left-factor paren rules; depth and token limits returning JtvError.',
+    task: 'H2 + H13: keyword boundary inside each keyword alternative (ordering alone does not fix int_a); keyword-list-generated tests; left-factor paren rules; depth and token limits returning JtvError.',
     gate: 'cargo test -p jtv-core --test pest_rule_tests; nest_200 < 50 ms release; nest_20000 exit 1' },
   { name: 'carrier', owns: 'echo.rs, number.rs test at L409, tests/carrier_reversal.rs, ADR-0015 draft',
     task: 'H10 + H19 interim: reject token-free reverse on Symbolic, String, Bool, Any. No Lean edits.',
@@ -380,7 +405,7 @@ function implementPrompt(l) {
 }
 
 function reviewPrompt(l, impl) {
-  return `Adversarially review lane ${l.name} on branch ${impl && impl.branch}. Try to refute that it closes its holes. Run every falsifier under ${SCRATCH}/falsifiers against the branch build. Check the gate commands really test the claim (no name-only or comment-matching greps). Default to refuted=true if uncertain.`
+  return `Adversarially review lane ${l.name} on branch ${impl && impl.branch}. Try to refute that it closes its holes. Run only the falsifiers tagged for this lane (${FALSIFIERS.filter((f) => f.lane === l.name).map((f) => f.file).join(', ') || 'none'}) from ${SCRATCH}/falsifiers against the branch build; other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. Report any new hole you find in new_holes. Check the gate commands really test the claim (no name-only or comment-matching greps). Default to refuted=true if uncertain.`
 }
 
 phase('Wave1-Independent')
@@ -400,6 +425,7 @@ log(`wasm lane ${wasmOk ? 'ok' : 'blocked'}; purity lane ${purityOk ? 'ok' : 'bl
 const holesSoFar = [falsifiers]
   .concat(census)
   .concat(ready.map((r) => r.impl))
+  .concat(ready.map((r) => r.verdict))
   .filter(Boolean)
   .flatMap((r) => r.new_holes || [])
 if (holesSoFar.length > 0) {
@@ -427,7 +453,9 @@ return {
   falsifiers,
   lanes: ready,
   entry,
-  newHoles: holesSoFar.concat((entry && entry.impl && entry.impl.new_holes) || []),
+  newHoles: holesSoFar
+    .concat((entry && entry.impl && entry.impl.new_holes) || [])
+    .concat((entry && entry.verdict && entry.verdict.new_holes) || []),
 }
 ----
 
