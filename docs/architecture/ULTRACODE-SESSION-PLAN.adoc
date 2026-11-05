@@ -302,20 +302,20 @@ Plain JavaScript for the Workflow tool. It passes a syntax check (`bun build --n
 |`{ mode: 'wave0' }`
 |Writes the W0 receipt, the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. Every later mode requires `baseline`.
 
-|`{ mode: 'lanes', lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
+|`{ mode: 'lanes', stopRule: false, lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
 
-|`{ mode: 'lanes', lanes: ['reversible-if', 'entry-interim'], base, merged: ['grammar', 'carrier', 'wasm'] }`
+|`{ mode: 'lanes', stopRule: false, lanes: ['reversible-if', 'entry-interim'], base, merged: ['grammar', 'carrier', 'wasm'] }`
 |Dependent lanes start from an integration branch that already contains their prerequisites. The script refuses to start a lane whose prerequisites are not listed as merged.
 
-|`{ mode: 'lanes', lanes: ['entry'], base, merged: ['wasm', 'purity', 'entry-interim'] }`
+|`{ mode: 'lanes', stopRule: false, lanes: ['entry'], base, merged: ['wasm', 'purity', 'entry-interim'] }`
 |The `CheckedProgram` typestate, after the purity lane.
 
 |`{ mode: 'lanes', stopRule: true, lanes: [...] }`
-|STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws.
+|STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
-|`{ mode: 'gate1', integration }`
-|Gate 1 on the merged branch: full test, lint, format and wasm32 build; trybuild; probes; every falsifier with its expectation; census delta against the baseline. A second agent tries to refute the report. `green` is true only if every command exited 0, every falsifier met its expectation, and the refutation failed.
+|`{ mode: 'gate1', integration, signing }`
+|Gate 1 on the merged branch: full test, lint, format and wasm32 build; trybuild; probes; every falsifier with its expectation; census delta against the baseline. A second agent tries to refute the report. `green` is true only if every command exited 0, every falsifier met its expectation, the test count is at least the baseline count, every commit is signed under the Q36 ruling, neither agent reported a new hole, and the refutation failed.
 |===
 
 Lane mapping to the Wave 1 table: A = `grammar`, B = `wasm`, C = `purity`, D = `carrier`, E = `entry-interim` then `entry`, F = `proof-hygiene`, G = `reversible-if`.
@@ -342,8 +342,10 @@ export const meta = {
 //   base         branch new lane worktrees start from (lead's integration branch)
 //   merged       lane names already merged into base (checked against prerequisites)
 //   lanes        lane names to run in this 'lanes' invocation
-//   stopRule     true when Q26/Q39 are unanswered: only STOP_ALLOWED lanes may run
+//   stopRule     REQUIRED in 'lanes' mode: true while Q26/Q39 are unanswered (only
+//                STOP_ALLOWED lanes may run), false only after the owner has answered
 //   integration  branch that Gate 1 tests ('gate1' mode)
+//   signing      'environment' or 'owner-key', per the Q36 ruling ('gate1' mode)
 // ---------------------------------------------------------------------------
 const A = args || {}
 const REPO = '/home/user/jtv-lang'
@@ -385,9 +387,13 @@ const GATE = {
       file: { type: 'string' }, expect: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
     }, required: ['file', 'expect', 'observed', 'ok'] } },
     census_delta: { type: 'string' },
+    test_count: { type: 'integer', description: 'tests passed by cargo test --workspace' },
+    baseline_test_count: { type: 'integer', description: 'tests passed in the W0 receipt, adjusted for moved tests' },
+    signatures_ok: { type: 'boolean', description: 'every commit on the branch since base is signed per the Q36 ruling' },
+    signature_detail: { type: 'string' },
     new_holes: { type: 'array', items: { type: 'string' } },
   },
-  required: ['commands', 'exit_codes', 'falsifier_results', 'census_delta', 'new_holes'],
+  required: ['commands', 'exit_codes', 'falsifier_results', 'census_delta', 'test_count', 'baseline_test_count', 'signatures_ok', 'signature_detail', 'new_holes'],
 }
 
 // expect: 'reject' (default) = the lane's fix must reject at check or stop safely at run;
@@ -409,6 +415,8 @@ const FALSIFIERS = [
   { file: 'reentrant_js_callback.test.js', lane: 'wasm' },
   { file: 'impure_in_data_repl.jtv', lane: 'entry-interim' },
   { file: 'impure_in_data_wasm.test.js', lane: 'entry-interim' },
+  { file: 'impure_in_data_wasm_collect.test.js', lane: 'entry-interim' },
+  { file: 'impure_in_data_debug.jtv', lane: 'entry-interim' },
   { file: 'deep_impure_recursion.jtv', lane: 'entry-interim' },
   { file: 'blowup_tree.jtv', lane: 'entry' },
   { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if' },
@@ -437,7 +445,7 @@ const LANES = {
     gate: 'reversible-if falsifiers non-zero on jtv check; retained-log test passes; cargo test -p jtv-core reversible' },
   'entry-interim': { prereqs: ['wasm'], owns: 'jtv-cli repl.rs, jtv-debug main.rs, jtv-wasm call sites, interpreter.rs call-depth cap',
     task: 'Interim H1 + H11: every host calls the existing TypeChecker and PurityChecker before Interpreter::run, as the CLI does; add a call-depth cap returning JtvError. No typestate yet.',
-    gate: 'impure_in_data_repl and impure_in_data_wasm rejected; deep_impure_recursion exits 1, not 134' },
+    gate: 'every host rejects the impure-in-Data program: impure_in_data_repl, impure_in_data_wasm (run), impure_in_data_wasm_collect (run_and_collect), impure_in_data_debug (jtv-debug); deep_impure_recursion exits 1, not 134' },
   entry: { prereqs: ['wasm', 'purity', 'entry-interim'], owns: 'check.rs, interpreter.rs, reversible.rs visibility, jtv-cli main.rs and repl.rs, jtv-debug, jtv-wasm call sites, tests/ui trybuild, ADR-0012 draft',
     task: 'H1 final + H16: CheckedProgram with private ctor; Interpreter::run(&CheckedProgram); seal ReversibleInterpreter; step fuel, size budget, per-run reset; re-assert callee level at eval.',
     gate: 'trybuild compile-fail passes; blowup_tree exits 1 within 1 s; REPL loop test; jtv-wasm wasm32 build' },
@@ -455,7 +463,7 @@ if (A.mode === 'wave0') {
     () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip.`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep 1..5000 (20 s timeout per run, debug and release) and X-depth bisect of the max safe call depth. No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
-    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. A 'reject' .jtv file is a program the lane's fix must reject at check or stop safely at run; an 'accept' file is a valid program the fix must check and run with exit 0 (keyword_prefix_identifier: the program "int_a = 42; print(int_a)" printing 42). The two .test.js files are bun tests on the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run on a program whose Data expression calls an impure function; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, with exactly these names, lanes and expectations: ${JSON.stringify(FALSIFIERS)}. A 'reject' .jtv file is a program the lane's fix must reject at check or stop safely at run; an 'accept' file is a valid program the fix must check and run with exit 0 (keyword_prefix_identifier: the program "int_a = 42; print(int_a)" printing 42). The .test.js files are bun tests on the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run, and impure_in_data_wasm_collect calls JtvWasm.run_and_collect, on a program whose Data expression calls an impure function; impure_in_data_debug.jtv is the same program run through jtv-debug; reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run and must get a JtvError, never a panic. Record the current check and run exit codes of every .jtv file.`, { label: 'falsifiers', phase: 'Wave0', schema: REPORT }),
   ])
   return { mode: 'wave0', reports, newHoles: holesOf(reports) }
 }
@@ -465,6 +473,7 @@ if (!A.baseline) throw new Error('Run mode wave0 first and pass its receipt path
 
 // ---- mode: lanes ----------------------------------------------------------
 if (A.mode === 'lanes') {
+  if (typeof A.stopRule !== 'boolean') throw new Error('lanes mode needs an explicit stopRule: true while Q26/Q39 are unanswered, false after the owner answers')
   const names = A.lanes || []
   for (const n of names) {
     if (!LANES[n]) throw new Error(`unknown lane ${n}`)
@@ -496,12 +505,18 @@ if (A.mode === 'lanes') {
 // ---- mode: gate1 ----------------------------------------------------------
 if (A.mode === 'gate1') {
   if (!A.integration) throw new Error('gate1 needs args.integration (the merged branch)')
+  if (!A.signing) throw new Error('gate1 needs args.signing per the Q36 ruling')
   phase('Gate1')
-  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run and record exit codes for: cargo test --workspace; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; the trybuild compile-fail tests; docs/architecture/probes/run-probes.sh. Then run EVERY falsifier in ${SCRATCH}/falsifiers against this build, honouring expect: ${JSON.stringify(FALSIFIERS)}. Re-run the census and compare with the baseline at ${A.baseline}; describe the delta. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
+  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run and record exit codes for: cargo test --workspace; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; cargo build -p jtv-wasm --target wasm32-unknown-unknown --release; the trybuild compile-fail tests; docs/architecture/probes/run-probes.sh. Then run EVERY falsifier in ${SCRATCH}/falsifiers against this build, honouring expect: ${JSON.stringify(FALSIFIERS)}. Re-run the census and compare with the baseline at ${A.baseline}; describe the delta. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). Check that every commit on the branch since ${BASE} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
   const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. Re-run any command whose result looks implausible, in your own detached worktree of that branch. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
-  const green = gate && check && !check.refuted
-    && gate.exit_codes.every((c) => c === 0) && gate.falsifier_results.every((f) => f.ok)
-  return { mode: 'gate1', green, gate, check, newHoles: holesOf([gate, check]) }
+  const newHoles = holesOf([gate, check])
+  const green = Boolean(gate && check && !check.refuted
+    && gate.exit_codes.length > 0 && gate.exit_codes.every((c) => c === 0)
+    && gate.falsifier_results.length === FALSIFIERS.length && gate.falsifier_results.every((f) => f.ok)
+    && gate.test_count >= gate.baseline_test_count
+    && gate.signatures_ok
+    && newHoles.length === 0)
+  return { mode: 'gate1', green, gate, check, newHoles }
 }
 
 throw new Error(`unknown mode ${A.mode}; use wave0, lanes or gate1`)
