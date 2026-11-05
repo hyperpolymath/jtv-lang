@@ -131,7 +131,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |report lists every Safe carrier that fails to round-trip
 
 |W0-parse+depth (agent, worktree)
-|X-parse depth sweep, debug and release: doubling depths 1, 2, 4, … up to 5000 (20 s timeout per run), then a bounded bisection after the first timeout; never a sequential sweep past a timeout. X-depth bisect of max safe call depth, recorded separately for native debug and release; lane caps use the smaller.
+|X-parse depth sweep, debug and release: doubling depths 1, 2, 4, … up to 5000 (20 s timeout per run), then a bounded bisection after the first timeout; never a sequential sweep past a timeout. X-depth bisect of max safe call depth, recorded separately for native debug and release; the call-depth cap uses the smaller. The parse-depth sweep measures the pre-fix exponential parser, so it is a regression baseline only, never the post-fix nesting cap (the grammar lane's own budget, `nest_200` under 50 ms, sets that).
 |report with ms per depth and safe depth
 
 |W0-signing (lead)
@@ -178,7 +178,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 
 |E-entry (H1, H11, H16) — after B and C merge
 |new `check.rs`, `lib.rs` (mod and re-export lines), `interpreter.rs`, `reversible.rs` visibility, `jtv-cli` (main, repl, `tests/repl_loop.rs`), `jtv-debug`, `jtv-wasm` call sites, every existing `crates/jtv-core/tests/*.rs` and `crates/jtv-core/benches/*.rs` call of `Interpreter::run` migrated via a `check_and_run` helper, `tests/ui/` trybuild, `tests/entry_point_ui.rs`, `tests/fuel.rs`, the trybuild dev-dependency in `crates/jtv-core/Cargo.toml`, `Cargo.lock`, ADR-0012 draft
-|`CheckedProgram` (private ctor); `Interpreter::run(&CheckedProgram)`; `ReversibleInterpreter` sealed; step fuel, depth cap (from X-depth), size budget, per-run reset; Data-callee level re-asserted at eval.
+|`CheckedProgram` (private ctor); `Interpreter::run(&CheckedProgram)`; every public raw-block entry point of `ReversibleInterpreter` (`new`, `with_state`, `execute_forward`, `execute_and_reverse`, …) sealed behind checked input, each with a compile-fail case; step fuel, depth cap (from X-depth), size budget, per-run reset, with `tests/fuel.rs` growing a String, a List and a Symbolic value by self-concatenation until a size-budget `JtvError` (step fuel alone does not bound allocation per step); Data-callee level re-asserted at eval.
 |trybuild: `Interpreter::run(&Program)` and `ReversibleInterpreter::with_state` fail to compile outside jtv-core; deep_recursion exit 1; blowup exit 1 within 1 s; REPL loops 2×MAX_ITERATIONS across inputs; `cargo build -p jtv-wasm --target wasm32-unknown-unknown`
 
 |F-ci-proof (PR0, files only)
@@ -467,6 +467,14 @@ const GATE1_VERDICT = {
   required: [...new Set([...VERDICT.required, ...GATE.required])],
 }
 
+// The implementer's lane report also carries its own falsifier run, so lane readiness needs two
+// independent falsifier judgements (implementer and reviewer), as Gate 1 does (gate agent and verifier).
+const LANE_REPORT = {
+  ...REPORT,
+  properties: { ...REPORT.properties, falsifier_results: VERDICT.properties.falsifier_results },
+  required: [...REPORT.required, 'falsifier_results'],
+}
+
 // expect (default 'reject'):
 //   'reject-check'        .jtv program: jtv check itself rejects it (exit != 0). A checker hole
 //                         is closed only at check time; failing later at run time does not count.
@@ -665,8 +673,8 @@ const LANES = {
     ] },
   // reversible-if is a direct full-mode prerequisite: an entry-interim built under the STOP
   // rule does not carry it, and both lanes edit interpreter.rs.
-  entry: { prereqs: ['wasm', 'purity', 'entry-interim'], fullPrereqs: ['reversible-if'], owns: 'crates/jtv-core/src/check.rs, crates/jtv-core/src/lib.rs (mod and re-export lines only), crates/jtv-core/src/interpreter.rs, crates/jtv-core/src/reversible.rs (visibility only), crates/jtv-core/tests/*.rs and crates/jtv-core/benches/*.rs (call-site migration only: Interpreter::run to CheckedProgram, and ReversibleInterpreter::with_state to its sealed replacement), crates/jtv-core/tests/ui/**, crates/jtv-core/tests/entry_point_ui.rs, crates/jtv-core/tests/fuel.rs, crates/jtv-core/Cargo.toml (trybuild dev-dependency only), Cargo.lock, crates/jtv-cli/src/main.rs, crates/jtv-cli/src/repl.rs, crates/jtv-cli/tests/repl_loop.rs, crates/jtv-debug/src/**, crates/jtv-wasm/src/** (run call sites only), ADR-0012 draft',
-    task: 'H1 final + H16: CheckedProgram with private ctor; Interpreter::run(&CheckedProgram), migrating every existing call site; seal ReversibleInterpreter; step fuel, size budget, per-run reset (tests/fuel.rs: blowup_tree stops with JtvError within 1 s); re-assert callee level at eval; REPL loop test.',
+  entry: { prereqs: ['wasm', 'purity', 'entry-interim'], fullPrereqs: ['reversible-if'], owns: 'crates/jtv-core/src/check.rs, crates/jtv-core/src/lib.rs (mod and re-export lines only), crates/jtv-core/src/interpreter.rs, crates/jtv-core/src/reversible.rs (visibility only), crates/jtv-core/tests/*.rs and crates/jtv-core/benches/*.rs (call-site migration only: Interpreter::run to CheckedProgram, and every sealed ReversibleInterpreter entry point, including new, with_state, execute_forward and execute_and_reverse, to its checked replacement), crates/jtv-core/tests/ui/**, crates/jtv-core/tests/entry_point_ui.rs, crates/jtv-core/tests/fuel.rs, crates/jtv-core/Cargo.toml (trybuild dev-dependency only), Cargo.lock, crates/jtv-cli/src/main.rs, crates/jtv-cli/src/repl.rs, crates/jtv-cli/tests/repl_loop.rs, crates/jtv-debug/src/**, crates/jtv-wasm/src/** (run call sites only), ADR-0012 draft',
+    task: 'H1 final + H16: CheckedProgram with private ctor; Interpreter::run(&CheckedProgram), migrating every existing call site; seal ReversibleInterpreter; step fuel, size budget, per-run reset (tests/fuel.rs: blowup_tree stops with JtvError within 1 s; a String, a List and a Symbolic value grown by repeated self-concatenation each stop with a size-budget JtvError rather than exhausting memory, since step fuel does not bound allocation per step; and a second run on the same interpreter starts with fresh fuel and size budgets); seal every public raw-block entry point of ReversibleInterpreter (new, with_state, execute_forward, execute_and_reverse and any other method that executes an unchecked ReverseBlock) behind checked input, with a tests/ui compile-fail case for each; re-assert callee level at eval; REPL loop test.',
     gate: [
       'cargo test -p jtv-core --test entry_point_ui',
       'cargo test --release -p jtv-core --test fuel',
@@ -731,13 +739,13 @@ if (A.mode === 'lanes') {
     if (missing.length) throw new Error(`lane ${n} needs ${missing.join(', ')} merged into ${BASE} first`)
   }
 
-  const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin && if git show-ref --verify --quiet refs/heads/${laneBranch(n)}; then git checkout ${laneBranch(n)} && { ! git ls-remote --exit-code --heads origin ${laneBranch(n)} >/dev/null || git rebase origin/${laneBranch(n)}; } && git rebase ${BASE}; elif git ls-remote --exit-code --heads origin ${laneBranch(n)} >/dev/null; then git checkout -B ${laneBranch(n)} origin/${laneBranch(n)} && git rebase ${BASE}; else git checkout -b ${laneBranch(n)} ${BASE}; fi (a retry reuses the lane branch, preferring the local ref so unpushed commits survive, and rebases it onto the base). You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. ${inputPaths(n).length ? `Follow the Wave 0 reports ${inputPaths(n).join(', ')}: the carrier set to reject comes from x11.md, and depth limits (parser nesting, call depth) are set at or below the smaller of the debug and release values in depth.md, so neither profile can overflow before the cap returns a JtvError.` : ''} Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the lane's own gate commands come first), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signed under the '${A.signing}' Q36 ruling) and push the branch (git push --force-with-lease --force-if-includes origin ${laneBranch(n)} after a retry rebase, which has already replayed any remote-only commits; rebased commits must be re-signed). Report every command with its exit code; report a new hole instead of fixing it.`
+  const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin && if git show-ref --verify --quiet refs/heads/${laneBranch(n)}; then git checkout ${laneBranch(n)} && { ! git ls-remote --exit-code --heads origin ${laneBranch(n)} >/dev/null || git rebase origin/${laneBranch(n)}; } && git rebase ${BASE}; elif git ls-remote --exit-code --heads origin ${laneBranch(n)} >/dev/null; then git checkout -B ${laneBranch(n)} origin/${laneBranch(n)} && git rebase ${BASE}; else git checkout -b ${laneBranch(n)} ${BASE}; fi (a retry reuses the lane branch, preferring the local ref so unpushed commits survive, and rebases it onto the base). You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. ${inputPaths(n).length ? `Follow the Wave 0 reports ${inputPaths(n).join(', ')}: the carrier set to reject comes from x11.md, and the call-depth cap is set at or below the smaller of call_max_safe_depth_debug and call_max_safe_depth_release in depth.md, so neither profile can overflow before the cap returns a JtvError. The parse_max_depth values describe the pre-fix exponential parser and are a regression baseline only, never the parser's post-fix nesting cap: that cap comes from the grammar lane's own budget (nest_200 parses in under 50 ms, so the cap is at least 200) and is re-measured after the fix.` : ''} Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the lane's own gate commands come first), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signed under the '${A.signing}' Q36 ruling) and push the branch (git push --force-with-lease --force-if-includes origin ${laneBranch(n)} after a retry rebase, which has already replayed any remote-only commits; rebased commits must be re-signed). Then run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers yourself, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list; the reviewer runs them again independently. Report every command with its exit code; report a new hole instead of fixing it.`
   const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. ${inputPaths(n).length ? `Read ${inputPaths(n).join(', ')} and refute the lane if it ignores them (a Safe carrier that x11.md shows failing to round-trip is still accepted, or a depth limit is above depth.md).` : ''} In your own worktree run: git fetch origin ${laneBranch(n)}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Read cargo_test_passed from the W0 receipt ${A.baseline} and report it as receipt_test_count; if the receipt is missing or unreadable, set refuted=true. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..HEAD`)} Re-run every command of this lane, in order (${JSON.stringify(laneCommands(n))}), and report them in commands with one exit code each in exit_codes; check that each gate command tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...HEAD (HEAD is the detached lane commit; the prerequisite fetches overwrite FETCH_HEAD); set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
 
   phase('Implement')
   const results = await pipeline(
     names,
-    (n) => agent(implementPrompt(n), { label: `impl-${n}`, phase: 'Implement', schema: REPORT, isolation: 'worktree' }),
+    (n) => agent(implementPrompt(n), { label: `impl-${n}`, phase: 'Implement', schema: LANE_REPORT, isolation: 'worktree' }),
     (impl, n) => agent(reviewPrompt(n, impl), { label: `review-${n}`, phase: 'Review', schema: LANE_VERDICT, isolation: 'worktree', effort: 'high' })
       .then((verdict) => ({ lane: n, impl, verdict })),
   )
@@ -762,6 +770,8 @@ if (A.mode === 'lanes') {
     && r.verdict.exit_codes.length === r.verdict.commands.length
     && r.verdict.exit_codes.every((c) => c === 0)
     && exactFalsifiers(r.verdict.falsifier_results, lanesFor(r.lane))
+    // Two independent judgements: the implementer's own falsifier run must also pass.
+    && Boolean(r.impl) && exactFalsifiers(r.impl.falsifier_results, lanesFor(r.lane))
     && complete(r.impl, r.lane)
     && r.impl.gate_exit_codes.every((c) => c === 0)).map((r) => r.lane)
   const newHoles = holesOf(done.map((r) => r.impl).concat(done.map((r) => r.verdict)))
