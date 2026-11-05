@@ -41,10 +41,10 @@ Batch these into one message. Nothing in Wave 1 lands without Q36.
 |present (bun 1.4.4, verified 2026-11-04)
 |—
 
-|wasm-bindgen-cli at the Cargo.lock version
-|jtv-wasm JS glue
-|`cargo install wasm-bindgen-cli --version <lock>`
-|ship raw `.wasm` + a hand-written loader test; mark playground "CI-pending"
+|wasm-bindgen-cli at the Cargo.lock version (0.2.118)
+|jtv-wasm JS glue; the bun falsifiers load its output
+|`cargo install wasm-bindgen-cli --version 0.2.118 --locked` (open source; installs in a few minutes and was checked in this environment)
+|none: a hard prerequisite for the wasm and entry-interim lanes and for Gate 1. Without it those gates fail closed; there is no hand-written loader fallback.
 
 |elan + Lean v4.12.0
 |PR0–PR7 locally
@@ -191,16 +191,18 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 
 *Adversarial reviewer (one agent, no worktree, read-only).* Writes falsifiers first, before implementers finish: mutual f→g→f; Data → `@total` → `@pure` loop; recursion via `M::f`; shadowing; caller-local read; reverse in function; impure-in-Data via wasm and REPL; Symbolic, String and Any reverse; deep Impure recursion; blow-up tree; nesting bomb; extern intrinsic in Data; re-entrant JS callback; overwrite inside a reversible `if`; guard that flips under its own branch. Any surviving falsifier blocks merge.
 
-*Merge order.* A → D → G → B → E-interim → C → E → F (G needs A and D merged; E-interim needs B, and also G outside the STOP rule, because both own `interpreter.rs`; E needs B, C and E-interim). E rebases on B and C. The lead resolves conflicts.
+*Merge order.* A → D → G → B → E-interim → C → E → F (G needs A and D merged; E-interim needs B, and also G outside the STOP rule, because both own `interpreter.rs`; E needs B, C and E-interim). E rebases on B and C. The lead resolves conflicts. Lane branches are merged with merge commits, never squashed, so each dependent lane can prove its prerequisites with `git merge-base --is-ancestor` (the first commands of its gate).
 
 *Gate 1.*
 
 * `cargo test --workspace` (passed count ≥ the raw W0 count, passed in as `baselineTests` and never adjusted; tests may move between crates but not disappear; 0 failed). The W0 receipt records the count as `cargo_test_passed`; the gate agent and the verifier each read it from the receipt, and both values must equal `baselineTests`.
-* the H23 check (`check_reversibility` deleted, or called outside `reversible.rs` on a line that is neither a `//` comment nor inside a string literal) re-runs here, because later merges can remove the only call site
+* the H23 check (`check_reversibility` deleted, or called outside `reversible.rs` once comments and string literals are stripped) re-runs here, because later merges can remove the only call site
 * the census is compared bucket by bucket with the Wave 0 results in `census-w0.md`, which the gate agent and the verifier both receive
 * the verifier re-runs every command and falsifier itself and reports its own commands, exit codes, falsifier results, test and census counts and signature result; `green` needs both reports to pass, so a thin verifier verdict cannot carry the gate
 * count checks never read a failed producer as zero: grep must exit 1 (no match, no error), and `cargo tree` must succeed before its output is scanned
 * each lane's branch is fixed by the workflow (`claude/jtv-w1-<lane>`); a report naming another branch is not ready, and the reviewer fetches the fixed branch
+* lane readiness also needs an empty `outside_paths` list (not just `ownership_ok`), the reviewer's own read of `cargo_test_passed` from the W0 receipt matching `baselineTests`, and passing prerequisite-ancestry commands
+* the H23 call count strips line, trailing and block comments and string literals before matching, so a comment can never stand in for the call
 * `cargo clippy --workspace --all-targets -- -D warnings`
 * `cargo fmt --all -- --check`
 * `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`, then `wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm` (wasm-bindgen-cli at the Cargo.lock version, 0.2.118); the bun falsifiers load `JTV_WASM_JS` = that `jtv_wasm.js`. Checked locally with a stub crate: the bindings load and a bun test passes.
@@ -318,19 +320,19 @@ Plain JavaScript for the Workflow tool. It passes a syntax check (`bun build --n
 |`{ mode: 'wave0', scratch }`
 |Writes the W0 receipt, the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline` and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
 
-|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
+|`{ mode: 'lanes', scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
 
-|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
+|`{ mode: 'lanes', scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
 |Dependent lanes start from an integration branch that already contains their prerequisites. The script refuses to start a lane whose prerequisites are not listed as merged.
 
-|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
+|`{ mode: 'lanes', scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
 |After `reversible-if` merges. Both lanes own `interpreter.rs`, so outside the STOP rule `entry-interim` starts from a base that already contains it.
 
-|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
+|`{ mode: 'lanes', scratch, baseline, baselineTests, signing, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
 |The `CheckedProgram` typestate, after the purity lane.
 
-|`{ mode: 'lanes', scratch, baseline, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
+|`{ mode: 'lanes', scratch, baseline, baselineTests, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
 |`{ mode: 'gate1', scratch, baseline, baselineTests, openHoles: [], integration, base, signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
@@ -414,8 +416,9 @@ const LANE_VERDICT = {
     signatures_ok: { type: 'boolean', description: 'every commit in base...branch is signed per the Q36 ruling' },
     signature_detail: { type: 'string' },
     commands: { type: 'array', items: { type: 'string' }, description: 'laneCommands(n), re-run by the reviewer, in order' },
-    exit_codes: { type: 'array', items: { type: 'integer' } } },
-  required: [...VERDICT.required, 'ownership_ok', 'outside_paths', 'falsifier_results', 'signatures_ok', 'signature_detail', 'commands', 'exit_codes'],
+    exit_codes: { type: 'array', items: { type: 'integer' } },
+    receipt_test_count: { type: 'integer', description: 'cargo_test_passed read from the W0 receipt file' } },
+  required: [...VERDICT.required, 'ownership_ok', 'outside_paths', 'falsifier_results', 'signatures_ok', 'signature_detail', 'commands', 'exit_codes', 'receipt_test_count'],
 }
 
 const GATE = {
@@ -512,7 +515,8 @@ const LANE_REQUIRED_COMMANDS = [
 
 // H23: check_reversibility is deleted, or called outside reversible.rs. Run by the lane and again by Gate 1.
 // A call counts only on a line that is not a // comment and not inside a string literal.
-const H23_CMD = String.raw`{ grep -rq 'fn check_reversibility' crates/jtv-core/src; test $? -eq 1; } || test "$(grep -rnP --include=*.rs '^(?!\s*//)(?!.*"[^"]*check_reversibility).*\bcheck_reversibility\s*\(' crates/*/src | grep -v '/reversible.rs:' | wc -l)" -ge 1`
+// Comments (line, trailing, block) and string literals are stripped before counting calls.
+const H23_CMD = String.raw`{ grep -rq 'fn check_reversibility' crates/jtv-core/src; test $? -eq 1; } || test "$(find crates -path '*/src/*.rs' ! -name reversible.rs -print0 | xargs -0 -r perl -0777 -ne 's{"(?:\\.|[^"\\\n])*"}{""}g; s{/\*.*?\*/}{}gs; s{//[^\n]*}{}g; $c += () = /\bcheck_reversibility\s*\(/g; END { print $c + 0 }')" -ge 1`
 // Count gates pass only when the producer itself succeeded: grep exit 1 (no match, no error),
 // and cargo tree checked before its output is scanned. A failed producer never reads as zero.
 const PROOF_GREP_CMD = String.raw`test -d jtv_proofs && { grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs; test $? -eq 1; }`
@@ -605,7 +609,11 @@ const LANES = {
     ] },
 }
 const STOP_ALLOWED = ['grammar', 'wasm', 'entry-interim']
-const laneCommands = (n) => [...LANES[n].gate, ...LANE_REQUIRED_COMMANDS]
+const requiredPrereqs = (n) => LANES[n].prereqs.concat(A.stopRule ? [] : (LANES[n].fullPrereqs || []))
+// Each claimed prerequisite must really be in the lane's history: its branch head is an
+// ancestor of HEAD (the lead merges lane branches with merge commits, never squash).
+const prereqCommands = (n) => requiredPrereqs(n).map((p) => `git fetch origin ${laneBranch(p)} && git merge-base --is-ancestor FETCH_HEAD HEAD`)
+const laneCommands = (n) => [...prereqCommands(n), ...LANES[n].gate, ...LANE_REQUIRED_COMMANDS]
 // The branch is fixed by the workflow, never taken from a report.
 const laneBranch = (n) => `claude/jtv-w1-${n}`
 
@@ -616,7 +624,7 @@ const holesOf = (reports) => reports.filter(Boolean).flatMap((r) => r.new_holes 
 if (A.mode === 'wave0') {
   phase('Wave0')
   const reports = await parallel([
-    () => agent(`Repo ${REPO}, read-only. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts, with the passed count as the integer field cargo_test_passed; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; docs/architecture/probes/run-probes.sh output. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Repo ${REPO}, read-only. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts, with the passed count as the integer field cargo_test_passed; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; cargo build -p jtv-cli (cargo test does not produce target/debug/jtv), then docs/architecture/probes/run-probes.sh output in report mode. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
     () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md and copy the test file to ${SCRATCH}/census/census.rs so later gates can run the same census. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip.`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep, debug and release: depths 1, 2, 4, 8, ... up to 5000 with a 20 s timeout per run; at the first timeout in a mode, stop doubling and bisect between the last passing and first timing-out depth (at most 12 further runs), then report the largest depth under 20 s and the timings. Never resume a sequential sweep past a timeout. Also bisect the max safe call depth (X-depth). No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
@@ -635,18 +643,18 @@ if (A.mode === 'lanes') {
   if (typeof A.stopRule !== 'boolean') throw new Error('lanes mode needs an explicit stopRule: true while Q26/Q39 are unanswered, false after the owner answers')
   if (typeof BASE !== 'string' || !BASE) throw new Error('lanes mode needs args.base: the branch every lane starts from')
   if (!Array.isArray(MERGED)) throw new Error('lanes mode needs args.merged: the lanes already merged into args.base ([] for none)')
+  if (!Number.isInteger(A.baselineTests) || A.baselineTests <= 0) throw new Error('lanes mode needs args.baselineTests: the raw W0 test count; each reviewer re-reads it from the receipt')
   if (!SIGNING_RULINGS.includes(A.signing)) throw new Error(`lanes mode needs args.signing set to one of ${SIGNING_RULINGS.join(', ')} per the Q36 ruling`)
   const names = A.lanes || []
   for (const n of names) {
     if (!LANES[n]) throw new Error(`unknown lane ${n}`)
     if (A.stopRule && !STOP_ALLOWED.includes(n)) throw new Error(`STOP rule active: ${n} may not run (allowed: ${STOP_ALLOWED.join(', ')})`)
-    const required = LANES[n].prereqs.concat(A.stopRule ? [] : (LANES[n].fullPrereqs || []))
-    const missing = required.filter((p) => !MERGED.includes(p))
+    const missing = requiredPrereqs(n).filter((p) => !MERGED.includes(p))
     if (missing.length) throw new Error(`lane ${n} needs ${missing.join(', ')} merged into ${BASE} first`)
   }
 
   const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin; git checkout -b ${laneBranch(n)} ${BASE}. You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the lane's own gate commands come first), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signed under the '${A.signing}' Q36 ruling) and push the branch. Report every command with its exit code; report a new hole instead of fixing it.`
-  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${laneBranch(n)}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run every command of this lane, in order (${JSON.stringify(laneCommands(n))}), and report them in commands with one exit code each in exit_codes; check that each gate command tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
+  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${laneBranch(n)}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Read cargo_test_passed from the W0 receipt ${A.baseline} and report it as receipt_test_count; if the receipt is missing or unreadable, set refuted=true. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run every command of this lane, in order (${JSON.stringify(laneCommands(n))}), and report them in commands with one exit code each in exit_codes; check that each gate command tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
 
   phase('Implement')
   const results = await pipeline(
@@ -667,6 +675,8 @@ if (A.mode === 'lanes') {
   const ready = done.filter((r) => r.verdict && !r.verdict.refuted
     && Array.isArray(r.verdict.surviving_falsifiers) && r.verdict.surviving_falsifiers.length === 0
     && r.verdict.ownership_ok === true
+    && Array.isArray(r.verdict.outside_paths) && r.verdict.outside_paths.length === 0
+    && r.verdict.receipt_test_count === A.baselineTests
     && r.verdict.signatures_ok === true
     && Array.isArray(r.verdict.commands) && Array.isArray(r.verdict.exit_codes)
     && r.verdict.commands.length === laneCommands(r.lane).length
