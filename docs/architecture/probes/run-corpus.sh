@@ -20,7 +20,7 @@
 # or empty corpus root; a failed find; or an unreadable or malformed baseline).
 set -u
 # crashed CODE: true when CODE is neither 0 (success) nor 1 (a handled JtvError).
-crashed() { [[ "$1" -ne 0 && "$1" -ne 1 ]]; }
+crashed() { local code="$1"; [[ "$code" -ne 0 && "$code" -ne 1 ]]; }
 baseline=""
 if [[ "${1:-}" == "--baseline" ]]; then baseline="${2:-}"; shift 2 || { echo "--baseline needs a file" >&2; exit 2; }; fi
 jtv="${1:-target/debug/jtv}"
