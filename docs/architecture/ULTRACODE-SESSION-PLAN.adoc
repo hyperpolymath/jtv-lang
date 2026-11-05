@@ -306,16 +306,16 @@ Plain JavaScript for the Workflow tool. It passes a syntax check (`bun build --n
 |`{ mode: 'wave0', scratch }`
 |Writes the W0 receipt, the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline` and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
 
-|`{ mode: 'lanes', stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
+|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
 
-|`{ mode: 'lanes', stopRule: false, openHoles: [], lanes: ['reversible-if', 'entry-interim'], base, merged: ['grammar', 'carrier', 'wasm'] }`
+|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['reversible-if', 'entry-interim'], base, merged: ['grammar', 'carrier', 'wasm'] }`
 |Dependent lanes start from an integration branch that already contains their prerequisites. The script refuses to start a lane whose prerequisites are not listed as merged.
 
-|`{ mode: 'lanes', stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['wasm', 'purity', 'entry-interim'] }`
+|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['wasm', 'purity', 'entry-interim'] }`
 |The `CheckedProgram` typestate, after the purity lane.
 
-|`{ mode: 'lanes', stopRule: true, openHoles: [], lanes: [...] }`
+|`{ mode: 'lanes', scratch, baseline, stopRule: true, openHoles: [], lanes: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
 |`{ mode: 'gate1', scratch, baseline, openHoles: [], integration, signing }`
