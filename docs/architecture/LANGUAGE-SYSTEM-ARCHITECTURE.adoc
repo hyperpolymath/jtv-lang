@@ -21,7 +21,7 @@ Plan, not a status claim. Every status below was ground-truthed on 2026-11-04 or
 
 JtV is a Harvard-architecture language. Control is Turing-complete. Data is meant to be total and addition-only. The reference implementation is jtv-lang (Rust).
 
-The plan puts every surface (CLI, REPL, wasm embedding, playground, LSP) behind one checked, fuelled entry point. Each Data island then gets one semantic identity: its normal form (NF) in the free model of its carrier. Totality comes from one rank certificate. Compiled islands are checked per artefact by an independent checker, not by a compiler-correctness proof. Lean runs in CI and gates *wording*, never function.
+The plan puts every surface (CLI, REPL, wasm embedding, playground, LSP) behind one checked, fuelled entry point. Each supported single-carrier exact Data island then gets one semantic identity: its normal form (NF) in the free model of its carrier. Float, Complex and mixed-carrier islands have no NF theorem. Totality comes from one rank certificate. Compiled islands are checked per artefact by an independent checker, not by a compiler-correctness proof. Lean runs in CI and gates *wording*, never function.
 
 === Layers
 
@@ -424,7 +424,7 @@ One prover home per theorem. Lean = JtV operational. Agda = family theory. Idris
 |PR0 Hygiene
 |Axiom audit (`#print axioms`; allowed: propext, Quot.sound, Classical.choice). `Pins.lean` with exact-statement pins, so a gate cannot be satisfied by `theorem x : True`. Pin elan-init and idris2-pack to SHAs (both fetched from moving branches today, proof-regression.yml:68, 126). Widen path filter. Remove the "skipping Lean" branch (cheap, though the lakefile exists today).
 |Lean, jtv-lang
-|`grep -rnwE 'sorry\|admit\|native_decide' --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -c 'elan/master' .github/workflows/*.yml` = 0; Lean CI conclusion success
+|`grep -rnwE 'sorry\|admit\|native_decide' --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h 'elan/master' .github/workflows/*.yml \| wc -l` = 0; Lean CI conclusion success
 
 |PR1 JtvRank
 |FunTable, rank certificate (with loop-bound field), decidable `CertValid`, fuel semantics `evalFuel` mirroring the interpreter *under the lexical-scoping ADR*. `checkCert_sound`, `cert_terminates`, `evalFuel_mono`, `data_call_state_preserving`, `islands_no_divergence`, negative `cyclic_table_diverges`.
@@ -506,7 +506,7 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 
 |E0 Baseline
 |Receipts: 592 tests; examples 3/15; conformance/valid 20/31; stdlib 0/4; wasm32 failure; all probes (H6, H7, H10, H13–H16, H19).
-|scratchpad receipt file; counts match
+|`cargo test --workspace` exit 0 with 592 passed; `docs/architecture/probes/run-probes.sh` exit 0 with its table matching the H-register. Comparing the counts is a manual precondition until E4 adds `xtask verify-claims`.
 
 |E0p Read-only census
 |`#[ignore]` probes: prototype SCC analysis that *reports* would-be rejections (incl. for-loop and free-variable reads); carrier round-trip falsifier (X11); parse depth sweep; host stack bisection.

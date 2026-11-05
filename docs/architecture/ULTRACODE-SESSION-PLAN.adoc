@@ -90,7 +90,7 @@ Batch these into one message. Nothing in Wave 1 lands without Q36.
 * Holes before features. A new hole freezes the feature lanes.
 * One worktree per implementer: `git worktree add <scratchpad>/wt-<lane> -b claude/jtv-w<N>-<lane>`.
 * File ownership is declared in each brief. An agent touching a file it does not own stops and reports.
-* Every gate is a command with an exit code. A red gate after two fix attempts stops that lane.
+* Every gate is a command with an exit code. A count gate compares the printed number (`wc -l` or `test "$(...)" -eq N`); it never relies on grep's exit status, which is 1 when nothing matches. A red gate after two fix attempts stops that lane.
 * The interpreter is the reference. Suspected interpreter bugs are logged, never papered over.
 * No `sorry`, `admit`, `native_decide`, new axioms or `believe_me`.
 * No licence or SPDX edits to existing files. New docs: CC-BY-SA-4.0. New code: MPL-2.0 (LICENSING.adoc table).
@@ -149,7 +149,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |B-wasm (H12) — must merge before E-entry
 |new `crates/jtv-wasm/`, move of `wasm.rs`, `lib.rs` re-export lines, `Cargo.toml` workspace
 |cdylib, `#![forbid(unsafe_code)]`, `thread_local` index shim, re-entry guard returning `JtvError`; js-sys/wasm-bindgen target-specific here only.
-|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -nE 'unsafe (impl\|fn\|\{)' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree -p jtv-core -e normal \| grep -c wasm-bindgen` = 0
+|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -nE 'unsafe (impl\|fn\|\{)' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree -p jtv-core -e normal \| grep wasm-bindgen \| wc -l` = 0
 
 |C-resolve+purity (H14, H15 interim, H6, H7, H17, H18) — one agent, serial
 |new `resolve.rs`, `purity.rs`, `typechecker.rs` (Data-call rule moved to a post-purity pass; for-over-List), `ast.rs` comment, fixtures, `tests/callgraph_props.rs`, `spec/jtv-totalcert-v0.adoc`, ADR-0013/0017 drafts
@@ -235,7 +235,7 @@ Then re-run the census and compare with W0.
 
 |C1 CI
 |E6 via `actions.lock` batch; new lanes in existing lock-listed workflows; patacl sentinels.
-|lock consistent; `grep -hnE '^\s*-?\s*uses: [^ ]+@' .github/workflows/*.yml \| grep -vcE '@[0-9a-f]{40}'` = 0 after owner regeneration
+|lock consistent; `grep -hnE '^\s*-?\s*uses: [^ ]+@' .github/workflows/*.yml \| grep -vE '@[0-9a-f]{40}' \| wc -l` = 0 after owner regeneration
 
 |C2 grammar
 |E9 `gen-grammar`; halting caveat.
@@ -251,7 +251,7 @@ Then re-run the census and compare with W0.
 
 |C5 producer first
 |E18-lite: minimal Int-island lowering (all-i64 per-node rule, or wasm-encoder sign-test traps if the owner approves path (c)). Then E17 `jtv-cert` against real output; X8 mutants incl. deleted call edge.
-|count of *compiled* islands ≥ agreed minimum; `cargo tree -p jtv-cert \| grep -cE 'jtv-core\|pest'` = 0; mutants 100%
+|count of *compiled* islands ≥ agreed minimum; `cargo tree -p jtv-cert \| grep -E 'jtv-core\|pest' \| wc -l` = 0; mutants 100%
 |===
 
 *Gate 3.* Lane gates. A red Lean run blocks only the claims that depend on it.
@@ -303,14 +303,14 @@ const REPORT = {
   type: 'object',
   properties: {
     lane: { type: 'string' },
-    branch: { type: 'string' },
+    branch: { type: 'string', description: 'branch name, or "none" for read-only lanes' },
     gate_commands: { type: 'array', items: { type: 'string' } },
     gate_exit_codes: { type: 'array', items: { type: 'integer' } },
     files_changed: { type: 'array', items: { type: 'string' } },
     new_holes: { type: 'array', items: { type: 'string' } },
     notes: { type: 'string' },
   },
-  required: ['lane', 'gate_commands', 'gate_exit_codes', 'files_changed', 'new_holes'],
+  required: ['lane', 'branch', 'gate_commands', 'gate_exit_codes', 'files_changed', 'new_holes'],
 }
 
 const VERDICT = {
@@ -381,6 +381,17 @@ const wasmOk = ready.some((r) => r.lane === 'wasm' && r.verdict && !r.verdict.re
 const purityOk = ready.some((r) => r.lane === 'purity' && r.verdict && !r.verdict.refuted)
 log(`wasm lane ${wasmOk ? 'ok' : 'blocked'}; purity lane ${purityOk ? 'ok' : 'blocked'}`)
 
+// ---- New holes from any report freeze later work, including Entry ----
+const holesSoFar = [falsifiers]
+  .concat(census)
+  .concat(ready.map((r) => r.impl))
+  .filter(Boolean)
+  .flatMap((r) => r.new_holes || [])
+if (holesSoFar.length > 0) {
+  log(`New holes reported (${holesSoFar.length}); Entry lane frozen until they are triaged`)
+  return { wave0: census, falsifiers, lanes: ready, entry: null, newHoles: holesSoFar }
+}
+
 // ---- Entry lane depends on wasm + purity (merged by the lead first) ----
 let entry = null
 if (wasmOk && purityOk && args && args.wasmAndPurityMerged) {
@@ -401,7 +412,7 @@ return {
   falsifiers,
   lanes: ready,
   entry,
-  newHoles: ready.concat(entry ? [entry] : []).flatMap((r) => (r.impl && r.impl.new_holes) || []),
+  newHoles: holesSoFar.concat((entry && entry.impl && entry.impl.new_holes) || []),
 }
 ----
 

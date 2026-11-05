@@ -6,7 +6,7 @@ Scope and conventions:
 
 * *Sources.* The 16 repository maps supplied: jtv-lang (implementation), jtv-lang (design), jtv-halting-islands-ct, anytype, typell, typed-wasm, echo-types, epistemic-types, tropical-types, choreographic-types, occupancy-types, secret-types, residual-evidence-types, absolute-zero, januskey and maa-framework.
 * *Status words.* "verified" means re-run in the mapping session. "Stated" means repo docs or CI only.
-* *Missing toolchains in the mapping environment.* lean/lake/elan, agda, idris2, zig, just, wasm-pack, the wasm32 target, coqc, isabelle, julia and deno. Present: cargo/rustc, bun and node. Every prover claim below is therefore stated-only unless marked otherwise.
+* *Missing toolchains in the mapping environment.* lean/lake/elan, agda, idris2, zig, just, wasm-pack, the wasm32 target, coqc, isabelle, julia and deno. Present: cargo/rustc, bun and node. The lead later installed the wasm32 target with `rustup target add` (2026-11-04); `cargo check -p jtv-core --target wasm32-unknown-unknown` then failed on source errors, not on the environment (see LANGUAGE-SYSTEM-ARCHITECTURE.adoc H12). Every prover claim below is therefore stated-only unless marked otherwise.
 * *Repos referenced but not mapped* (out of scope; nothing is claimed about their contents beyond what the maps cite): resource-algebra (pins inspected by the occupancy-types mapper only), patacl, systemet, affinescript, ephapax, 007, oblibeny, nextgen-typing, nextgen-languages, EchoTypes.jl, valence-shell, ochrance, aletheia-as-separate, hypatia, standards, cicd-suite, kategoria, ordinal-notation, typedqliser, lintel and wokelang.
 
 == 1. Dependency graph
@@ -244,7 +244,7 @@ R9. Interpreter correctness, PROOF-2: *PARTIAL*.
 R10. Echo semantics anchored in echo-types: *OPEN*.
 * echo-types holds the theory: EchoGraded (keep ≤ residue ≤ forget, ≤g-prop, degrade-compose), EchoLossTaxonomy (EQUIV/INJ/SURJ/CONST), EchoNoSectionGeneric and the Echo.* foundation contract. All LANDED-stated, CI green on 1073d60 (run 40446306048), not type-checked locally.
 * Blockers:
-** ADR-0007/0009 cite the retracted "graded comonad" framing (echo-types R-2026-05-18 and EchoVariance #243).
+** ADR-0007/0009 cite the retracted "graded comonad" framing. Sources, read locally at echo-types `1073d600004d13f1aec7363baa0ee2e38d91568e`: `docs/retractions.adoc` §R-2026-05-18, and `docs/echo-types/variance-resolution.adoc` with `proofs/agda/EchoVariance.agda` (landed as echo-types#243 per its CLAUDE.md). The Agda itself was not type-checked here.
 ** JtV's 3-point Echo fuses the loss-class axis and the retention-index axis, a fusion FOUNDATION_CONTRACT forbids.
 ** "Breaking = total erasure" has no fibre meaning: `const-fibre-section` shows the constant map's fibre keeps the whole domain.
 ** "tropical → Breaking" conflicts with EchoTropical (retains distinct echoes) and with FOUNDATIONS_BRIDGE §5 (tropical belongs on the resource axis).
@@ -399,7 +399,7 @@ Default "one prover home per theorem" assignment (avoids B2, B3, B4 and most of 
 None of these steps has an external blocker. All are self-repo, Rust only, verifiable with cargo.
 
 * H1. Enforce typecheck and purity in JtvWasm::run/run_and_collect and in Interpreter::run (or a single checked entry point). This closes the totality/injection bypass.
-* H2. Add a word-boundary keyword rule to grammar.pest (`!(keyword ~ !ident_char)`).
+* H2. Add a word boundary to the keyword rule in grammar.pest. Put the boundary inside each keyword alternative, or order the alternatives longest-first. An outer `!(keyword ~ !ident_char)` is unsafe under PEG ordered choice, because `in` precedes `intrinsic` and `insn` (see LANGUAGE-SYSTEM-ARCHITECTURE.adoc H2).
 * H3. Re-triage the 15 examples after H2. Repair them, or quarantine the aspirational ones (owner Q13), so `just ci` is honest.
 * H4. Fix the epistemic.rs under-reporting (If/While conditions, injective `x + 1`), or downgrade its claim. Without this, Opaque must not be read as noninterference.
 * H5. Truth pass: one capability matrix (ALIGNMENT G1) replacing the STATE "DONE" overclaims for WASM, coproc and LSP.
