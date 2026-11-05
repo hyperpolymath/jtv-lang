@@ -1,4 +1,38 @@
-= Reversibility (Current State)
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= Reversibility (Current State) — SUPERSEDED
+
+[IMPORTANT]
+====
+*Superseded 2026-11-01. Retained as a historical record only.*
+
+This note predates the C1/C2 implementation and the v2 "(c)" Neutral bridge.
+Most of its body below ("no reverse execution model", "not enforced at the
+language level") no longer describes the tree.
+
+*Two lines are still current, and the banner must not claim otherwise:*
+
+* *"No integration with formal proofs"* — still true. No extraction or
+  refinement connects the Lean/Agda model to the Rust interpreter
+  (`gap-001`), and `STATUS.adoc` lists that unwired chain as a known gap.
+  Only the *type-level* Echo gate is realised in code.
+* *"Reversibility is not enforced at the language level"* — partly true: it is
+  enforced at the *type-checker* level on the paths that typecheck first, and
+  not at all in the interpreter (finding F4).
+
+Authoritative sources, in order:
+
+. `STATUS.adoc` — implemented surface and known gaps.
+. `docs/language/DESIGN-JTV-V2-REVERSIBILITY.adoc` — canonical v2 design
+  (per-operation inverse log; residue for Neutral steps).
+. `verification/PROOF-CAPABILITY-MATRIX.adoc` — what is mechanised.
+. `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` — per-layer
+  semantics, the proof-to-interpreter gap, and open findings F1–F6 (F7 closed
+  by this documentation change).
+====
+
+== Historical body (pre-C1/C2, do not cite)
 
 JtV currently provides limited, partial reversibility.
 

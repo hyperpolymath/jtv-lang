@@ -1,0 +1,267 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= JtV theory proofs in Agda
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-01
+:revnumber: 1.0
+:toc: left
+
+[.lead]
+This directory is JtV's **Theory Path source of truth**
+(`hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §1: theory →
+*Agda*, rechecked in Rocq and Lean). It is what the `jtv_proofs/` Lean
+libraries were previously standing in for, and what makes a
+`hyperpolymath/mathesis:estate-mathematical-architecture` §5 grade
+assignable at all.
+
+== 1. Modules
+
+[cols="1,3,2",options="header"]
+|===
+| Module | Content | Lean counterpart
+
+| `Jtv.Core`
+| Domains (`Var`, `State`, `DataExpr`), `eval`, `freeVars`, `update` and its
+  two interaction lemmas, evaluation extensionality, and
+  `eval-independent` (evaluation ignores state it does not mention).
+| `jtv_proofs/JtvCore.lean`, `JtvTheorems.lean`
+
+| `Jtv.Reversal`
+| v2's reversal discipline: Safe tier (`+=` and `-=`), Neutral tier
+  (recovery from a retained residue), and an existential proof that the
+  specified naive inverse fails on self-referential `x += x`
+  (`naive-backward-fails-self-ref`) — necessity *for that inverse*, not a
+  claim that no residue-free strategy could ever work. Also the two `ℤ`
+  cancellation lemmas, stated as `+ (- b)` because ADR-0007 D2 makes
+  subtraction a non-primitive.
+| `jtv_proofs/JtvTheorems.lean` (the `RevOp` section)
+
+| `Jtv.Echo`
+| The structured-loss lattice `{Safe ⊑ Neutral ⊑ Breaking}` with join
+  laws; the two admissibility policies (Safe-only, and residue/Bennett)
+  and `token-buys-neutral`; both block theorems —
+  `blockEcho-admissible` (Safe-only) and `blockEcho-admissibleWithResidue`
+  (residue/Bennett), each with its `join-*` induction step; and the
+  retained-loss fibre
+  `Echo-of f y = Σ x, f x ≡ y` with the injective⇒no-branching theorem
+  and a witness that loss is real.
+| `jtv_proofs/JtvEcho.lean`
+
+| `Jtv.Conditional`
+| **New** (not in Lean): the reversible `if`. Proves that the tokenless
+  strategy — re-evaluating the guard on the reversed state — is *not* an
+  identity (`tokenless-conditional-not-identity`), and *proves* the repair
+  rather than modelling it: `reversible-if-with-residue` shows that
+  re-playing the recorded branch (`reverse-if-recorded`) restores the state
+  for an arbitrary guard, including one whose truth changes under the step.
+  This mechanises finding **F3** of
+  `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1.
+| —
+|===
+
+== 2. Toolchain, pinned
+
+The policy requires the versions to be pinned and recorded with each source
+commit and proof result (§2.1). This is the pin the receipts in
+`verification/receipts/` were produced under:
+
+[cols="1,2",options="header"]
+|===
+| Component | Version / provenance
+
+| Agda | *2.7.0.1* (`Agda version 2.7.0.1-cf6e2d9`)
+| Standard library | *2.4* (`standard-library-2.4`, tag `v2.4`)
+
+| Invocation
+| `agda --safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch <module>.agda`
+
+| Library file
+| `jtv-theory.agda-lib` (name `jtv-theory`, `depend: standard-library-2.4`)
+|===
+
+[NOTE]
+====
+*How the audit session obtained the toolchain, and what CI should do instead.*
+The session sandbox could reach `pypi.org`, `codeload.github.com` and
+`github.com` but **not** `static.rust-lang.org`, Debian mirrors, or GitHub
+release assets (they redirect to `objects.githubusercontent.com`, which is
+blocked). Agda was therefore installed from the PyPI `agda` wheel
+(2.7.0.1, the upstream `wenkokke/agda-python` packaging), whose wheel omits
+Agda's `data/lib/prim` directory; that directory was taken from the upstream
+source tree at tag `v2.7.0.1` and dropped into the wheel's `data/`. The
+standard library came from `agda/agda-stdlib` tag `v2.4`.
+
+That is a reproduction of the *binary*, not an endorsement of the route. CI
+must install Agda and the stdlib properly (the repo's Guix manifest or a
+container, per PROOF-POLICY §6) and pin the same versions. Nothing about
+this directory depends on the wheel.
+====
+
+== 3. Running it
+
+[source,shell]
+----
+cd theory/agda
+./check.sh                 # every src/**/*.agda (recursive); prints versions + results
+./check.sh Reversal        # one module (bare name => src/Jtv/Reversal.agda)
+./check.sh Jtv/Core        # namespaced form also accepted
+AGDA=/path/to/agda AGDA_STDLIB=/path/to/standard-library.agda-lib ./check.sh
+----
+
+Discovery is recursive: every `src/**/*.agda` is compiled and scanned, so a
+module added under a new namespace (say `src/Jtv/Algebra/Group.agda`) cannot
+slip past the gate — the workflow fires on `theory/agda/**`, and a fixed module
+list would then report success without compiling it.
+
+`check.sh` is the receipt generator: it prints the Agda version, the stdlib
+name, the exact invocation, the commit, the per-module result, the receipt file
+path (`_build/check.log`), and it scans for escape hatches (`{!!}`, `postulate`, `primTrustMe`,
+`{-# NON_TERMINATING #-}`). A "green" run with a hole in it is not
+evidence, so the script fails on one rather than reporting success.
+
+== 4. Statement correspondence (PROOF-POLICY §2.2)
+
+§2.2 requires the correspondence to be recorded **per theorem**, not per
+file, and it is explicit that "a successful compilation in each prover does
+not establish that all proved the same proposition". So the route and the
+discrepancies are recorded here.
+
+*Route for every row:* `re-proved`. There is no Agda→Lean transport
+(no Dedukti/Lambdapi leg is wired up), so the Lean statement is an
+independent proof of a corresponding statement, not a translated witness.
+Per §2.2 the transport route would be preferable and is open work.
+
+[cols="3,2,1,3",options="header"]
+|===
+| Agda theorem | Lean theorem | Route | Correspondence, and where it is not exact
+
+| `eval-independent`
+| `free_vars_sufficient` (`JtvTheorems.lean:172`), with `update_non_free_var` (`:193`)
+| re-proved
+| Corresponds — the earlier citation `eval_state_independent` names no Lean
+  declaration; `free_vars_sufficient` is the theorem that states evaluation is
+  determined by the free variables, and `update_non_free_var` is what the
+  reversal proofs consume. *Representation differs:* Lean's `State := String → Int`;
+  Agda's is `Var = ℕ → ℤ`, chosen so `_≟_` is structural. Equality of
+  predicates is therefore up to the variable encoding.
+
+| `rev-forward-backward-add`
+| `rev_forward_backward` (+ `rev_composition`)
+| re-proved
+| *Agda statement is strictly stronger.* Lean concludes the value at `x`
+  only; Agda concludes **every** variable with `∀ y` (the full-state
+  identity). The Lean theorem is the `y ≡ x` restriction of the Agda one,
+  so the Lean leg does not on its own discharge the Agda statement. Open
+  reconciliation item: strengthen the Lean theorem to `∀ y`.
+
+| `rev-forward-backward-sub`
+| *(none)* — **open**
+| — (Agda-only)
+| **Correction:** this row previously cited Lean's `rev_forward_backward`
+  as the `subAssign` case. That is wrong: the Lean theorem carries the
+  hypothesis `hop : op = RevOp.addAssign x e` and is therefore about
+  addition only — no Lean subtraction round-trip theorem exists. Nothing
+  in the Lean leg discharges this statement, so the correspondence is
+  `open` and this theorem is Agda-only evidence until a Lean
+  `rev_forward_backward_sub` is added and compared. (Rust subtracts via
+  `+ (- v)` per ADR-0007 D2, which is why the Agda statement is phrased
+  that way; that is a modelling note, not a Lean correspondence.)
+
+| `rev-forward-backward-with-token`
+| `rev_forward_backward_with_token`
+| re-proved
+| Corresponds, same full-state strengthening. Both are single-operation:
+  the model's "token" is one saved value, not the runtime's log.
+
+| `naive-backward-fails-self-ref`
+| `rev_backward_naive_fails_self_ref`
+| re-proved
+| Corresponds (both are existential counterexamples). Witnesses differ in
+  presentation, not in content.
+
+| Echo lattice laws (`⊔-idem`, `⊔-comm`, `⊔-assoc`, `⊔-absorbingʳ`)
+| `JtvEcho` lattice lemmas
+| re-proved
+| Corresponds as algebras. Lean's `Echo` is the same three-element chain.
+  Agda's join needed the "worse of the two" clauses made explicit; the
+  Lean definition encodes the same operation.
+
+| `token-buys-neutral`
+| `neutral_residue_only` (`JtvEcho.lean:171`)
+| re-proved
+| Corresponds. Corrected name: the Lean declaration is `neutral_residue_only`
+  (`admissible neutral = false ∧ admissibleWithResidue neutral = true` — the
+  same conjunction as the Agda statement). `neutral_admissibleWithResidue` does
+  not exist.
+
+| `blockEcho-admissible`
+| `blockEcho_admissible`
+| re-proved
+| Corresponds. The Safe-only block theorem was *missing* from the first
+  revision of `Jtv.Echo` (the section header claimed both while only the
+  residue form existed, leaving `allAdmissible` unused); it is now proved
+  with its join lemma `join-admissible`.
+
+| `blockEcho-admissibleWithResidue`
+| `blockEcho_admissibleWithResidue`
+| re-proved
+| Corresponds. Agda needs the join lemma `join-admissibleWithResidue`
+  first, because the policy does not reduce through a variable tail.
+
+| `loss-is-real`, `fibre-inputs-agree`
+| Echo fibre construction (`JtvEcho` §4)
+| re-proved
+| *Correspondence to `echo-types` is `argued`, not bridged.* JtV states
+  the same fibre (`Σ x, f x ≡ y`) and the same "Safe ⇒ no branching"
+  reading. No statement comparison against the `echo-types` Agda library
+  has been recorded, so under §2.2 that row stays `argued` and the
+  cross-project side is `open` here. This directory does **not** import or
+  transport from `echo-types`, and no dependency is introduced.
+
+| `tokenless-conditional-not-identity` (`Jtv.Conditional`), `reversible-if-with-residue`
+| —
+| new
+| No Lean counterpart: these statements are about the *runtime* reversal
+  strategies (tokenless re-check vs. recorded branch) that the Lean model
+  does not cover.
+|===
+
+=== 4.1 What is deliberately not modelled
+
+Stated so no reader infers more coverage than exists:
+
+* the multi-operation reversal **log** (`Vec<RecordedOp>`,
+  `apply_inverse_ops`) — the Agda token is one saved value;
+* the **Rust interpreter** (`crates/jtv-core`): parser, `Value`, effect
+  order, overflow behaviour. `gap-001` stays open;
+* **conditional reversal at the runtime level** beyond the one
+  counterexample — `Jtv.Conditional` proves the tokenless strategy is
+  unsound, it does not mechanise the runtime's actual recording path;
+* **the repair for an overwriting branch.** `reversible-if-with-residue` is
+  about `x += v`, where the recorded branch bit really is the whole residue.
+  A branch that overwrites (`x = 5`) loses the old value, so the branch bit
+  cannot restore it and the `Snapshot` residue would be needed instead — that
+  statement is not proved here;
+* the **carrier-distinct number systems** (float/rational/complex/symbolic
+  value models, `gap-005`) — everything here is over `ℤ`. This bound now matters
+  more than it did: the owner's refinement of `spec/jtv_v2_type_system_corrected.adoc`
+  §9 (commit `bd32a96`) records that only *self-referential* assignments save a
+  `Snapshot` residue, while other Neutral steps — a non-self-referential `float`
+  addition, for instance — record an operation *without* a prior value, so
+  IEEE-754 rounding can prevent exact restoration. Accordingly,
+  `rev-forward-backward-with-token` is an **exactness theorem for the `ℤ` carrier
+  and for the Snapshot residue**; it is *not* a claim that every Neutral-graded
+  step is exactly reversible. A float-carrier analogue would be a different
+  theorem (and a false one, absent a residue);
+* Control-plane semantics (loops, calls, purity/liveness), which the Lean
+  libraries cover and this directory does not yet.
+
+== 5. Status
+
+See `verification/PROOF-STATUS.adoc` for the ledger and the grade. In one
+line: these four modules are **Grade 3** evidence (Agda, canonical flags,
+no escape hatches, receipt recorded); the Lean legs exist but are
+`re-proved` and carry the strengthening discrepancy above, so **Grade 2i is
+pending** that reconciliation, and Grade 2ii needs a non-DTT leg
+(Isabelle/HOL) that does not exist yet.

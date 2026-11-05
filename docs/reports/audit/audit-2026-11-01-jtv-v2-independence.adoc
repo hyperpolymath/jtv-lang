@@ -1,0 +1,940 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= Audit: JtV v2 is an Independent Research-Language Programme
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-01
+:revnumber: 1.3
+:toc: left
+:sectnums:
+
+[.lead]
+*Question.* Is JtV v2 still an independent research-language programme, or has
+it drifted into an assumed dependency on sibling hyperpolymath projects —
+specifically `epistemic-types` (at `5422cd5`), *JanusKey*, and *Absolute Zero* —
+on the strength of shared reversibility/epistemic vocabulary?
+
+*Answer.* Independent. There is no code, build, or runtime dependency on any of
+them, and none is introduced here. This audit records what JtV's reversibility
+mechanism *actually is* at each layer, what the proof-to-interpreter gap
+actually is, what "v2" means today, and the precise shape any future adapter
+would have to take to be admissible. The connection proposed by the vocabulary
+overlap is recorded as *related work only*.
+
+*Scope of evidence.* Static audit of this tree at `b23f8e9` (the full repository
+was read; every claim below cites a file, and line numbers are as of this
+commit). *No* `cargo`, `rustc`, `lake`, or Lean toolchain is available in the
+audit environment and `crates.io` is not reachable, so *nothing here is a
+test-run result*. Findings that would normally be confirmed by execution are
+marked **[not executed]** and are stated as static-reading claims, not as
+reproduced failures.
+
+== Verdict at a glance
+
+[cols="1,2,4",options="header"]
+|===
+| # | Question | Finding
+
+| V1
+| Does JtV depend on `epistemic-types`, *JanusKey*, or *Absolute Zero*?
+| *No.* No entry in `Cargo.toml`, `Cargo.lock`, `flake`/`mise`/`Justfile`, no
+`use`, no FFI, no runtime handshake, no shared token ABI. See §1.
+
+| V2
+| Is "snapshot-based `ReversalToken`" the right description?
+| *Only partly* — and the three layers disagree with each other. The Rust token
+carries a *per-operation log* with a *residue snapshot* for Neutral steps; the
+Lean "token" is a single `Int` residue; the interpreter also whole-state-copies
+at block boundaries. See §2.
+
+| V3
+| What exactly is the proof-to-interpreter gap?
+| No extraction or refinement proof exists; the Lean model and the Rust
+interpreter are independent implementations. The *token itself* is modelled in
+one as `Int` and implemented in the other as `Vec<RecordedOp>`. Conditional
+reversal is modelled only in part: `theory/agda/src/Jtv/Conditional.agda`
+models the tokenless guard-recheck strategy, exhibits the state at which it
+fails (`tokenless-conditional-not-identity`), and proves the recorded-branch
+repair (`reversible-if-with-residue`). It does **not** model the Rust
+recording path (`RecordedOp::If`) or the runtime log, and no Lean statement
+covers conditions — so the gap in §3 stands, but the blanket claim that
+conditional reversal is unmodelled no longer does. See §3.
+
+| V4
+| Is "v2" delivered?
+| Design complete; C1 + C2 + the Neutral residue bridge landed; the *typed*
+`ReversalToken<S>`, static linearity, and `irreversible { }` are designed but
+not implemented. Public prose overstates it. See §4.
+|===
+
+''''
+
+== §1 Independence: the dependency audit
+
+=== 1.1 What a dependency would have to look like
+
+For a Rust workspace, an actual dependency is one of: a `[dependencies]` entry
+(path, git, or registry), a `Cargo.lock` entry, a build-script invocation, an
+FFI/`extern "C"` boundary, a submodule, or a runtime protocol spoken over I/O.
+Anything less is *related work*.
+
+=== 1.2 Evidence of absence
+
+[cols="2,4",options="header"]
+|===
+| Surface checked | Result
+
+| `Cargo.toml` (workspace + `crates/jtv-core`, `jtv-cli`, `jtv-lsp`, `jtv-debug`)
+| No dependency on `epistemic-types`, `echo-types`, `januskey`, `absolute-zero`
+or any sibling repository. The only sibling named anywhere in dependency logic
+is `patacl-core`, and it is *deliberately not declared* (documented in
+`Cargo.toml`: eager path resolution would break clean-clone builds).
+
+| `Cargo.lock`
+| No matching package entry.
+
+| Rust sources, whole workspace
+| `grep -ri 'januskey\|absolute_zero\|abszero'` over `--include=*.rs` ⇒ *0*
+hits. `grep -ri 'epistemic'` ⇒ hits only in JtV's *own* `epistemic.rs`,
+`effect.rs`, `echo.rs`, `ast.rs` and tests — JtV's local Epistemic grade, not an
+import.
+
+| `.machine_readable/` (`.a2ml` state, contractiles, anchors)
+| No mention of `JanusKey` or `Absolute Zero`. The contractiles reference other
+ADR/state files inside this repo only.
+
+| Repository name check for the item under discussion
+| `grep -rn 'epistemic-types'` over the **parent tree** (`b23f8e9`, before this
+audit existed) ⇒ *0* hits; every current hit is this audit's own prose. The repo cites a
+*different* artefact, `echo-types` (Agda), and only as a *conceptual
+source/reference* (`echo.rs`, `jtv_proofs/JtvEcho.lean`,
+`verification/PROOF-CAPABILITY-MATRIX.adoc` §Echo, `ADR-0007`, `ADR-0009`,
+`ALIGNMENT-AFFINESCRIPT.adoc`) — with the Agda↔Lean bridge explicitly deferred
+and *not* blocking anything.
+|===
+
+=== 1.3 The two sibling mentions that exist, and what they are
+
+. `docs/ecosystem-status.adoc` — a *portfolio* status document with
+  MUST/INTEND/WISH tables for four projects (JtV, Absolute Zero, JanusKey,
+  maa-framework). It is a reporting artefact. JtV is described as "the
+  normative anchor" of the portfolio *as a status summary*, and no row asserts
+  a code relationship in either direction.
+. `wiki/language/Reversible-Computing.md:262` — "Near-absolute-zero systems
+  benefit most": a *cryogenics* reference. A word collision, not a project
+  reference. (Recorded here precisely because a keyword search for "absolute
+  zero" will keep landing on it.)
+
+A third apparent collision is *vocabulary*, not dependency: JtV's tests and
+comments call `forward ∘ reverse = id` the *CNO* (Certified Null Operation)
+pattern (`reversible.rs:161`, `interpreter.rs:424`,
+`reversibility_c2_tests.rs:5`, `reversibility_tests.rs:124`). That is a locally
+defined name for a locally defined property. Absolute Zero *is* a CNO
+verification programme, so the acronym overlap is real — and is exactly the kind
+of "similar vocabulary" the brief warns against reading as convergence. The
+semantics differ: JtV's CNO is a *runtime identity check over an interpreter
+state map*; Absolute Zero's is a *multi-prover obligation about a categorical
+construction*. Neither cites the other.
+
+=== 1.4 The `epistemic-types@5422cd5` item
+
+The stated context is that `epistemic-types` is a *constructive epistemic
+library* and supplies *no reversible-language runtime*. That is consistent with
+everything found here: JtV contains a complete reversible-language runtime of
+its own (`reversible.rs`, `interpreter.rs` token store, Lean `RevOp` model), so
+there is nothing for it to have borrowed a runtime from, and nothing in this
+tree asks for one.
+
+The one real adjacency is *terminology*, and it is worth stating precisely
+because it is the most likely source of a false convergence claim:
+
+[cols="1,3,3",options="header"]
+|===
+| Word | JtV meaning (this repo) | Not to be conflated with
+
+| *Echo*
+| Graded *structured loss* `{Safe ⊑ Neutral ⊑ Breaking}`, a coeffect-style
+grade carried in the arrow (`echo.rs`, `ast::Echo`, ADR-0009 D1).
+| A generic `Σ`-type or a wrapper; or any epistemic-types construct.
+
+| *Epistemic*
+| Graded *observability* `{Opaque ⊑ Partial ⊑ Transparent}` — a second axis,
+*dual* to Echo (loss vs revelation), forming a product effect row
+(`epistemic.rs`, ADR-0009 D2).
+| Knowledge/belief modalities in the epistemological sense. JtV's grade is a
+static, syntactic, worst-case analysis of a function body
+(`function_epistemic`, `epistemic.rs:52`).
+
+| *ReversalToken*
+| JtV-local opaque `Value::ReversalToken(u64)` indexing an in-process
+`HashMap<u64, Vec<RecordedOp>>` (`number.rs:26`, `interpreter.rs:30`).
+| A shared ABI, a linear type in the type system, or the token of any other
+project.
+|===
+
+One note for accuracy: JtV's vocabulary *is* shared with `echo-types` (Agda),
+which JtV explicitly names as its conceptual reference. If `epistemic-types` and
+`echo-types` are related artefacts, that relationship does **not** transitively
+become a JtV↔`epistemic-types` dependency: JtV's only claim about `echo-types`
+is "our lattice instantiates the same fibre construction" (`JtvEcho.lean` §4),
+which is *related work* by definition — it is a correspondence between two
+mechanisations, not a link. No action is taken on it here.
+
+''''
+
+== §2 "Snapshot-based `ReversalToken`": what the mechanism actually is
+
+The phrase is half-right, and the half that is wrong matters, because three
+layers implement three different things under one name.
+
+=== 2.1 Layer A — the Rust runtime token (the real one)
+
+`reversible { ... } -> tok` runs the body forward through
+`ReversibleInterpreter::execute_forward` and *records concrete operations* into
+a `ReverseTrace`; the trace is moved out (`take_recorded_ops`) into
+`Interpreter::token_store: HashMap<u64, Vec<RecordedOp>>` keyed by a monotonic
+`next_token_id`, and `tok` is bound to `Value::ReversalToken(id)`
+(`interpreter.rs:452-482`). `reverse tok` removes the log and applies each op's
+*inverse* last-to-first (`apply_inverse_ops`); `abandon tok` drops the log. On
+the same *name*, a second `reverse` errors at runtime — the log is gone
+(`reversibility_c2_tests.rs` C2-3/C2-4). A second `abandon` does **not**: the
+tests cover reusing the name, but `eval_abandon_token` discards the result of
+`token_store.remove(&id)`, so once a token value has been copied to an alias,
+abandoning that alias still returns `Ok(())`. Linearity is therefore a runtime
+convention on names, not a guarantee about token values — this is the
+implementation-level half of F2, and it is why the `+ReversalToken<S>+` /
+static-linearity design items matter.
+
+`RecordedOp` has four variants (`reversible.rs:11-28`):
+
+* `AddAssign { target, value }` — inverse is `SubAssign` (subtract the *recorded*
+  value, not a re-evaluated expression);
+* `SubAssign { target, value }` — inverse is `AddAssign`;
+* `If { condition_was_true, then_ops, else_ops }` — inverse replays the branch
+  that *was taken* (`apply_operation`);
+* `Snapshot { target, old_value }` — the *residue*: for a self-referential step
+  (`x += x`) the pre-step value is saved and restored, because the naive
+  `-value` inverse is wrong there.
+
+So the default is an **operation log**, and a **snapshot is used as the
+residue-recovery mechanism for the Neutral tier only**. That is the opposite of
+007's Phase-1 whole-block snapshot restore, which the canonical design doc
+explicitly rejects (`docs/language/DESIGN-JTV-V2-REVERSIBILITY.adoc`, "What JTV
+v2 Does NOT Do").
+
+=== 2.2 Layer B — the tokenless `reverse { }` path is *not* the log
+
+`reverse { ... }` (no token) does not replay the log. `Interpreter::eval_reverse_block`
+constructs a fresh `ReversibleInterpreter` over `globals.clone()` and calls
+`execute_inverse` (`interpreter.rs:412-441`), which walks the *AST* backwards and
+recomputes each inverse against the current state (`reversible.rs:177-224`).
+
+Two behaviours therefore coexist for the same source construct:
+
+[cols="2,2,3",options="header"]
+|===
+| Aspect | Token path (`reversible { } -> tok`) | Tokenless path (`reverse { }`)
+| Undo of `x += e`
+| subtract the *recorded* value
+| subtract `e` *re-evaluated* on the reversed state
+| Conditional
+| replays the branch that was recorded as taken (`condition_was_true`)
+| *re-evaluates* the guard in reverse and skips if it no longer holds
+| Self-reference `x += x`
+| admissible when a token is bound; residue snapshot restores exactly
+| rejected by the typechecker (Safe-only); the runtime has no such check
+| Overall state
+| whole `HashMap` cloned into a scratch interpreter and copied back
+| idem
+|===
+
+Both paths therefore do whole-state copying at the block boundary even though
+neither relies on it for correctness. That is an implementation detail (state
+marshalling), *not* the semantic mechanism — worth stating plainly, because it is
+the most likely reason a reader describes JtV's tokens as "snapshot-based".
+
+Note the tokenless conditional is the one place where re-evaluation can *fail to
+undo*. Three grammar/implementation facts fix the shape of any demonstration,
+and two earlier drafts of this paragraph got them wrong:
+
+* `reversible_stmt = reversible_assignment | if_stmt`, but an `if` branch body is
+  a plain control `block` (`grammar.pest:38,48`), so **any** control statement
+  parses in the branch — the `+=`-only restriction applies to statements directly
+  in a reversible block, not inside its `if` branches;
+* `reverse { ... }` does **not** run anything forward first: `execute_inverse`
+  walks the block applying inverses (`reversible.rs:177-182`);
+* within an `if`, `execute_inverted_stmt` only descends into nested
+  `ControlStmt::ReverseBlock` items and **silently ignores every other statement
+  in the branch** (`reversible.rs:203-221`).
+
+So a safe-branch-overwrite demonstration has to be a forward run followed by a
+tokenless reverse, with the branch content being something the inverse walker
+actually descends into:
+
+[source,jtv]
+----
+x = 4
+reverse { if x < 5 { reverse { y += 1 } } }
+----
+
+The inverse re-evaluates `x < 5` **on the current state**. If the forward run left
+`x >= 5`, the guard is false and the nested inverse is skipped, so the `y`
+adjustment made forward is never undone and the composite is not the identity.
+That is finding F3, and it is why the runtime requires a Janus-style "the
+condition must hold in the same direction" discipline
+(`reversible.rs:204-205`) that JtV has no check for.
+
+The counterexample is *proved* only in the model
+(`Jtv/Conditional.agda:tokenless-conditional-not-identity`); nothing above is an
+executed trace. **[not executed]**
+in the reverse direction (the comment at `reversible.rs:204` invokes exactly that
+requirement) — but JtV has no check for it. See F3 in §8. **[not executed]**
+
+=== 2.3 Layer C — the Lean model's "token" is an `Int`
+
+`jtv_proofs/JtvTheorems.lean:383`:
+
+[source,lean]
+----
+def RevOp.execBackwardWithToken (op : RevOp) (σ : State) (tok : Int) : State :=
+  match op with
+  | addAssign x _ => σ[x ↦ tok]
+  | subAssign x _ => σ[x ↦ tok]
+----
+
+`rev_forward_backward_with_token` proves that restoring `x` from the saved
+pre-step value recovers the whole state, unconditionally (including
+`x ∈ e.freeVars`), and `rev_backward_naive_fails_self_ref` proves the token is
+*necessary* in that case. This is a correctly-shaped, non-vacuous result — and
+it is a **single-operation residue snapshot**: `tok : Int` is one saved value of
+one variable, not a log, not multi-step, not a carried structure.
+
+=== 2.4 What follows
+
+"Snapshot-based `ReversalToken`" is a description of Layer C and of the
+`RecordedOp::Snapshot` residue. It is *inaccurate* as a description of the v2
+runtime token (a multi-op log) and *inaccurate* as a description of the design
+intent. The repo's own `README.adoc` currently repeats the inaccurate version
+("Snapshot-based rollback of local state") and is corrected in this change.
+
+The honest one-line statement is: **v2's token carries a per-operation inverse
+log; a saved-value snapshot is used as the residue that makes Neutral
+(self-referential) steps invertible; the mechanised model so far covers one
+operation's residue, not the log.**
+
+''''
+
+== §3 The proof-to-interpreter gap
+
+=== 3.1 What exists
+
+`verification/PROOF-CAPABILITY-MATRIX.adoc` is the authority and is candid:
+`JtvCore`, `JtvTheorems`, `JtvOperational`, `JtvTypes`, `JtvSecurity`,
+`JtvExtended`, `JtvEcho` are `verified` (Lean 4, no `sorry`/`admit`/added
+`axiom`), and `gap-001` (`interpreter ↔ denotational-model correspondence`) is
+`partial` with a *tested* correspondence harness (`mod
+denotational_correspondence` in `interpreter.rs`): the same four `evalDataExpr`
+rules re-encoded in `i128`, a shared golden corpus, and exhaustive checking of
+every integer-fragment expression of height ≤ 2 (~12k cases). The matrix states
+its own bound: integer fragment, in-range, exhaustive-up-to-depth, "not a
+Lean-mechanised refinement of the evaluator".
+
+=== 3.2 What does not exist — enumerated, because "the gap" is often left vague
+
+. *No extraction or refinement.* There is no `lake` extraction into Rust, no
+  generated code, no proof-carrying artefact consumed by the interpreter. `lake
+  build` and `cargo test` are independent gates over independent artefacts
+  (`proof-regression.yml` vs `rust-ci.yml`).
+. *No shared token representation.* Lean: `tok : Int`, one variable, one op.
+  Rust: `Vec<RecordedOp>`, many ops, four variants, per-op recorded values.
+  Nothing states that the Rust log *refines* the Lean residue, and for
+  multi-operation blocks the Lean model cannot even be instantiated — the
+  theorem is per-`RevOp`.
+. *Conditionals are outside the model.* Lean `RevOp` has `addAssign` /
+  `subAssign`. The Rust `RecordedOp::If` and the tokenless branch/guard
+  re-evaluation have **no Lean counterpart at all**, so the conditional reversal
+  paths — the two that already disagree with each other (§2.2) — are unverified
+  in both directions.
+. *The type-level gate is proved, the runtime gate does not exist.* The Lean
+  admissibility theorems (`blockEcho_admissible`,
+  `blockEcho_admissibleWithResidue`) are realised in `typechecker.rs`
+  (`check_echo_admissible` / `check_echo_admissible_with_residue`). But the
+  interpreter itself performs *no* admissibility or reversibility check:
+  `Interpreter::run` (`interpreter.rs:183`) evaluates statements directly. The
+  gate holds only on paths that typecheck first. Only `jtv run` does that
+  (`run_file`, `main.rs:199-222`, "SECURITY: Run type checking before
+  execution"). These shipped paths do **not**:
+
+  * **REPL** — `crates/jtv-cli/src/repl.rs` calls `parse_program` then
+    `Interpreter::run` with no `TypeChecker`;
+  * **debugger** — `crates/jtv-debug/src/main.rs` likewise;
+  * **WASM** — `WasmInterpreter::run` / `run_and_collect` parse and execute
+    (`wasm.rs:69-92`); `type_check` is a separate, host-opt-in method;
+  * **any embedder** — `parse_program` + `Interpreter::run` is the public API,
+    and the reversibility test suites use exactly that.
+
+  So F1-F3 are reachable interactively in the REPL and debugger, in the
+  playground, and from any library host - not only in unusual embedding
+  scenarios.
+  silently gets unchecked reversal.
+. *`check_reversibility` is production-dead.* The AST-level guard in
+  `reversible.rs:471` is referenced only by tests
+  (`tests/contract_tests.rs:242,260`); the typechecker has its own, different
+  Echo-based guard which *is* the proved rule's realisation in code, but which
+  the interpreter never consults on its own path. Two guards, one dead, the
+  other opt-in.
+. *No end-to-end round-trip at the integration level.* `STATUS.adoc` lists this
+  under Known Gaps and it is still true: there is no
+  `(forward ∘ reverse = id)` test over the *language surface* for the Neutral
+  tier. The residue bridge is tested at `ReversibleInterpreter` unit level
+  (`test_neutral_self_reference_recovered_via_residue`) and the token paths are
+  tested for Safe-only blocks (`reversibility_c2_tests.rs`); the composition —
+  `reversible { x += x } -> tok` through parser, typechecker, interpreter and
+  `reverse tok` — is not in the suite.
+
+=== 3.3 Why this is a research obligation, not a defect report
+
+The gap is *the state of the art JtV claims to be at*, and it is documented as
+such. Recording its shape precisely is what keeps the claim honest: JtV has a
+mechanised model of its semantics, a tested correspondence for the integer
+fragment, and a typed admissibility rule realised in the checker — but the
+*reversible* semantics is mechanised one operation at a time while the runtime
+implements a log with conditionals. Any statement of the form "JtV's
+reversibility is proved" must be read as "the Safe single-step and the Neutral
+residue step are proved; the token/log semantics as executed is tested, not
+proved".
+
+''''
+
+== §4 Current v2 status
+
+Authoritative sources disagree, so they are reconciled here.
+
+[cols="3,1,2",options="header"]
+|===
+| Element | Status | Evidence
+
+| v2 reversibility *design* (5 decisions, canonical model)
+| complete
+| `docs/language/DESIGN-JTV-V2-REVERSIBILITY.adoc`; ADR-0007; ADR-0008
+
+| C1 — `reverse { }` / `execute_inverse` / `execute_reverse`
+| implemented
+| `reversible.rs`, `interpreter.rs:412`, `reversibility_tests.rs`
+
+| C2 — `reversible { } -> tok` / `reverse tok` / `abandon tok`
+| implemented
+| `interpreter.rs:452-556`, `reversibility_c2_tests.rs` (5 tests)
+
+| Neutral residue bridge ("(c)"), token unlocks Neutral
+| implemented + mechanised
+| `RecordedOp::Snapshot`; `check_echo_admissible_with_residue`; ADR-0007
+"LANDED 2026-06-15"; `JtvEcho` §2b, `JtvTheorems:399,416`
+
+| Typed token `ReversalToken<S>` (type parameter, path-sensitive typing at
+branch joins)
+| *designed only*
+| design doc; implementation is `Value::ReversalToken(u64)` with no type
+parameter (`number.rs:26`) and no join typing
+
+| Static linearity ("exactly one `reverse`/`abandon`")
+| *runtime only*
+| `typechecker.rs:513-521` accepts `reverse tok` / `abandon tok`
+unconditionally; linearity is enforced by removing the id from `token_store`
+
+| `irreversible { }` escape hatch (design doc §The Three Constructs)
+| *not implemented*
+| no grammar rule, no AST node, no parser arm; `README.adoc` advertises it
+(now corrected)
+
+| Deterministic single-step replay discipline (one `reverse` per token, no
+interleaving)
+| unstated, unimplemented
+| the log records *values*, not identities; a token whose variables drifted is
+not checked (§4.1 F2)
+
+| Full round-trip identity at integration level
+| absent
+| §3.2 item 6
+|===
+
+=== 4.1 Status of the surrounding documentation
+
+Three artefacts are stale in ways that would mislead the next reader, and are
+corrected in this change:
+
+. `README.adoc` §v2 Reversibility — "Snapshot-based rollback of local state",
+   "`ReversalToken` is linearly typed", and `irreversible { }` as if it existed.
+   No one of these three is true of the implementation (§2, §4 table).
+. `spec/jtv_v2_type_system_corrected.adoc` §9 — an implementation note dated
+   2026-06-02 saying the residue mechanism is "unimplemented, so the checker
+   conservatively rejects [Neutral]". That was superseded on 2026-06-15
+   (ADR-0007, the `(c)` bridge); the note is now the opposite of the code.
+. `docs/language/reversibility/current-status.adoc` — "limited, partial
+   reversibility … no reverse execution model … not enforced at the language
+   level". Contradicts `STATUS.adoc` and the whole C1/C2 implementation. Kept as
+   a historical note, with a superseded banner.
+
+=== 4.2 One status item worth flagging separately
+
+`reversible { ... }` with **no** `-> tok` binding is legal (the grammar makes the
+binding optional, `grammar.pest:59`) and stores the log anyway; the interpreter
+comments that it is "effectively abandoned"
+(`interpreter.rs:472-473`). The log is then unreachable and retained for the
+interpreter's lifetime — residue that can never be recovered and is never freed
+until `reset()`. Either the binding should be mandatory, or the tokenless form
+should be a *Safe-only* `reverse`-style block that records nothing. Flagged, not
+changed (it is a semantics decision, not a doc fix).
+
+''''
+
+== §5 What this audit does *not* touch — JtV's own scope
+
+JtV's research identity is stated independently of every sibling project, and
+nothing in this audit relaxes it.
+
+*The Harvard Data/Control split* is JtV's, and it is structural, not
+editorial: `Language`/`Expr` GADT separation in Idris2 (`src/abi/Types.idr`,
+`isControl` + `dataIsNeverControl`), the grammar-level separation in
+`grammar.pest`, `no_control_to_data_flow` and `string_not_executable` in
+`JtvSecurity`, the addition-only Total Data plane (ADR-0007 D1), and the AOLD
+grafting claim (D3). Reversibility lives *inside* Control's reverse blocks, as a
+third orthogonal axis, and is explicitly not allowed to erode Data totality or
+purity (ADR-0007, "Identity preserved").
+
+*JtV's reversibility obligations are its own and were stated before, and
+independently of, any portfolio question*:
+
+[cols="1,4",options="header"]
+|===
+| Obligation | Source (JtV-internal)
+
+| Subtraction is not a primitive; it is the reversal of addition
+| ADR-0007 D2; DESIGN-JTV-V2-REVERSIBILITY "Philosophical Commitment"
+
+| Addition-only, no multiplication primitive, all number systems
+| ADR-0007 D1
+
+| Turing-completeness by Harvard block *embedded* in a von-Neumann host (AOLD)
+| ADR-0007 D3
+
+| Shortest-addition-path-to-equality, with Echo as lineage
+| ADR-0007 D4
+
+| Reversal *ladder*: Safe → Neutral (retained residue) → Breaking
+| ADR-0007 D5; `Echo` lattice; `admissible` / `admissibleWithResidue`
+
+| Echo tier fixed by the additive algebra of the carrier
+| ADR-0007 D6; ADR-0010 (`abelianGroup`/`approxGroup`/`nonGroup`); `JtvEcho` §6
+
+| Reverse blocks: all statements invertible, no `EchoBreaking`, no loops
+| spec v2 §9; `check_echo_admissible`
+
+| Two independent effect axes (Echo loss, Epistemic revelation) as a product row
+| ADR-0009 D1/D2/D3; `effect.rs`
+
+| Locally reversible only; cross-agent sends are a static error
+| DESIGN §The ExternalHandle Boundary
+|===
+
+None of these obligations is derived from, delegated to, or weakened by
+`epistemic-types`, *JanusKey*, or *Absolute Zero*. Conversely, this audit does
+not ask JtV to *adopt* anything: the "do not introduce a dependency merely
+because all three discuss reversibility" instruction is honoured by leaving the
+dependency graph exactly as it is.
+
+''''
+
+== §6 Related work (recorded, non-binding, no semantics attached)
+
+These are the connections the shared vocabulary invites. Each is recorded with
+its *actual* relation to JtV and the reason it is not a dependency.
+
+[NOTE]
+====
+*Evidential status of this section.* Every relation below is an inference drawn by
+this session from repository contents; none is a receipt. Per mathesis
+`estate-mathematical-architecture` §8, bridges or correspondences suggested by a
+model must be tagged: **everything in §6 and §7 is LLM-Hypothesized
+(Unverified)** and belongs in a nomination, not in the catalogue. The *negative*
+findings in §1 (absence of dependencies) are grep-checked against this tree at
+`b23f8e9` and are not hypotheses; the *positive* readings of what
+another project's artefacts would have to supply cannot be checked from here and
+carry the tag.
+====
+
+=== 6.1 Janus (Lutz & Derby 1982; Yokoyama & Glück 2007)
+
+*Relation:* literature lineage. JtV's per-operation reversal — and the
+"guard must hold when reversing" discipline — is the Janus tradition, and the
+comment at `reversible.rs:204` invokes it by name. This is citation, not
+coupling: no Janus implementation, grammar, or artefact is imported, and Janus
+is a published language, not a hyperpolymath component.
+
+*Divergence worth keeping explicit:* Janus guarantees reversibility by
+*construction* (there is no irreversible assignment in the language). JtV
+guarantees it by *grading + gate* (Echo classification, an admissibility rule
+in the checker, and a residue token where the grade is Neutral). That is a
+different research position — JtV keeps a total, addition-only Data plane and an
+expressive Control plane and pays for it with a static gate — and it is the
+reason JtV's obligations cannot be discharged by importing Janus's.
+
+=== 6.2 The 007 Phase 1/Phase 2 fork
+
+*Relation:* a *deliberately designed experiment* between two of the author's own
+implementations, documented in both directions
+(DESIGN-JTV-V2-REVERSIBILITY "The Designed Fork with 007"). Shared: linear
+token pairing, `Option<token>` at asymmetric joins, `ExternalHandle` static
+error, `irreversible { }`, structural sugar. Different: snapshot-and-restore
+(007 Phase 1) vs operation log (JtV v2).
+
+This is the one place where a *shared mechanism* is claimed, and it is claimed
+narrowly: pairing mechanism shared; reversal semantics not. It carries no code
+dependency and no build coupling — the shared part is a design vocabulary the two
+implementations keep in sync by reading each other's design docs.
+
+=== 6.3 Absolute Zero
+
+*Relation:* sibling verification programme, different subject. Absolute Zero
+mechanises *Certified Null Operations* across Coq/Lean/Agda with an axiom-triage
+discipline; JtV uses "CNO" as the name of a *runtime identity property*
+(`execute_and_reverse`). Shared vocabulary: "CNO", "reversibility",
+"Landauer/Bennett". Shared artefact: none.
+
+If a connection is ever wanted, the honest form is: *Absolute Zero's CNO
+definition could serve as an external specification of what JtV's
+`execute_and_reverse` is supposed to mean.* That is a specification-adoption
+proposal — a research claim requiring a semantic mapping — not a dependency, and
+it is **not** proposed here (see §7.3).
+
+=== 6.4 JanusKey
+
+*Relation:* different domain sharing a word. JanusKey is architecturally
+reversible *file operations* over content-addressed storage (SHA256 + audit
+trail + transactions) in Rust. JtV is a *language* whose reversibility is a
+semantic property of programs over an abstract state map. There is no shared
+abstraction to depend on: JanusKey's reversibility is at the filesystem API
+layer; JtV's is at the expression/evaluation layer. Nothing in JtV's `Storage`,
+`ExternalHandle`, or coprocessor surfaces would be served by JanusKey, and
+JanusKey has nothing to import from a language runtime.
+
+=== 6.5 `epistemic-types@5422cd5`
+
+*Relation:* as stated in §1.4 — constructive epistemic library, no reversible
+runtime, no artefact cited by JtV, no code path. Similar vocabulary
+("epistemic", "reversible") is documented here as *false-positive signal*, not
+as convergence evidence. Architectural convergence would require an actual
+correspondence between JtV's effect row and that library's constructions, proved
+or at least stated as a mapping; no such correspondence is claimed anywhere in
+this tree, and this audit does not create one.
+
+''''
+
+== §7 If an adapter is ever wanted: explicit admissibility semantics
+
+Nothing below is planned, scheduled, or implied by this audit. It is written
+down so that a future proposal cannot be accepted on vocabulary alone. An
+adapter from JtV to any of the above is admissible only if *all* of the
+following hold.
+
+=== 7.1 Required form
+
+. *Direction: JtV-internal model → external artefact as a target of a mapping.*
+   The external project supplies *theory or specification*; it never supplies a
+   runtime, a token representation, a store, or an evaluator. Any proposal in
+   which JtV would obtain its reversible runtime from outside is rejected on its
+   face, because JtV *is* a reversible-language runtime.
+. *Authoritative side stays JtV.* `verification/PROOF-CAPABILITY-MATRIX.adoc`
+   and `JtvEcho.lean` remain authoritative for JtV implementation semantics, as
+   they already do for the `echo-types` reference. An external development is
+   never allowed to overrule the matrix.
+. *Pinned and named.* The proposal must cite a commit (e.g.
+   `epistemic-types@5422cd5`), the exact artefact, and which direction data would
+   flow. Prose references to a repository are not an adapter.
+. *No shared ABI.* No shared token type, no shared serialisation, no shared
+   store. If the mapping needs a token at the boundary, the boundary is wrong.
+. *Additive only.* An adapter must not change JtV's obligations (§5), the
+   Data/Control split, the addition-only mandate, or the Echo/Epistemic axes.
+   If it would, it is a redesign and needs its own ADR, not an adapter.
+. *Failure is a documented non-mapping.* If the correspondence cannot be stated
+   (different notions of loss, different notions of knowledge, no shared fibre
+   construction), the outcome is a "Related work, no mapping" note in this
+   directory — which is a successful audit outcome, not an unfinished task.
+
+=== 7.2 What each candidate would have to supply to be more than related work
+
+[cols="2,4",options="header"]
+|===
+| Candidate | The missing artefact
+
+| `epistemic-types`
+| A stated correspondence between its constructions and JtV's
+  `Echo × Epistemic` product row — i.e. which of its objects, if any, is the
+  interpretation of `function_effect` — plus confirmation that no runtime
+  obligation is implied. Without that, the relation is vocabulary.
+
+| Absolute Zero
+| A definition of CNO that JtV's `execute_and_reverse` provably satisfies
+  (i.e. a refinement obligation from §3.2), *and* acceptance that JtV's evidence
+  standard (runtime test + tested correspondence) is lower than Absolute Zero's
+  (multi-prover, triaged axioms). Adopting the definition without meeting the
+  standard would be a downgrade dressed as integration.
+
+| JanusKey
+| Nothing available: the abstraction levels do not meet. Recorded as
+  non-adjacent.
+
+| Janus
+| Nothing available: published literature, cited as lineage (§6.1). No adapter
+  is definable to a paper.
+|===
+
+=== 7.3 Decision of record
+
+**Status: none proposed.** The default for all four is "related work, no
+mapping". This is the deliberate outcome of the audit, not an oversight, and it
+is the item to revisit first if a future session feels pressure to "connect the
+reversibility projects".
+
+''''
+
+== §8 Findings and the changes made with this audit
+
+=== 8.1 Findings
+
+[cols="1,2,1,3",options="header"]
+|===
+| ID | Finding | Severity | Where
+
+| F1
+| Echo grades a plain assignment inside a reversible `if` branch as `Safe`
+  (`classify_control_stmts_in_env`, `echo.rs:223-232`), so an overwrite is
+  admitted into a reverse block although it is not invertible.
+| *High*
+| `echo.rs`, `typechecker.rs`
+
+| F2
+| `execute_control_stmt_reversible` executes branch assignments *without
+  recording* them, so `RecordedOp::If` carries empty `then_ops`/`else_ops` and
+  `reverse` is a silent no-op for the branch — `forward ∘ reverse ≠ id`, with no
+  error. **[not executed]** Consequence of F1.
+| *High*
+| `reversible.rs:313-340`
+
+| F3
+| Tokenless `reverse { }` re-evaluates the guard on reversal and silently skips
+  the branch when the guard no longer holds, so the block is not the identity.
+  Janus forbids such blocks; JtV does not check. **[not executed]**
+| *High*
+| `reversible.rs:203-224`
+
+| F4
+| No runtime admissibility gate: `Interpreter::run` inverts without checking
+  Echo/reversibility. Only the CLI typechecks before executing; the WASM `run`
+  bindings and any `parse_program` + `Interpreter::run` host do not.
+| *Medium*
+| `interpreter.rs:183`, `main.rs:199`, `repl.rs`, `jtv-debug/src/main.rs`, `wasm.rs:69`
+
+| F5
+| `check_reversibility` (AST-level guard) is dead in production — tests only;
+  the effective guard is a differently-shaped Echo check.
+| *Medium*
+| `reversible.rs:471`
+
+| F6
+| Tokenless `reversible { }` stores an unreachable log forever ("effectively
+  abandoned"), retaining residue that can never be recovered.
+| *Medium*
+| `interpreter.rs:466-470`
+
+| F7
+| Documentation overstates v2: README (snapshot rollback, linearly *typed*
+  token, `irreversible { }`), spec §9 (residue "unimplemented"), and
+  `reversibility/current-status.adoc` (no reverse execution model).
+| *Medium*
+| see §4.1
+|===
+
+F7 (documentation overstatement) is closed by this same change (§8.2); F1–F6
+remain open. F1–F3 are the ones that matter: they are cases where the *mechanised* story
+(Echo is a sound gate; the log inverts) and the *executed* story (conditionals
+are neither graded nor recorded soundly) have diverged. They are recorded here
+rather than patched, because this audit could not compile or run the test suite
+(no toolchain, no crate registry) and because F1/F2 need a semantics decision —
+whether reversible blocks admit plain assignments at all, or whether reversible
+`if` branches must themselves be `+=`/`-=` only — which is a design call, not a
+typo fix. Recommended next action: make reversible `if` branches `+=`/`-=`-only
+(matching `spec/jtv_v2_type_system_corrected.adoc` §9 "all statements
+invertible"), which retires F1 and F2 at once; then add the integration-level
+round-trip tests listed in §3.2 item 6, including `reversible { x += x } -> tok`,
+the conditional cases in F2/F3, and a double-`reverse` linearity check through
+the language surface.
+
+=== 8.2 Documentation changes made in the same commit
+
+* `README.adoc` — v2 reversibility bullets rewritten to the implemented
+  mechanism (per-operation inverse log with a residue for Neutral steps;
+  linearity enforced by consumption at runtime, not by the type system;
+  `irreversible { }` and typed `ReversalToken<S>` marked designed-not-implemented).
+* `spec/jtv_v2_type_system_corrected.adoc` §9 — stale "unimplemented" note
+  replaced with the landed residue policy (Safe-only for tokenless blocks;
+  Safe-or-Neutral for `-> tok`), citing ADR-0007 and the checker functions.
+* `docs/language/reversibility/current-status.adoc` — superseded banner pointing
+  at `STATUS.adoc`, the design doc, and this audit; historical body retained.
+* `docs/language/DESIGN-JTV-V2-REVERSIBILITY.adoc` — Janus paragraph marked as
+  literature lineage (not a dependency), plus a pointer to this audit and to the
+  Layer A/B/C distinction.
+* `docs/ecosystem-status.adoc` — a non-dependency statement for the portfolio
+  table: JtV ships no code dependency on Absolute Zero, JanusKey, or any sibling;
+  the status document reports, it does not couple.
+* `verification/PROOF-STATUS.adoc` — *new.* JtV's estate-conformant proof ledger:
+  the closed status vocabulary per obligation, the prover legs required by
+  PROOF-POLICY §1, the mathesis grade status (**Grade 3 held for four Agda
+  modules**, receipt filed; Grade 2i pending), and the remaining graded path (§5).
+  This bullet originally read "none held … no prover was executed", which was
+  true when the ledger was first written and is no longer: the Agda layer was
+  added, run under the canonical invocation, and receipted in
+  `verification/receipts/2026-11-01-agda.adoc`.
+* `verification/PROOF-CAPABILITY-MATRIX.adoc` — header note separating "what JtV
+  has mechanised, in which prover" from "what grade that earns"; the matrix's
+  local `verified`/`partial` vocabulary explicitly does *not* confer a grade.
+* `EXPLAINME.adoc` — §7.1 corrected from "five Lean libraries" to the actual
+  seven; new §7.4 (strength vs grade) and §7.5 (the `[[proof-ledger]]` summary the
+  README-EXPLAINME standard requires once proofs are claimed).
+* `CLAUDE.md` — the PROOF-POLICY pointer the policy expects every repository's
+  `CLAUDE.md` to carry, with the two rules with teeth for this repo (Lean ≠ theory
+  source of truth; no Mathlib, no weakened flags).
+* `STATUS.adoc` — grade row in the classification table.
+
+Nothing in the code, the grammar, the dependency graph, or the proof
+*requirements* was changed by this audit. No prover, verifier, or test suite was
+executed *by the audit itself* (§3.1 covers what is claimed without execution).
+The subsequent Agda work is a separate, receipted execution: four modules
+typechecked under the canonical invocation on 2026-11-01, recorded in
+`verification/receipts/2026-11-01-agda.adoc`, and that receipt — not this
+document — is the evidence for the Grade 3 claim in §9.
+
+''''
+
+== §9 Estate conformance: which grade does any of this earn?
+
+Folded in 2026-11-01 at the owner's direction: the governing policies are
+`hyperpolymath/mathesis` → `estate-mathematical-architecture` (§5 graded proof
+architecture, §6 epistemic precision) and `hyperpolymath/standards` →
+`3-practice/PROOF-POLICY.adoc` (§1 prover mapping, §2 rechecking, §3 re-homing,
+§4 exceptions, §5 vocabulary). JtV now carries a ledger at
+`verification/PROOF-STATUS.adoc`; this section is the audit-level summary.
+
+=== 9.1 The grade definitions that matter here
+
+* *Grade 3* — the theorem type-checks **locally in Agda** under strict flags
+  (`agda --safe --without-K --cubical-compatible`), not yet translated to an
+  independent foundation.
+* *Grade 2i / 2ii* — the **Agda witness** is translated to one / two other
+  foundations (2ii's second must be non-DTT, e.g. Isabelle/HOL, because
+  Agda/Rocq/Lean share the DTT-CIC family).
+* *Grade 1* — those witnesses compile headless in CI via verified checker APIs
+  (AXLE for Lean, coq-lsp for Rocq, Isabelle server for HOL), receipt pinned to a
+  commit.
+* Statuses are `Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` /
+  `Grade 1` (plus `Superseded` / `Regressed`). *Never* a percentage.
+
+=== 9.2 JtV's position
+
+*Status update (later the same day): JtV now holds Grade 3 for four Agda modules.*
+The section below is the position *as audited*; it is kept because it explains
+why the gap existed, and because every word of it still applies to the theorems
+that were **not** ported. `theory/agda/` now carries `Jtv.Core`, `Jtv.Reversal`,
+`Jtv.Echo` and `Jtv.Conditional` under the canonical invocation, receipted in
+`verification/receipts/2026-11-01-agda.adoc`, with the per-theorem Lean↔Agda
+correspondence (and its one strengthening discrepancy) in
+`theory/agda/README.adoc` §4. Grade 2i is pending that reconciliation; the Rocq
+leg, a non-DTT leg and any Rust/Creusot leg remain absent.
+
+*As audited, JtV held no grade at all.* Not because its proofs were weak, but
+because of an ordering choice: JtV mechanised in Lean first, and the estate's
+Theory Path puts Agda first. PROOF-POLICY §3 settles the consequence without ambiguity — a Lean
+proof of a theory statement is *target-only evidence*, and "the Agda row stays
+`OPEN`". JtV has zero `.agda` files. So:
+
+[cols="2,1,3",options="header"]
+|===
+| Layer | Estate status | Note
+
+| Theory source (Agda) | `open` | Missing entirely; the binding obligation
+| Theory recheck (Rocq) | `open` | No `.v`, no Dedukti transport
+| Theory recheck (Lean) | `open` as a *leg* | Present as evidence: 7 libraries,
+  no `sorry`/`admit`/`axiom`, Mathlib-free (satisfies §2's no-Mathlib rule) —
+  but a leg only counts once the Agda source is `proven` and the statements have
+  *been compared*, with that comparison recorded (§2.2)
+| Engineering (Idris2 ABI) | `proven` | `src/abi/Types.idr`, `%default total`
+| Engineering (Rust/Creusot) | `open` | No contracts anywhere in `crates/`; this
+  is the §1 mapping for JtV's core runtime
+| Model ↔ interpreter (`gap-001`) | `open` / `tested-only` | Harness only
+| Mathesis grade | `Claimed` → *`Grade 3` (§2.1b)* | Four modules ported to Agda
+  the same day and receipted; the Lean-only remainder stays `Claimed`
+|===
+
+=== 9.3 What this audit therefore does *not* claim
+
+It does not claim JtV's reversibility is "proved". §3 already scopes that
+precisely; the estate vocabulary makes the scoping citable: the Safe single-step
+and Neutral residue-step theorems are `proven` *over the model and in the wrong
+prover for the leg*, the runtime log semantics is `tested-only` at best, the
+Neutral round-trip is `open`, and the Rust contracts are `open`.
+
+=== 9.4 The shortest route to Grade 3 (and why it is one theorem, not a suite)
+
+Per PROOF-POLICY §2.3's evidence-first order, keep the Lean and Idris2 gates
+running, then take **one exact theorem** to Agda under the canonical invocation
+and pin the Agda + stdlib versions with the commit. `dataExpr_totality`
+(structural recursion over the `DataExpr` GADT) and the Echo lattice laws are the
+cheapest honest candidates: no library dependency, no cubical feature, and the
+Lean statement already exists to be compared against. The moment one such
+statement type-checks in Agda *and the Lean statement has been compared with it*,
+JtV is at Grade 2i — because the Lean leg already exists. Grade 3 alone (Agda,
+untranslated) is a state JtV would have to reach by *not* having Lean, so it is
+better understood as a milestone on the way, not a destination.
+
+*On the Rust side*, Aeneas is the estate's route for "Rust implements a proved
+theorem" — precisely `gap-001` — and it is **not** adoptable today: its Rocq
+backend carries an axiom (`mk_array`) from which `False` is derivable and is
+unmaintained, and its Lean backend requires Mathlib, which §2 forbids. The
+correspondence row would be `ASSUMED` at best. Recorded so no future session
+closes the proof-to-interpreter gap with Aeneas and then reports the
+implementation as proved.
+
+== §10 One-paragraph answer
+
+JtV v2 remains an independent research-language programme. Its reversible
+runtime is JtV's own: an in-process linear token (`u64`) indexing a
+per-operation inverse log, with saved-value residues for Neutral
+(self-referential) steps and whole-state marshalling at block boundaries. It
+depends on no sibling project — not `epistemic-types` (never named in this tree,
+which cites `echo-types` instead and only as a conceptual reference), not
+*JanusKey* (different abstraction level; mentioned once, in a portfolio status
+table), not *Absolute Zero* (sibling verification programme; "CNO" here names a
+local runtime identity property). The proof-to-interpreter gap is real and
+specific: the Lean model mechanises the Safe single step and the Neutral residue
+step per operation, while the executed semantics is a multi-operation log with
+conditionals that the model does not cover, and no refinement proof connects the
+two. v2 is design-complete with C1/C2 and the Neutral bridge landed; the typed
+`ReversalToken<S>`, static linearity, and `irreversible { }` are not implemented,
+and the prose that said otherwise is corrected here. JtV's Harvard Data/Control
+split and its independently stated reversibility obligations (ADR-0007 D1–D6,
+spec §9, ADR-0009, ADR-0010) are untouched. Vocabulary overlap with `epistemic-types`,
+*JanusKey* and *Absolute Zero* is recorded as related work with no mapping, and
+no dependency is introduced. On the estate's proof grading, JtV holds
+**Grade 3 for four Agda modules** — `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`,
+`Jtv.Conditional` — checked under the canonical invocation with a filed receipt
+(`verification/receipts/2026-11-01-agda.adoc`). Its seven `sorry`-free Lean
+libraries are retained, but under `standards/3-practice/PROOF-POLICY.adoc` §3
+they are not the leg that carries the grade (the Theory Path puts Agda first):
+they are a strong artefact in a neighbouring prover, and one theorem
+(`rev_forward_backward`) is weaker than its Agda counterpart, which is why
+**Grade 2i is pending** rather than held. Still open beside it: the unported
+theorems (`dataExpr_totality`, the `isIntRepr` family, `JtvSecurity`'s AOLD
+bundle, `JtvExtended`), the Rust/Creusot leg — JtV's first-party Rust carries no
+Creusot contracts — and the statement reconciliation that Grade 2i needs. All of
+this is recorded, with the ordered path, in
+`verification/PROOF-STATUS.adoc`.
