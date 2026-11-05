@@ -7,9 +7,9 @@
 # then a nested-parenthesis parse-time sweep (H13). Read-only: writes only to a
 # temporary directory. Usage: docs/architecture/probes/run-probes.sh [--gate] [path/to/jtv]
 #
-# Report mode (default, Wave 0 baseline) always exits 0: the holes are expected to
-# reproduce. --gate mode exits 1 if any input cannot be prepared (missing or unreadable
-# probe, failed mktemp or sweep write) or any probe or sweep step ends with anything other
+# Report mode (default, Wave 0 baseline) exits 0 even when holes reproduce, which is expected;
+# both modes exit 2 if any input cannot be prepared (missing or unreadable
+# probe, failed mktemp or sweep write). --gate mode also exits 1 if any probe or sweep step ends with anything other
 # than 0 (success) or 1 (a handled JtvError): a timeout (124), a Rust panic (101), a
 # host abort (134) or any other status counts as a crash, so none can pass Gate 1.
 # Whether each probe's behaviour is correct is judged per file by the Gate 1
@@ -20,10 +20,11 @@ if [[ "${1:-}" == "--gate" ]]; then gate=1; shift; fi
 here="$(cd "$(dirname "$0")" && pwd)"
 jtv="${1:-$here/../../../target/debug/jtv}"
 bad=0
+prep_bad=0
 # crashed CODE: true when CODE is neither 0 (success) nor 1 (handled JtvError).
 crashed() { local code="$1"; [[ "$code" -ne 0 && "$code" -ne 1 ]]; }
 # prep_failed WHAT: an input could not be prepared, so its check never ran; count it.
-prep_failed() { local what="$1"; echo "  preparation failed: $what"; bad=$((bad + 1)); }
+prep_failed() { local what="$1"; echo "  preparation failed: $what"; bad=$((bad + 1)); prep_bad=$((prep_bad + 1)); }
 [[ -x "$jtv" ]] || { echo "build first: cargo build -p jtv-cli" >&2; exit 2; }
 shopt -s nullglob
 probes=("$here"/*.jtv)
@@ -54,6 +55,8 @@ for d in ${NEST_DEPTHS:-8 12 16 18}; do
   echo "  $d $e $(( ($(date +%s%N) - s) / 1000000 ))"
   if crashed "$e"; then bad=$((bad + 1)); fi
 done
-echo; echo "hung, crashed or unprepared steps: $bad"
+echo; echo "hung, crashed or unprepared steps: $bad (unprepared: $prep_bad)"
+# Missing evidence fails in both modes: a baseline built on probes that never ran is not a baseline.
+if [[ "$prep_bad" -ne 0 ]]; then exit 2; fi
 if [[ "$gate" -eq 1 && "$bad" -ne 0 ]]; then exit 1; fi
 exit 0
