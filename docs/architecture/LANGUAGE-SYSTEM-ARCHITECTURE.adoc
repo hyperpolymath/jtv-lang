@@ -496,7 +496,7 @@ Corrections applied (from the judges and red team):
 |PR0 Hygiene
 |Axiom audit (`#print axioms`; allowed: propext, Quot.sound, Classical.choice). `Pins.lean` with exact-statement pins, so a gate cannot be satisfied by `theorem x : True`. Pin elan-init and idris2-pack to SHAs (both fetched from moving branches today, proof-regression.yml:68, 126). Widen path filter. Remove the "skipping Lean" branch (cheap, though the lakefile exists today).
 |Lean, jtv-lang
-|`grep -rnwE 'sorry\|admit\|native_decide' --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h 'elan/master' .github/workflows/*.yml \| wc -l` = 0; Lean CI conclusion success
+|`grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` "forbidden axioms: 0"; `grep -h 'elan/master' .github/workflows/*.yml \| wc -l` = 0; Lean CI conclusion success
 
 |PR1 JtvRank
 |FunTable, rank certificate (with loop-bound field), decidable `CertValid`, fuel semantics `evalFuel` mirroring the interpreter *under the lexical-scoping ADR*. `checkCert_sound`, `cert_terminates`, `evalFuel_mono`, `data_call_state_preserving`, `islands_no_divergence`, negative `cyclic_table_diverges`.
