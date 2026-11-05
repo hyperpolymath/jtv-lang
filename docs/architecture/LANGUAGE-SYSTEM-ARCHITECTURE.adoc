@@ -826,7 +826,7 @@ Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, an
 
 |X-parse (Wave 0)
 |Parse time is exponential in nesting today and linear after left-factoring
-|depth sweep 1..5000, debug and release
+|doubling depths 1, 2, 4, … to 5000 (20 s timeout), then bounded bisection after the first timeout; debug and release
 |ms per depth; exit codes
 |H13 fix choice (left-factor vs Pratt)
 
