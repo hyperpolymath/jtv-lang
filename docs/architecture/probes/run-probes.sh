@@ -35,7 +35,9 @@ for n in "${expected[@]}"; do probes+=("$here/$n.jtv"); done
 shopt -s nullglob
 for p in "$here"/*.jtv; do
   n="$(basename "$p" .jtv)"
-  [[ " ${expected[*]} " == *" $n "* ]] || prep_failed "unlisted probe $p (add it to expected)"
+  listed=0
+  for e in "${expected[@]}"; do [[ "$n" == "$e" ]] && listed=1; done
+  [[ "$listed" -eq 1 ]] || prep_failed "unlisted probe $p (add it to expected)"
 done
 printf '%-20s %6s %6s  %s\n' probe check run 'output (all lines, joined with |)'
 for p in "${probes[@]}"; do
@@ -56,6 +58,8 @@ else
 fi
 for d in ${NEST_DEPTHS:-8 12 16 18}; do
   [[ -n "$tmp" ]] || { prep_failed "sweep depth $d (no temp dir)"; continue; }
+  # A depth must be a positive integer, or seq fails and printf would still write a depth-one input.
+  [[ "$d" =~ ^[1-9][0-9]*$ ]] || { prep_failed "sweep depth $d (not a positive integer)"; continue; }
   open="$(printf '(%.0s' $(seq 1 "$d"))"; close="$(printf ')%.0s' $(seq 1 "$d"))"
   if ! { printf 'x = %s1%s\nprint(x)\n' "$open" "$close" > "$tmp/n.jtv" && [[ -s "$tmp/n.jtv" ]]; }; then
     prep_failed "sweep file for depth $d"; continue

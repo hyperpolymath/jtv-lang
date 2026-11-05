@@ -319,7 +319,7 @@ Then re-run the census and compare with W0.
 
 == Workflow script skeleton (Wave 0 and Wave 1)
 
-Plain JavaScript for the Workflow tool. Like any Workflow script it is an async function body (it ends in a top-level `return`), so it is syntax-checked that way: wrapped in `export default async function (...) { ... }` it passes `bun build --no-bundle`, and the bare file is not a standalone module. Fill `repo` (the absolute path of the jtv-lang checkout), `scratch` and the branch names when running it. Each run does one mode. The lead merges branches between runs, so ordering is enforced by checked prerequisites, not by prose.
+Plain JavaScript for the Workflow tool. Like any Workflow script it starts with the `export const meta` literal and runs as an async function body (it ends in a top-level `return`), so the bare file is not a standalone module. It is syntax-checked the way it runs: with `export const meta` rewritten to a plain `const` (an `export` cannot sit inside a function) and the whole file wrapped in `export default async function (args, agent, phase, log, pipeline, parallel) { ... }`, it passes `bun build --no-bundle`. A stubbed-agent harness then runs that same wrapped body against every mode. Fill `repo` (the absolute path of the jtv-lang checkout), `scratch` and the branch names when running it. Each run does one mode. The lead merges branches between runs, so ordering is enforced by checked prerequisites, not by prose.
 
 [cols="1,3",options="header"]
 |===
@@ -385,9 +385,13 @@ export const meta = {
 //   No defaults: 'lanes' and 'gate1' both require base and merged.
 // ---------------------------------------------------------------------------
 const A = args || {}
-if (typeof A.repo !== 'string' || !A.repo.startsWith('/')) throw new Error('args.repo must be the absolute path of the jtv-lang checkout')
+// Every argument below is interpolated into shell commands, so each is held to a grammar with
+// no spaces or shell metacharacters; branch names must also start alphanumeric (never an option).
+const SAFE_PATH = /^\/[A-Za-z0-9._\/-]+$/
+const SAFE_BRANCH = /^[A-Za-z0-9][A-Za-z0-9._\/-]*$/
+if (typeof A.repo !== 'string' || !SAFE_PATH.test(A.repo)) throw new Error('args.repo must be the absolute path of the jtv-lang checkout ([A-Za-z0-9._/-] only)')
 const REPO = A.repo
-if (typeof A.scratch !== 'string' || !A.scratch.startsWith('/')) throw new Error('args.scratch must be an absolute path shared by every worktree')
+if (typeof A.scratch !== 'string' || !SAFE_PATH.test(A.scratch)) throw new Error('args.scratch must be an absolute path shared by every worktree ([A-Za-z0-9._/-] only)')
 const SCRATCH = A.scratch
 const BASE = A.base
 const MERGED = A.merged
@@ -674,7 +678,7 @@ if (A.mode === 'wave0') {
 }
 
 // Every later mode needs the Wave 0 baseline and an explicit, empty list of open holes.
-if (!A.baseline) throw new Error('Run mode wave0 first and pass its receipt path as args.baseline')
+if (typeof A.baseline !== 'string' || !SAFE_PATH.test(A.baseline)) throw new Error('Run mode wave0 first and pass its receipt path as args.baseline (absolute, [A-Za-z0-9._/-] only)')
 if (!Array.isArray(A.openHoles)) throw new Error('Pass args.openHoles: the untriaged holes from earlier runs ([] once triaged)')
 if (A.openHoles.length) throw new Error(`Frozen: ${A.openHoles.length} untriaged hole(s); triage them before running ${A.mode}`)
 if (typeof A.w0Digest !== 'string' || !/^[0-9a-f]{64}$/.test(A.w0Digest)) throw new Error('Pass args.w0Digest: the 64-hex digest of the Wave 0 outputs (run the w0DigestCommand that wave0 returned)')
@@ -682,7 +686,7 @@ if (typeof A.w0Digest !== 'string' || !/^[0-9a-f]{64}$/.test(A.w0Digest)) throw 
 // ---- mode: lanes ----------------------------------------------------------
 if (A.mode === 'lanes') {
   if (typeof A.stopRule !== 'boolean') throw new Error('lanes mode needs an explicit stopRule: true while Q26/Q39 are unanswered, false after the owner answers')
-  if (typeof BASE !== 'string' || !BASE) throw new Error('lanes mode needs args.base: the branch every lane starts from')
+  if (typeof BASE !== 'string' || !SAFE_BRANCH.test(BASE)) throw new Error('lanes mode needs args.base: the branch every lane starts from (alphanumeric first, then [A-Za-z0-9._/-])')
   if (!Array.isArray(MERGED)) throw new Error('lanes mode needs args.merged: the lanes already merged into args.base ([] for none)')
   if (!Number.isInteger(A.baselineTests) || A.baselineTests <= 0) throw new Error('lanes mode needs args.baselineTests: the raw W0 test count; each reviewer re-reads it from the receipt')
   if (!SIGNING_RULINGS.includes(A.signing)) throw new Error(`lanes mode needs args.signing set to one of ${SIGNING_RULINGS.join(', ')} per the Q36 ruling`)
@@ -734,7 +738,7 @@ if (A.mode === 'lanes') {
 
 // ---- mode: gate1 ----------------------------------------------------------
 if (A.mode === 'gate1') {
-  if (!A.integration) throw new Error('gate1 needs args.integration (the merged branch)')
+  if (typeof A.integration !== 'string' || !SAFE_BRANCH.test(A.integration)) throw new Error('gate1 needs args.integration: the merged branch (alphanumeric first, then [A-Za-z0-9._/-])')
   if (!Number.isInteger(A.baselineTests) || A.baselineTests <= 0) throw new Error('gate1 needs args.baselineTests: the raw W0 test count (a positive integer)')
   if (!SIGNING_RULINGS.includes(A.signing)) throw new Error(`gate1 needs args.signing set to one of ${SIGNING_RULINGS.join(', ')} per the Q36 ruling`)
   if (typeof BASE !== 'string' || !/^[0-9a-f]{40}$/.test(BASE)) throw new Error('gate1 needs args.base as the full 40-hex SHA of the pre-Wave-1 commit (an immutable signature-range start, not a branch name)')
