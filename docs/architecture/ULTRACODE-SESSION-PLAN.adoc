@@ -152,9 +152,9 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |Lane |Files owned |Deliverable |Gate
 
 |A-grammar (H2, H13)
-|`grammar.pest`, `parser.rs` (limits only), `tests/pest_rule_tests.rs`, `benches/parse.rs`
+|`grammar.pest`, `parser.rs` (limits only), `tests/pest_rule_tests.rs`, `tests/parse_budget.rs`, `benches/parse.rs`
 |Boundary inside each keyword alternative (ordering alone does not fix `int_a`); keyword-list-generated test; left-factored `(`-rules and data/control choice; depth and token limits → `JtvError`.
-|`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn`, `in` rejected as identifiers, `int_a` accepted; nest_200 check < 50 ms (release); nest_20000 exit 1; examples/basic/02 parses
+|`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn`, `in` rejected as identifiers, `int_a` accepted; `cargo test --release -p jtv-core --test parse_budget` (asserts nest_200 parses in under 50 ms and nest_20000 returns a JtvError, not a crash); examples/basic/02 parses
 
 |B-wasm (H12) — must merge before E-entry
 |new `crates/jtv-wasm/`, move of `wasm.rs`, `lib.rs` re-export lines, `Cargo.toml` workspace
@@ -198,8 +198,11 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 * `cargo fmt --all -- --check`
 * `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`
 * every Wave 1 fixture non-zero on check; every falsifier of a merged lane meets its declared expectation and runner (reject-check, reject, accept, pass or reject-or-roundtrip; see the skeleton's EXPECT_MEANING). Checker holes use reject-check: failing only at run time does not count.
-* `docs/architecture/probes/run-probes.sh --gate` exits 0 (no probe hangs or aborts)
-* a full Gate 1 needs all eight Wave 1 lanes merged, including `proof-hygiene` and its axiom audit; a STOP-subset Gate 1 covers only `grammar`, `wasm` and `entry-interim`, and judges only their falsifiers
+* `cargo test --release -p jtv-core --test parse_budget`, re-run here because `reversible-if` edits `grammar.pest` after the grammar lane
+* `cargo build -p jtv-cli`, then `docs/architecture/probes/run-probes.sh --gate` exits 0 (no probe hangs or aborts; the native binary is built first because `cargo test` does not produce it)
+* a full Gate 1 needs all eight Wave 1 lanes merged, including `proof-hygiene` and its axiom audit; a STOP-subset Gate 1 needs exactly `grammar`, `wasm` and `entry-interim`, and judges only their falsifiers
+* the verifier gets the falsifier directory, the census test and the baseline receipt, and recomputes the counts rather than trusting them
+* lane readiness also needs the reviewer's own per-file falsifier results (one per expected file, matching expect and runner) and signed commits under the Q36 ruling
 * trybuild compile-fail tests pass
 * signatures per the Q36 ruling
 
@@ -308,19 +311,19 @@ Plain JavaScript for the Workflow tool. It passes a syntax check (`bun build --n
 |`{ mode: 'wave0', scratch }`
 |Writes the W0 receipt, the census, X11, the parse and depth sweep, and the lane-tagged falsifiers. No source change. `scratch` must be an absolute path shared by every worktree. Every later mode requires `baseline` and an explicit `openHoles` list, which must be empty: any untriaged hole from an earlier run freezes the next run.
 
-|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
+|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['grammar', 'carrier', 'wasm', 'purity', 'proof-hygiene'], base, merged: [] }`
 |Independent lanes, one worktree each, branched from `base`. Each reviewer checks out that lane's branch in its own worktree and runs only that lane's falsifiers.
 
-|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
+|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['reversible-if'], base, merged: ['grammar', 'carrier', 'wasm'] }`
 |Dependent lanes start from an integration branch that already contains their prerequisites. The script refuses to start a lane whose prerequisites are not listed as merged.
 
-|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
+|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['entry-interim'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if'] }`
 |After `reversible-if` merges. Both lanes own `interpreter.rs`, so outside the STOP rule `entry-interim` starts from a base that already contains it.
 
-|`{ mode: 'lanes', scratch, baseline, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
+|`{ mode: 'lanes', scratch, baseline, signing, stopRule: false, openHoles: [], lanes: ['entry'], base, merged: ['grammar', 'carrier', 'wasm', 'reversible-if', 'entry-interim', 'purity'] }`
 |The `CheckedProgram` typestate, after the purity lane.
 
-|`{ mode: 'lanes', scratch, baseline, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
+|`{ mode: 'lanes', scratch, baseline, signing, stopRule: true, openHoles: [], lanes: [...], base, merged: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
 |`{ mode: 'gate1', scratch, baseline, openHoles: [], integration, base, signing: 'environment' or 'owner-key', merged: [all eight lanes], stopRule: false }`
@@ -356,7 +359,7 @@ export const meta = {
 //   stopRule     REQUIRED in 'lanes' mode: true while Q26/Q39 are unanswered (only
 //                STOP_ALLOWED lanes may run), false only after the owner has answered
 //   integration  branch that Gate 1 tests ('gate1' mode)
-//   signing      'environment' or 'owner-key', per the Q36 ruling ('gate1' mode)
+//   signing      'environment' or 'owner-key', per the Q36 ruling ('lanes' and 'gate1' modes)
 //   No defaults: 'lanes' and 'gate1' both require base and merged.
 // ---------------------------------------------------------------------------
 const A = args || {}
@@ -396,8 +399,13 @@ const LANE_VERDICT = {
   ...VERDICT,
   properties: { ...VERDICT.properties,
     ownership_ok: { type: 'boolean', description: 'every path in git diff --name-only base...branch is within the lane owns list' },
-    outside_paths: { type: 'array', items: { type: 'string' } } },
-  required: [...VERDICT.required, 'ownership_ok', 'outside_paths'],
+    outside_paths: { type: 'array', items: { type: 'string' } },
+    falsifier_results: { type: 'array', items: { type: 'object', properties: {
+      file: { type: 'string' }, expect: { type: 'string' }, runner: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
+    }, required: ['file', 'expect', 'runner', 'observed', 'ok'] } },
+    signatures_ok: { type: 'boolean', description: 'every commit in base...branch is signed per the Q36 ruling' },
+    signature_detail: { type: 'string' } },
+  required: [...VERDICT.required, 'ownership_ok', 'outside_paths', 'falsifier_results', 'signatures_ok', 'signature_detail'],
 }
 
 const GATE = {
@@ -460,6 +468,11 @@ const FALSIFIERS = RAW_FALSIFIERS.map((f) => ({
   runner: f.file.endsWith('.test.js') ? 'bun' : 'jtv',
   ...f,
 }))
+// Exact coverage: one result per expected file, with the same expect and runner, and ok.
+const exactFalsifiers = (results, list) => Array.isArray(results) && results.length === list.length
+  && list.every((f) => { const rs = results.filter((r) => r.file === f.file); return rs.length === 1 && rs[0].expect === f.expect && rs[0].runner === f.runner && rs[0].ok === true })
+// The Q36 signature check, quoted into every prompt that verifies commits.
+const signingCheck = (range) => `Check that every commit in ${range} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail.`
 // One shared definition, quoted into every prompt that judges a falsifier.
 const EXPECT_MEANING = "Expectations: 'reject-check' = jtv check itself exits != 0; passing check and failing only at run time is a failure. 'reject' = a .jtv program that jtv check rejects (exit != 0) or that jtv run stops with a JtvError (exit 1); exit 0 or a host abort (134) fails. 'accept' = jtv check and jtv run both exit 0. 'pass' = bun test on the file exits 0 (its assertions encode the rejection). 'reject-or-roundtrip' = rejected by jtv check, or runs with exit 0 and its before/after prints match. Runners: 'jtv' = jtv check then jtv run; 'repl' = feed the file to jtv repl on stdin (the REPL must reject the program); 'jtv-debug' = run the file through jtv-debug (it must reject before executing); 'bun' = bun test on the file. Judge each file only with its own runner and report that runner in the result."
 
@@ -479,6 +492,8 @@ const GATE1_COMMANDS = [
   'cargo fmt --all -- --check',
   'cargo build -p jtv-wasm --target wasm32-unknown-unknown --release',
   ...(Array.isArray(MERGED) && MERGED.includes('entry') ? ['cargo test -p jtv-core --test entry_point_ui'] : []),
+  'cargo test --release -p jtv-core --test parse_budget',
+  'cargo build -p jtv-cli',
   'docs/architecture/probes/run-probes.sh --gate',
   'proof hygiene: grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs theory | wc -l = 0',
   ...(Array.isArray(MERGED) && MERGED.includes('proof-hygiene') ? ['bash scripts/check-lean-axioms.sh'] : []),
@@ -487,9 +502,9 @@ const GATE1_COMMANDS = [
 
 // prereqs must already be merged into `base` before a lane may start.
 const LANES = {
-  grammar: { prereqs: [], owns: 'grammar.pest, parser.rs limits, pest_rule_tests.rs, benches/parse.rs',
+  grammar: { prereqs: [], owns: 'grammar.pest, parser.rs limits, pest_rule_tests.rs, tests/parse_budget.rs, benches/parse.rs',
     task: 'H2 + H13: word boundary inside every keyword alternative; keyword-list-generated tests; left-factor paren rules; depth and token limits returning JtvError.',
-    gate: 'cargo test -p jtv-core --test pest_rule_tests; nest_200 under 50 ms release; nest_20000 exit 1' },
+    gate: 'cargo test -p jtv-core --test pest_rule_tests; cargo test --release -p jtv-core --test parse_budget (asserts nest_200 parses in under 50 ms and nest_20000 returns a JtvError, not a crash)' },
   carrier: { prereqs: [], owns: 'echo.rs carrier table, number.rs test at L409, tests/carrier_reversal.rs, ADR-0015 draft',
     task: 'H10 + H19 interim: reject token-free reverse on Symbolic, String, Bool, Any; add a carrier_echo regression asserting none of them is Safe. No Lean edits.',
     gate: 'symbolic/string/bool/any reverse falsifiers non-zero on jtv check; cargo test -p jtv-core carrier' },
@@ -544,6 +559,7 @@ if (A.mode === 'lanes') {
   if (typeof A.stopRule !== 'boolean') throw new Error('lanes mode needs an explicit stopRule: true while Q26/Q39 are unanswered, false after the owner answers')
   if (typeof BASE !== 'string' || !BASE) throw new Error('lanes mode needs args.base: the branch every lane starts from')
   if (!Array.isArray(MERGED)) throw new Error('lanes mode needs args.merged: the lanes already merged into args.base ([] for none)')
+  if (!SIGNING_RULINGS.includes(A.signing)) throw new Error(`lanes mode needs args.signing set to one of ${SIGNING_RULINGS.join(', ')} per the Q36 ruling`)
   const names = A.lanes || []
   for (const n of names) {
     if (!LANES[n]) throw new Error(`unknown lane ${n}`)
@@ -553,8 +569,8 @@ if (A.mode === 'lanes') {
     if (missing.length) throw new Error(`lane ${n} needs ${missing.join(', ')} merged into ${BASE} first`)
   }
 
-  const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin; git checkout -b claude/jtv-w1-${n} ${BASE}. You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the first is this lane's own gate), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signing per the Q36 ruling) and push the branch. Report every command with its exit code; report a new hole instead of fixing it.`
-  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${impl && impl.branch}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. Re-run the lane gate and check that it tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
+  const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin; git checkout -b claude/jtv-w1-${n} ${BASE}. You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the first is this lane's own gate), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signed under the '${A.signing}' Q36 ruling) and push the branch. Report every command with its exit code; report a new hole instead of fixing it.`
+  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${impl && impl.branch}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run the lane gate and check that it tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
 
   phase('Implement')
   const results = await pipeline(
@@ -575,6 +591,8 @@ if (A.mode === 'lanes') {
   const ready = done.filter((r) => r.verdict && !r.verdict.refuted
     && Array.isArray(r.verdict.surviving_falsifiers) && r.verdict.surviving_falsifiers.length === 0
     && r.verdict.ownership_ok === true
+    && r.verdict.signatures_ok === true
+    && exactFalsifiers(r.verdict.falsifier_results, lanesFor(r.lane))
     && complete(r.impl, r.lane)
     && r.impl.gate_exit_codes.every((c) => c === 0)).map((r) => r.lane)
   const newHoles = holesOf(done.map((r) => r.impl).concat(done.map((r) => r.verdict)))
@@ -593,19 +611,19 @@ if (A.mode === 'gate1') {
   if (!A.stopRule && unmerged.length) throw new Error(`A full Gate 1 needs every Wave 1 lane merged; missing: ${unmerged.join(', ')}. For a STOP-subset gate pass stopRule: true`)
   const forbidden = MERGED.filter((n) => !STOP_ALLOWED.includes(n))
   if (A.stopRule && forbidden.length) throw new Error(`STOP-subset Gate 1 may only cover ${STOP_ALLOWED.join(', ')}; got ${forbidden.join(', ')}`)
+  const stopMissing = STOP_ALLOWED.filter((n) => !MERGED.includes(n))
+  if (A.stopRule && stopMissing.length) throw new Error(`STOP-subset Gate 1 needs every STOP lane merged; missing: ${stopMissing.join(', ')}`)
   // Falsifiers of lanes not merged here are expected to still reproduce, so they are not judged.
   const GATE_FALSIFIERS = FALSIFIERS.filter((f) => MERGED.includes(f.lane))
   phase('Gate1')
-  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). Check that every commit on the branch since ${BASE} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
-  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. Re-run any command whose result looks implausible, in your own detached worktree of that branch. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
+  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). ${signingCheck(`${BASE}..FETCH_HEAD`)} Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
+  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. The report must list exactly these commands, in order: ${JSON.stringify(GATE1_COMMANDS)}. The falsifiers live in ${SCRATCH}/falsifiers and must be judged exactly as listed (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The census test is ${SCRATCH}/census/census.rs (copy it to crates/jtv-core/tests/census.rs, do not commit) and the baseline receipt is ${A.baseline}; recompute census_new_failures and baseline_test_count from them. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run any command, falsifier or count whose result looks implausible; list in surviving_falsifiers any falsifier you can make fail. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
   const newHoles = holesOf([gate, check])
   // Coverage: the exact command list, and each falsifier exactly once with its expectation.
   const commandsExact = Boolean(gate) && gate.commands.length === GATE1_COMMANDS.length
     && GATE1_COMMANDS.every((c, i) => gate.commands[i] === c)
     && gate.exit_codes.length === GATE1_COMMANDS.length
-  const resultFor = (f) => (gate ? gate.falsifier_results.filter((r) => r.file === f.file) : [])
-  const falsifiersExact = Boolean(gate) && gate.falsifier_results.length === GATE_FALSIFIERS.length
-    && GATE_FALSIFIERS.every((f) => { const rs = resultFor(f); return rs.length === 1 && rs[0].expect === f.expect && rs[0].runner === f.runner && rs[0].ok })
+  const falsifiersExact = Boolean(gate) && exactFalsifiers(gate.falsifier_results, GATE_FALSIFIERS)
   const green = Boolean(gate && check && !check.refuted
     && Array.isArray(check.surviving_falsifiers) && check.surviving_falsifiers.length === 0
     && commandsExact && gate.exit_codes.every((c) => c === 0)

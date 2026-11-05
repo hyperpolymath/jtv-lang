@@ -586,7 +586,7 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 
 |E1g Grammar (H2, H13)
 |Keyword boundary *inside each alternative* (ordering alone is insufficient: `int_a` begins with `in`); test generated from the keyword list (every keyword rejected; every keyword+`_x` accepted). Left-factor `(`-alternatives; depth/token limits returning `JtvError`.
-|`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn` rejected; nest_200 check < 50 ms; nest_20000 exit 1
+|`cargo test -p jtv-core --test pest_rule_tests`; `intrinsic`, `insn` rejected; `cargo test --release -p jtv-core --test parse_budget` (nest_200 under 50 ms; nest_20000 returns a JtvError)
 
 |E1r Resolve + scope (H14, H15)
 |`resolve.rs` with `FnId`s; fail-closed scoping interim per Q39.
