@@ -159,7 +159,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |B-wasm (H12) — must merge before E-entry
 |new `crates/jtv-wasm/`, move of `wasm.rs`, `lib.rs` re-export lines, `Cargo.toml` workspace, `crates/jtv-core/Cargo.toml` (drop `wasm-bindgen`), `Cargo.lock`
 |cdylib, `#![forbid(unsafe_code)]`, `thread_local` index shim, re-entry guard returning `JtvError`; js-sys/wasm-bindgen target-specific here only.
-|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree -p jtv-core -e normal \| grep wasm-bindgen \| wc -l` = 0
+|`cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`; `grep -c '^#!\[forbid(unsafe_code)\]' crates/jtv-wasm/src/lib.rs` = 1; `grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs \| wc -l` = 0; `cargo tree --workspace --exclude jtv-wasm -e normal \| grep -c wasm-bindgen` = 0 (only jtv-wasm may depend on it)
 
 |C-resolve+purity (H14, H15 interim, H6, H7, H17, H18) — one agent, serial
 |new `resolve.rs`, `purity.rs`, `typechecker.rs` (Data-call rule moved to a post-purity pass; for-over-List), `ast.rs` comment, `lib.rs` (mod lines only), fixtures, `tests/callgraph_props.rs`, `spec/jtv-totalcert-v0.adoc`, `docs/spec/totalcert.schema.json`, `jtv-cli` `--cert`/`--json` flags and `crates/jtv-cli/tests/cert_json.rs`, ADR-0013/0017 drafts
@@ -187,7 +187,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |`grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs \| wc -l` = 0; `bash scripts/check-lean-axioms.sh` exits 0 and prints "forbidden axioms: 0"; `lake env lean jtv_proofs/Pins.lean` exits 0; `grep -c True jtv_proofs/Pins.lean` = 0. Without a Lean toolchain these exit non-zero, so the lane stays not ready (fail closed) until Q28 is answered or CI runs them.
 |===
 
-The Gate column summarises each lane. The executable form is `LANES[n].gate` in the workflow skeleton below: one shell command per entry, each with its own exit code, and a lane is ready only when every entry exits 0. That list is authoritative. Rejections everywhere mean the CLI's handled `JtvError` status 1; any other non-zero status (101 panic, 134 abort, 124 timeout) is a crash. The REPL falsifier is driven with `:load <file>` then `:quit`, so the REPL sees the file as one program.
+The Gate column summarises each lane. The executable form is `LANES[n].gate` in the workflow skeleton below: one shell command per entry, each with its own exit code, and a lane is ready only when every entry exits 0, both in the implementer's report and when the reviewer re-runs the full list. That list is authoritative. Rejections everywhere mean the CLI's handled `JtvError` status 1; any other non-zero status (101 panic, 134 abort, 124 timeout) is a crash. The REPL falsifier is driven with `:load <file>` then `:quit`, so the REPL sees the file as one program.
 
 *Adversarial reviewer (one agent, no worktree, read-only).* Writes falsifiers first, before implementers finish: mutual f→g→f; Data → `@total` → `@pure` loop; recursion via `M::f`; shadowing; caller-local read; reverse in function; impure-in-Data via wasm and REPL; Symbolic, String and Any reverse; deep Impure recursion; blow-up tree; nesting bomb; extern intrinsic in Data; re-entrant JS callback; overwrite inside a reversible `if`; guard that flips under its own branch. Any surviving falsifier blocks merge.
 
@@ -195,7 +195,8 @@ The Gate column summarises each lane. The executable form is `LANES[n].gate` in 
 
 *Gate 1.*
 
-* `cargo test --workspace` (passed count ≥ the raw W0 count, passed in as `baselineTests` and never adjusted; tests may move between crates but not disappear; 0 failed)
+* `cargo test --workspace` (passed count ≥ the raw W0 count, passed in as `baselineTests` and never adjusted; tests may move between crates but not disappear; 0 failed). The W0 receipt records the count as `cargo_test_passed`; the gate agent and the verifier each read it from the receipt, and both values must equal `baselineTests`.
+* the H23 check (`check_reversibility` deleted, or called outside `reversible.rs`) re-runs here, because later merges can remove the only call site
 * `cargo clippy --workspace --all-targets -- -D warnings`
 * `cargo fmt --all -- --check`
 * `cargo build -p jtv-wasm --target wasm32-unknown-unknown --release`, then `wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm` (wasm-bindgen-cli at the Cargo.lock version, 0.2.118); the bun falsifiers load `JTV_WASM_JS` = that `jtv_wasm.js`. Checked locally with a stub crate: the bindings load and a bun test passes.
@@ -407,8 +408,10 @@ const LANE_VERDICT = {
       file: { type: 'string' }, expect: { type: 'string' }, runner: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
     }, required: ['file', 'expect', 'runner', 'observed', 'ok'] } },
     signatures_ok: { type: 'boolean', description: 'every commit in base...branch is signed per the Q36 ruling' },
-    signature_detail: { type: 'string' } },
-  required: [...VERDICT.required, 'ownership_ok', 'outside_paths', 'falsifier_results', 'signatures_ok', 'signature_detail'],
+    signature_detail: { type: 'string' },
+    commands: { type: 'array', items: { type: 'string' }, description: 'laneCommands(n), re-run by the reviewer, in order' },
+    exit_codes: { type: 'array', items: { type: 'integer' } } },
+  required: [...VERDICT.required, 'ownership_ok', 'outside_paths', 'falsifier_results', 'signatures_ok', 'signature_detail', 'commands', 'exit_codes'],
 }
 
 const GATE = {
@@ -420,6 +423,7 @@ const GATE = {
       file: { type: 'string' }, expect: { type: 'string' }, runner: { type: 'string' }, observed: { type: 'string' }, ok: { type: 'boolean' },
     }, required: ['file', 'expect', 'runner', 'observed', 'ok'] } },
     census_delta: { type: 'string' },
+    receipt_test_count: { type: 'integer', description: 'cargo_test_passed read from the W0 receipt file' },
     census_new_failures: { type: 'integer', description: 'programs (examples, conformance, stdlib) that pass in the W0 baseline and fail on this branch' },
     test_count: { type: 'integer', description: 'tests passed by cargo test --workspace' },
     baseline_test_count: { type: 'integer', description: 'the raw W0 test count, copied from args.baselineTests' },
@@ -427,7 +431,13 @@ const GATE = {
     signature_detail: { type: 'string' },
     new_holes: { type: 'array', items: { type: 'string' } },
   },
-  required: ['commands', 'exit_codes', 'falsifier_results', 'census_delta', 'census_new_failures', 'test_count', 'baseline_test_count', 'signatures_ok', 'signature_detail', 'new_holes'],
+  required: ['commands', 'exit_codes', 'falsifier_results', 'census_delta', 'receipt_test_count', 'census_new_failures', 'test_count', 'baseline_test_count', 'signatures_ok', 'signature_detail', 'new_holes'],
+}
+// The Gate 1 verifier also reads the receipt itself, so a wrong args.baselineTests is caught twice.
+const GATE1_VERDICT = {
+  ...VERDICT,
+  properties: { ...VERDICT.properties, receipt_test_count: { type: 'integer', description: 'cargo_test_passed read from the W0 receipt file' } },
+  required: [...VERDICT.required, 'receipt_test_count'],
 }
 
 // expect (default 'reject'):
@@ -494,6 +504,8 @@ const LANE_REQUIRED_COMMANDS = [
   'cargo fmt --all -- --check',
 ]
 
+// H23: check_reversibility is deleted, or called outside reversible.rs. Run by the lane and again by Gate 1.
+const H23_CMD = "test \"$(grep -rn 'fn check_reversibility' crates/jtv-core/src | wc -l)\" -eq 0 || test \"$(grep -rln 'check_reversibility(' crates/*/src | grep -v 'reversible.rs$' | wc -l)\" -ge 1"
 // JS bindings for the bun falsifiers, at a fixed path they load through JTV_WASM_JS.
 const WASM_JS_CMD = 'wasm-bindgen --target nodejs --out-dir target/jtv-wasm-js target/wasm32-unknown-unknown/release/jtv_wasm.wasm'
 // The commands Gate 1 must run, each exactly once, by this exact label. The trybuild
@@ -510,6 +522,7 @@ const GATE1_COMMANDS = [
   'docs/architecture/probes/run-probes.sh --gate',
   'test "$(grep -rnw -e sorry -e admit -e native_decide --include=*.lean --exclude-dir=.lake jtv_proofs theory | wc -l)" -eq 0',
   ...(Array.isArray(MERGED) && MERGED.includes('proof-hygiene') ? ['bash scripts/check-lean-axioms.sh'] : []),
+  ...(Array.isArray(MERGED) && MERGED.includes('reversible-if') ? [H23_CMD] : []),
   'cargo test -p jtv-core --test census -- --ignored',
 ]
 
@@ -535,13 +548,14 @@ const LANES = {
       WASM_JS_CMD,
       "test \"$(grep -c '^#!\\[forbid(unsafe_code)\\]' crates/jtv-wasm/src/lib.rs)\" -eq 1",
       "test -d crates/jtv-wasm/src && test \"$(grep -n -e 'unsafe impl' -e 'unsafe fn' -e 'unsafe {' crates/jtv-wasm/src/*.rs | wc -l)\" -eq 0",
-      'test "$(cargo tree -p jtv-core -e normal | grep -c wasm-bindgen)" -eq 0',
+      'test "$(cargo tree --workspace --exclude jtv-wasm -e normal | grep -c wasm-bindgen)" -eq 0',
     ] },
-  purity: { prereqs: [], owns: 'crates/jtv-core/src/resolve.rs, crates/jtv-core/src/purity.rs, crates/jtv-core/src/typechecker.rs, crates/jtv-core/src/ast.rs (comment only), crates/jtv-core/src/lib.rs (mod lines only), crates/jtv-core/tests/fixtures/**, crates/jtv-core/tests/callgraph_props.rs, crates/jtv-cli/src/main.rs (--cert/--json flags only), crates/jtv-cli/tests/cert_json.rs, docs/spec/totalcert.schema.json, ADR-0013/0017 drafts',
-    task: 'H14, H15 interim, H6, H7, H17, H18: resolver with FnIds; fail-closed scoping; purity LFP over SCC; Data-call rule on computed level; bodiless callees Impure; for over List; jtv check --cert --json emitting JSON that matches docs/spec/totalcert.schema.json (crates/jtv-cli/tests/cert_json.rs asserts exit 0 and schema validity).',
+  purity: { prereqs: [], owns: 'crates/jtv-core/src/resolve.rs, crates/jtv-core/src/purity.rs, crates/jtv-core/src/typechecker.rs, crates/jtv-core/src/ast.rs (comment only), crates/jtv-core/src/lib.rs (mod lines only), crates/jtv-core/tests/fixtures/**, crates/jtv-core/tests/callgraph_props.rs, crates/jtv-cli/src/main.rs (--cert/--json flags only), crates/jtv-cli/tests/cert_json.rs, docs/spec/totalcert.schema.json, spec/jtv-totalcert-v0.adoc, ADR-0013/0017 drafts',
+    task: 'H14, H15 interim, H6, H7, H17, H18: resolver with FnIds; fail-closed scoping; purity LFP over SCC; Data-call rule on computed level; bodiless callees Impure; for over List; jtv check --cert --json emitting JSON that matches docs/spec/totalcert.schema.json (crates/jtv-cli/tests/cert_json.rs asserts exit 0 and schema validity); spec/jtv-totalcert-v0.adoc describes the certificate format and names the schema file.',
     gate: [
       'PROPTEST_CASES=1000 cargo test -p jtv-core --test callgraph_props',
       'cargo test -p jtv-cli --test cert_json',
+      "test -s spec/jtv-totalcert-v0.adoc && grep -q 'totalcert.schema.json' spec/jtv-totalcert-v0.adoc",
     ] },
   'proof-hygiene': { prereqs: [], owns: 'jtv_proofs/JtvAxiomAudit.lean, jtv_proofs/Pins.lean, scripts/check-lean-axioms.sh, workflow drafts (not committed)',
     task: 'PR0 files; workflow edits drafted only, pending owner actions.lock regeneration.',
@@ -555,7 +569,7 @@ const LANES = {
     task: 'H20-H24: fail closed until Q44 is answered (reject if inside reverse {} and reversible {}); one reversibility gate (H23: delete check_reversibility or call it from the checker); tokenless reversible {} keeps no log (H24; tests/reversible_if.rs runs 10^4 tokenless blocks and asserts the log stays empty).',
     gate: [
       'cargo test -p jtv-core --test reversible_if',
-      "test \"$(grep -rn 'fn check_reversibility' crates/jtv-core/src | wc -l)\" -eq 0 || test \"$(grep -rln 'check_reversibility(' crates/*/src | grep -v 'reversible.rs$' | wc -l)\" -ge 1",
+      H23_CMD,
     ] },
   // fullPrereqs apply only outside the STOP rule: both lanes own interpreter.rs, so
   // entry-interim starts from a base that already contains reversible-if (merge order G before E-interim).
@@ -583,7 +597,7 @@ const holesOf = (reports) => reports.filter(Boolean).flatMap((r) => r.new_holes 
 if (A.mode === 'wave0') {
   phase('Wave0')
   const reports = await parallel([
-    () => agent(`Repo ${REPO}, read-only. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; docs/architecture/probes/run-probes.sh output. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
+    () => agent(`Repo ${REPO}, read-only. Write the W0 baseline receipt to ${SCRATCH}/receipts/w0.json: cargo test --workspace counts, with the passed count as the integer field cargo_test_passed; examples pass/fail per file; conformance/valid per file; stdlib per file; cargo check -p jtv-core --target wasm32-unknown-unknown result; docs/architecture/probes/run-probes.sh output. Record every command and exit code.`, { label: 'receipts', phase: 'Wave0', schema: REPORT }),
     () => agent(`Repo ${REPO}: write crates/jtv-core/tests/census.rs (#[ignore], test-only) reporting would-be rejections of a computed-Total rule (with and without bounded for), island carrier buckets, and free-identifier reads in function bodies across examples, stdlib and conformance. Run it; write the report under ${SCRATCH}/census-w0.md and copy the test file to ${SCRATCH}/census/census.rs so later gates can run the same census. No semantic change.`, { label: 'census', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X11 carrier round-trip falsifier for Int, Hex, Binary, Rational, Symbolic, Complex, Float, String, Bool, Any versus carrier_echo. Test file only. Report every Safe carrier that does not round-trip.`, { label: 'carrier-X11', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
     () => agent(`Repo ${REPO}: X-parse nesting sweep, debug and release: depths 1, 2, 4, 8, ... up to 5000 with a 20 s timeout per run; at the first timeout in a mode, stop doubling and bisect between the last passing and first timing-out depth (at most 12 further runs), then report the largest depth under 20 s and the timings. Never resume a sequential sweep past a timeout. Also bisect the max safe call depth (X-depth). No source changes.`, { label: 'parse-depth', phase: 'Wave0', schema: REPORT, isolation: 'worktree' }),
@@ -613,7 +627,7 @@ if (A.mode === 'lanes') {
   }
 
   const implementPrompt = (n) => `Repo ${REPO}. In your worktree run: git fetch origin; git checkout -b claude/jtv-w1-${n} ${BASE}. You own ONLY: ${LANES[n].owns}. Task: ${LANES[n].task}. Holes before features; touch no other file; stop and report if you must. Run and report, in this order and with these exact labels (the lane's own gate commands come first), each of: ${JSON.stringify(laneCommands(n))}. Report one exit code per command, in the same order, and set lane to '${n}'. Compare against the baseline at ${A.baseline}. Commit (signed under the '${A.signing}' Q36 ruling) and push the branch. Report every command with its exit code; report a new hole instead of fixing it.`
-  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${impl && impl.branch}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run each of this lane's gate commands (${JSON.stringify(LANES[n].gate)}) and check that each tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
+  const reviewPrompt = (n, impl) => `Adversarially review lane ${n}. In your own worktree run: git fetch origin ${impl && impl.branch}; git checkout --detach FETCH_HEAD. Build it. Run ONLY this lane's falsifiers from ${SCRATCH}/falsifiers, honouring each expect field (${EXPECT_MEANING}): ${JSON.stringify(lanesFor(n))}. Report one falsifier_results entry per file (file, expect, runner, observed, ok), copying expect and runner from the list. Other lanes' falsifiers are expected to still reproduce here and are not evidence against this lane. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run every command of this lane, in order (${JSON.stringify(laneCommands(n))}), and report them in commands with one exit code each in exit_codes; check that each gate command tests the claim (no name-only or comment-matching greps). Run git diff --name-only ${BASE}...FETCH_HEAD; set ownership_ok=false and list in outside_paths every path not covered by this lane's owns list: ${LANES[n].owns}. Default to refuted=true if uncertain. Report any new hole in new_holes.`
 
   phase('Implement')
   const results = await pipeline(
@@ -635,6 +649,11 @@ if (A.mode === 'lanes') {
     && Array.isArray(r.verdict.surviving_falsifiers) && r.verdict.surviving_falsifiers.length === 0
     && r.verdict.ownership_ok === true
     && r.verdict.signatures_ok === true
+    && Array.isArray(r.verdict.commands) && Array.isArray(r.verdict.exit_codes)
+    && r.verdict.commands.length === laneCommands(r.lane).length
+    && laneCommands(r.lane).every((c, i) => r.verdict.commands[i] === c)
+    && r.verdict.exit_codes.length === r.verdict.commands.length
+    && r.verdict.exit_codes.every((c) => c === 0)
     && exactFalsifiers(r.verdict.falsifier_results, lanesFor(r.lane))
     && complete(r.impl, r.lane)
     && r.impl.gate_exit_codes.every((c) => c === 0)).map((r) => r.lane)
@@ -660,8 +679,8 @@ if (A.mode === 'gate1') {
   // Falsifiers of lanes not merged here are expected to still reproduce, so they are not judged.
   const GATE_FALSIFIERS = FALSIFIERS.filter((f) => MERGED.includes(f.lane))
   phase('Gate1')
-  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed by cargo test --workspace (test_count) and set baseline_test_count to ${A.baselineTests}, the raw W0 count; it is never adjusted (tests may move between crates but not disappear). ${signingCheck(`${BASE}..FETCH_HEAD`)} Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
-  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. The report must list exactly these commands, in order: ${JSON.stringify(GATE1_COMMANDS)}. The falsifiers live in ${SCRATCH}/falsifiers and must be judged exactly as listed (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The census test is ${SCRATCH}/census/census.rs (copy it to crates/jtv-core/tests/census.rs, do not commit) and the baseline receipt is ${A.baseline}; recompute census_new_failures and test_count; the baseline count is fixed at ${A.baselineTests}. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run any command, falsifier or count whose result looks implausible; list in surviving_falsifiers any falsifier you can make fail. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
+  const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run exactly these falsifiers from ${SCRATCH}/falsifiers (the lanes merged here) against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed by cargo test --workspace (test_count) and set baseline_test_count to ${A.baselineTests}, the raw W0 count; it is never adjusted (tests may move between crates but not disappear). Read cargo_test_passed from the receipt ${A.baseline} and report it as receipt_test_count. ${signingCheck(`${BASE}..FETCH_HEAD`)} Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
+  const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. The report must list exactly these commands, in order: ${JSON.stringify(GATE1_COMMANDS)}. The falsifiers live in ${SCRATCH}/falsifiers and must be judged exactly as listed (${EXPECT_MEANING}): ${JSON.stringify(GATE_FALSIFIERS)}. The census test is ${SCRATCH}/census/census.rs (copy it to crates/jtv-core/tests/census.rs, do not commit) and the baseline receipt is ${A.baseline}; recompute census_new_failures and test_count; the baseline count is fixed at ${A.baselineTests}; read cargo_test_passed from the receipt yourself and report it as receipt_test_count. ${signingCheck(`${BASE}..FETCH_HEAD`)} Re-run any command, falsifier or count whose result looks implausible; list in surviving_falsifiers any falsifier you can make fail. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: GATE1_VERDICT, isolation: 'worktree', effort: 'high' })
   const newHoles = holesOf([gate, check])
   // Coverage: the exact command list, and each falsifier exactly once with its expectation.
   const commandsExact = Boolean(gate) && gate.commands.length === GATE1_COMMANDS.length
@@ -673,6 +692,8 @@ if (A.mode === 'gate1') {
     && commandsExact && gate.exit_codes.every((c) => c === 0)
     && falsifiersExact
     && gate.baseline_test_count === A.baselineTests
+    && gate.receipt_test_count === A.baselineTests
+    && check.receipt_test_count === A.baselineTests
     && gate.test_count >= A.baselineTests
     && gate.census_new_failures === 0
     && gate.signatures_ok
