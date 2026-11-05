@@ -139,13 +139,13 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |recorded; Q36 sent
 |===
 
-*Gate 0.* All four reports exist. Owner packet sent. *STOP rule:* if Q26/Q39 are unanswered and the census shows the default arm would reject legitimate corpus programs beyond the already-failing set, land only H1/H2/H11/H12/H13 and wait.
+*Gate 0.* All four reports exist. Owner packet sent. *STOP rule:* if Q26/Q39 are unanswered and the census shows the default arm would reject legitimate corpus programs beyond the already-failing set, land only H2, H11, H12, H13 and an *interim H1* and wait. The interim H1 does not depend on lane C: every host (`JtvWasm::run`/`run_and_collect`, the REPL, jtv-debug) calls the existing `TypeChecker` and `PurityChecker` before `Interpreter::run`, exactly as the CLI does today. The `CheckedProgram` typestate follows once C lands.
 
 *Expected PRs:* none.
 
 === Wave 1 — holes (6 lanes, ~2–3 sessions)
 
-*Goal.* Close H1, H2, H6, H7, H10 (interim), H11–H19 in jtv-lang. Every surface goes through one checked, fuelled entry point.
+*Goal.* Close H1, H2, H6, H7, H10 (interim), H11–H24 in jtv-lang (H20–H24 through lane G, fail-closed until Q44 is answered). Every surface goes through one checked, fuelled entry point.
 
 [cols="1,2,3,3",options="header"]
 |===
@@ -166,10 +166,10 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 |Resolver with FnIds; duplicate bare names rejected; fail-closed scoping interim (free identifiers in `@total`/`@pure` bodies rejected; `reverse` in functions rejected); purity LFP over SCC; bodiless callees Impure; bounded `for` per Q26; `jtv check --cert --json`.
 |fixtures `total_self_recursion`, `total_mutual_recursion`, `pure_loop_in_data_call`, `module_shadows_total`, `total_reads_global`, `reverse_in_fn`, `data_calls_extern_intrinsic` all exit non-zero on check; `callgraph_props` ≥ 1000 graphs; no new failures vs the W0 baseline set
 
-|G-reversible-if (H20, H21, H22) — owner design call first
-|`echo.rs`, `reversible.rs`, `grammar.pest` (`reversible_stmt` inside branches), `tests/reversible_if.rs`, ADR draft
-|Audit's recommended arm: reversible `if` branches are `+=`/`-=` only, which retires H20 and H21 together. Tokenless `reverse {}` over `if` either records the branch bit or is rejected at check (H22). Pending the owner's call, fail closed: reject `if` inside `reverse {}` and `reversible {}`.
-|probes rev_if_overwrite, rev_if_tok, rev_if_tokenless exit non-zero on check; round-trip tests for the admitted forms pass
+|G-reversible-if (H20–H24) — owner design call first; merges after D (both touch `echo.rs`)
+|`echo.rs`, `reversible.rs`, `interpreter.rs` (tokenless-log retention only), `grammar.pest` (`reversible_stmt` inside branches), `tests/reversible_if.rs`, ADR draft
+|Audit's recommended arm: reversible `if` branches are `+=`/`-=` only, which retires H20 and H21 together. Tokenless `reverse {}` over `if` either records the branch bit or is rejected at check (H22). Pending the owner's call, fail closed: reject `if` inside `reverse {}` and `reversible {}`. H23: one reversibility gate, either `check_reversibility` wired into `check()` or deleted with its tests moved to the Echo gate. H24: a tokenless `reversible {}` drops its log at block end (or is rejected at check).
+|probes rev_if_overwrite, rev_if_tok, rev_if_tokenless exit non-zero on check; round-trip tests for the admitted forms pass; `grep -rn 'fn check_reversibility' crates/jtv-core/src \| wc -l` = 0 or a production call site exists; a test runs 10^4 tokenless `reversible {}` blocks and asserts the retained-log count stays 0
 
 |D-carrier (H10, H19 interim)
 |`echo.rs`, `number.rs:409` test, `tests/carrier_reversal.rs`, ADR-0015 draft (owner-gated)
@@ -189,7 +189,7 @@ Global stop conditions: unsigned commit; licence edit; third-party code; push ou
 
 *Adversarial reviewer (one agent, no worktree, read-only).* Writes falsifiers first, before implementers finish: mutual f→g→f; Data → `@total` → `@pure` loop; recursion via `M::f`; shadowing; caller-local read; reverse in function; impure-in-Data via wasm and REPL; Symbolic, String and Any reverse; deep Impure recursion; blow-up tree; nesting bomb; extern intrinsic in Data; re-entrant JS callback; overwrite inside a reversible `if`; guard that flips under its own branch. Any surviving falsifier blocks merge.
 
-*Merge order.* A → D → B → C → E → F. E rebases on B and C. The lead resolves conflicts.
+*Merge order.* A → D → G → B → C → E → F. E rebases on B and C. The lead resolves conflicts.
 
 *Gate 1.*
 
@@ -359,7 +359,7 @@ phase('Falsifiers')
 // only their lane's files on the isolated branch; Gate 1 runs all of them after
 // the lanes are integrated.
 const FALSIFIERS = [
-  { file: 'keyword_prefix_identifier.jtv', lane: 'grammar' },
+  { file: 'keyword_prefix_identifier.jtv', lane: 'grammar', expect: 'accept' },
   { file: 'nesting_bomb.jtv', lane: 'grammar' },
   { file: 'symbolic_reverse.jtv', lane: 'carrier' },
   { file: 'string_reverse.jtv', lane: 'carrier' },
@@ -379,7 +379,7 @@ const FALSIFIERS = [
   { file: 'reversible_if_overwrite.jtv', lane: 'reversible-if' },
   { file: 'reversible_if_guard_flip.jtv', lane: 'reversible-if' },
 ]
-const falsifiers = await agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, using exactly these names and lanes: ${JSON.stringify(FALSIFIERS)}. The .jtv files are programs that the lane's fix must reject at check or stop safely at run. The two .test.js files are bun tests against the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run on a program whose Data expression calls an impure function (must return an error once H1 is fixed); reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run (must return a JtvError, never panic or abort). Record current check/run exit codes for each .jtv file.`, { label: 'falsifiers', schema: REPORT })
+const falsifiers = await agent(`Write falsifiers (do not fix anything) under ${SCRATCH}/falsifiers, one per file, using exactly these names and lanes: ${JSON.stringify(FALSIFIERS)}. Each entry has an expect field: 'accept' (default 'reject'). A 'reject' .jtv file is a program the lane's fix must reject at check or stop safely at run; an 'accept' file is a valid program the fix must check and run with exit 0 (for keyword_prefix_identifier: the program "int_a = 42; print(int_a)" printing 42). The two .test.js files are bun tests against the jtv-wasm build output: impure_in_data_wasm calls JtvWasm.run on a program whose Data expression calls an impure function (must return an error once H1 is fixed); reentrant_js_callback registers a coproc callback that calls back into JtvWasm.run (must return a JtvError, never panic or abort). Record current check/run exit codes for each .jtv file.`, { label: 'falsifiers', schema: REPORT })
 
 // ---- Wave 1 lanes ----
 const LANES = [
@@ -395,6 +395,9 @@ const LANES = [
   { name: 'purity', owns: 'resolve.rs, purity.rs, typechecker.rs, ast.rs comment, fixtures, callgraph_props.rs, totalcert spec, ADR-0013/0017 drafts',
     task: 'H14, H15 interim, H6, H7, H17, H18: resolver with FnIds; fail-closed scoping; purity LFP over SCC; Data-call rule after purity on computed level; bodiless callees Impure; for over List; jtv check --cert --json.',
     gate: 'all invalid fixtures non-zero; callgraph_props >= 1000 graphs; no new failures vs W0 baseline' },
+  { name: 'reversible-if', owns: 'echo.rs, reversible.rs, interpreter.rs (tokenless-log retention only), grammar.pest reversible_stmt, tests/reversible_if.rs, ADR draft',
+    task: 'H20-H24 per lane G: fail closed until Q44 is answered (reject if inside reverse {} and reversible {}); one reversibility gate (H23); tokenless reversible {} keeps no log (H24).',
+    gate: 'rev_if_overwrite, rev_if_tok, rev_if_tokenless non-zero on jtv check; retained-log test passes; cargo test -p jtv-core reversible' },
   { name: 'proof-hygiene', owns: 'jtv_proofs/JtvAxiomAudit.lean, jtv_proofs/Pins.lean, scripts/check-lean-axioms.sh, workflow drafts (not committed)',
     task: 'PR0 files; workflow edits drafted only, pending owner actions.lock regeneration.',
     gate: 'sorry/admit/native_decide grep = 0 (recursive, excluding .lake)' },
@@ -417,8 +420,12 @@ const independent = await pipeline(
 )
 
 const ready = independent.filter(Boolean)
-const wasmOk = ready.some((r) => r.lane === 'wasm' && r.verdict && !r.verdict.refuted)
-const purityOk = ready.some((r) => r.lane === 'purity' && r.verdict && !r.verdict.refuted)
+// A lane is ready only if its reviewer did not refute it AND every gate it ran exited 0.
+const laneOk = (name) => ready.some((r) => r.lane === name && r.verdict && !r.verdict.refuted
+  && r.impl && Array.isArray(r.impl.gate_exit_codes) && r.impl.gate_exit_codes.length > 0
+  && r.impl.gate_exit_codes.every((c) => c === 0))
+const wasmOk = laneOk('wasm')
+const purityOk = laneOk('purity')
 log(`wasm lane ${wasmOk ? 'ok' : 'blocked'}; purity lane ${purityOk ? 'ok' : 'blocked'}`)
 
 // ---- New holes from any report freeze later work, including Entry ----
