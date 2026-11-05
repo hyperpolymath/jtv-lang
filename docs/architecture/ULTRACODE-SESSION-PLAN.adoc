@@ -318,7 +318,7 @@ Plain JavaScript for the Workflow tool. It passes a syntax check (`bun build --n
 |`{ mode: 'lanes', scratch, baseline, stopRule: true, openHoles: [], lanes: [...] }`
 |STOP-rule runs: only `grammar`, `wasm` and `entry-interim` may run (H2, H11, H12, H13 and the interim H1). Anything else throws. `stopRule` is required in every `lanes` run; omitting it throws, so a missing owner answer can never read as permission.
 
-|`{ mode: 'gate1', scratch, baseline, openHoles: [], integration, signing }`
+|`{ mode: 'gate1', scratch, baseline, openHoles: [], integration, signing, merged: [...], stopRule: false }`
 |Gate 1 on the merged branch: full test, lint, format and wasm32 build; trybuild; probes; every falsifier with its expectation; census delta against the baseline. A second agent tries to refute the report. `green` is true only if the report lists exactly the required Gate 1 commands, each exited 0, each falsifier appears exactly once with its expectation met, the test count is at least the baseline count, every commit is signed under the Q36 ruling, neither agent reported a new hole, and the refutation failed.
 |===
 
@@ -555,6 +555,9 @@ if (A.mode === 'lanes') {
 if (A.mode === 'gate1') {
   if (!A.integration) throw new Error('gate1 needs args.integration (the merged branch)')
   if (!A.signing) throw new Error('gate1 needs args.signing per the Q36 ruling')
+  if (!Array.isArray(A.merged)) throw new Error('gate1 needs args.merged: the lanes merged into args.integration')
+  if (typeof A.stopRule !== 'boolean') throw new Error('gate1 needs an explicit stopRule')
+  if (!A.stopRule && !MERGED.includes('entry')) throw new Error('A full Gate 1 needs the entry lane merged (it adds the entry-point UI test); for a STOP-subset gate pass stopRule: true')
   phase('Gate1')
   const gate = await agent(`Gate 1 on the integrated branch. In your own worktree run: git fetch origin ${A.integration}; git checkout --detach FETCH_HEAD. Run each of these commands exactly once and report them in commands, in this order and with these exact labels, with the matching exit_codes: ${JSON.stringify(GATE1_COMMANDS)}. Then run EVERY falsifier in ${SCRATCH}/falsifiers against this build, honouring expect (${EXPECT_MEANING}): ${JSON.stringify(FALSIFIERS)}. Before the census, copy ${SCRATCH}/census/census.rs to crates/jtv-core/tests/census.rs in your worktree (do not commit it). Run the census (label it exactly as in the list above) and compare with the baseline at ${A.baseline}; describe the delta and count census_new_failures. Record the number of tests passed (test_count) and the baseline count from the receipt adjusted for moved tests (baseline_test_count). Check that every commit on the branch since ${BASE} is signed under the '${A.signing}' ruling (environment: commit has a signature and GitHub reports verified=true; owner-key: git log --format=%G? shows G); set signatures_ok and list any failing commit in signature_detail. Report any new hole.`, { label: 'gate1', phase: 'Gate1', schema: GATE, isolation: 'worktree' })
   const check = await agent(`Try to refute this Gate 1 report for branch ${A.integration}: ${JSON.stringify(gate)}. Re-run any command whose result looks implausible, in your own detached worktree of that branch. Default to refuted=true if a claimed pass cannot be reproduced.`, { label: 'gate1-verify', phase: 'Gate1', schema: VERDICT, isolation: 'worktree', effort: 'high' })
