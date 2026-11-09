@@ -8,6 +8,7 @@ members = [
     "crates/jtv-cli",
     "crates/jtv-lsp",
     "crates/jtv-debug",
+    "crates/jtv-proof-ledger",
 ]
 exclude = [
     "fuzz",

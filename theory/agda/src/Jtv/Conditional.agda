@@ -150,7 +150,7 @@ undo-add-general x v σ τ at-x off-x = go
 -- guard g — not merely one that stays true. Stated pointwise (∀ y), matching
 -- Jtv.Reversal: a `State`-level equality would need function extensionality,
 -- which the stdlib supplies only as an axiom, and postulating an axiom to
--- prove a reversibility lemma would put an escape hatch in a Grade 3 module.
+-- prove a reversibility lemma would put an escape hatch in a PWG-3 module.
 reversible-if-with-residue :
   ∀ (g : State → Bool) (x : Var) (v : ℤ) (σ : State) → ∀ y
   → reverse-if-recorded (g σ) x v (forward-if g x v σ) y ≡ σ y

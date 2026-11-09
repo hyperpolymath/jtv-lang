@@ -56,8 +56,8 @@ Batch these into one message. Nothing in Wave 1 lands without Q36.
 |user-approved install, or rely on `agda-proof-policy.yml` in CI
 |CI-only; rows stay `Open` until a receipt exists
 
-|Rocq, Creusot, Kani
-|theory rechecks; Rust contracts; `unsafe`/FFI
+|Rocq; Creusot (Pearlite contracts) and Verus; Kani
+|theory rechecks; Rust verification, both verifiers by default (PROOF-POLICY §1.2); `unsafe`/FFI
 |user-approved install
 |record "not run"; no grade claimed
 

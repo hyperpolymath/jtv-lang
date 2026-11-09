@@ -127,6 +127,16 @@ file, and it is explicit that "a successful compilation in each prover does
 not establish that all proved the same proposition". So the route and the
 discrepancies are recorded here.
 
+*Superseded as the record of correspondence (2026-11-09).* The per-theorem
+records — Lean declaration, route, §2.2 state, comparison and residual
+assumptions — now live in `verification/ledger/theorems.json`, and the grades
+derived from them in `verification/ledger/PWG.adoc`. Every Agda theorem below now
+has a Lean declaration of equal strength; the gaps this table recorded on
+2026-11-01 (the `∀ y` strengthening, subtraction, the conditional theorems) were
+closed by new Lean theorems, noted in the rows. Every Lean leg is
+`BRIDGE-PENDING` until the owner reviews its comparison. The table is kept as the
+narrative behind those records.
+
 *Route for every row:* `re-proved`. There is no Agda→Lean transport
 (no Dedukti/Lambdapi leg is wired up), so the Lean statement is an
 independent proof of a corresponding statement, not a translated witness.
@@ -149,16 +159,15 @@ Per §2.2 the transport route would be preferable and is open work.
 | `rev-forward-backward-add`
 | `rev_forward_backward` (+ `rev_composition`)
 | re-proved
-| *Agda statement is strictly stronger.* Lean concludes the value at `x`
-  only; Agda concludes **every** variable with `∀ y` (the full-state
-  identity). The Lean theorem is the `y ≡ x` restriction of the Agda one,
-  so the Lean leg does not on its own discharge the Agda statement. Open
-  reconciliation item: strengthen the Lean theorem to `∀ y`.
+| *Closed 2026-11-09.* `rev_forward_backward` concludes the value at `x`
+  only, the `y ≡ x` restriction of the Agda statement. The new Lean
+  `rev_forward_backward_add_full` concludes every variable (`∀ y`) and is the
+  counterpart recorded in `theorems.json`.
 
 | `rev-forward-backward-sub`
-| *(none)* — **open**
-| — (Agda-only)
-| **Correction:** this row previously cited Lean's `rev_forward_backward`
+| `rev_forward_backward_sub` (added 2026-11-09)
+| re-proved
+| *Closed 2026-11-09* by the new full-state Lean theorem. History: this row previously cited Lean's `rev_forward_backward`
   as the `subAssign` case. That is wrong: the Lean theorem carries the
   hypothesis `hop : op = RevOp.addAssign x e` and is therefore about
   addition only — no Lean subtraction round-trip theorem exists. Nothing
@@ -220,11 +229,19 @@ Per §2.2 the transport route would be preferable and is open work.
   transport from `echo-types`, and no dependency is introduced.
 
 | `tokenless-conditional-not-identity` (`Jtv.Conditional`), `reversible-if-with-residue`
-| —
-| new
-| No Lean counterpart: these statements are about the *runtime* reversal
-  strategies (tokenless re-check vs. recorded branch) that the Lean model
-  does not cover.
+| `Jtv.Conditional.tokenless_conditional_not_identity`,
+  `Jtv.Conditional.reversible_if_with_residue` (`JtvConditional.lean`, added 2026-11-09)
+| re-proved
+| Same statements over the Lean model; the guard tests variable `"x"` in Lean
+  and `zero` in Agda. Both are about the model's reversal strategies, not the
+  runtime's recording path.
+
+| `rev-forward-backward-with-token-sub`, `admissibleWithResidue-if`, `⊑⇒⊔`, `⊔⇒⊑` (added 2026-11-09)
+| `rev_forward_backward_with_token_sub`; `Jtv.Echo.admissibleWithResidue_iff`; `Jtv.Echo.le_iff_join`
+| re-proved
+| New Agda theorems closing gaps the 2026-11-01 review found: the token path for
+  subtraction, the converse that makes the residue-policy lemma a real iff, and
+  the agreement of the order with the join (which Lean has by definition).
 |===
 
 === 4.1 What is deliberately not modelled
@@ -260,8 +277,9 @@ Stated so no reader infers more coverage than exists:
 == 5. Status
 
 See `verification/PROOF-STATUS.adoc` for the ledger and the grade. In one
-line: these four modules are **Grade 3** evidence (Agda, canonical flags,
-no escape hatches, receipt recorded); the Lean legs exist but are
-`re-proved` and carry the strengthening discrepancy above, so **Grade 2i is
-pending** that reconciliation, and Grade 2ii needs a non-DTT leg
-(Isabelle/HOL) that does not exist yet.
+line: the theorems of these four modules are `PWG-3` (Agda, canonical flags,
+no escape hatches, current receipt `verification/receipts/agda.json`); every one
+now has a Lean statement of equal strength, recorded `BRIDGE-PENDING` until the
+owner reviews the comparison, so `PWG-2i` waits on that review. `PWG-2ii` needs
+the Rocq leg as well; Isabelle/HOL would be the tag `+foundation-diverse`, not a
+grade. The grades themselves are derived, in `verification/ledger/PWG.adoc`.

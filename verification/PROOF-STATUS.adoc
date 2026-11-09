@@ -3,8 +3,8 @@
 
 = JtV — Proof Status
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:revdate: 2026-11-01
-:revnumber: 1.1
+:revdate: 2026-11-09
+:revnumber: 1.2
 :toc: left
 :sectnums:
 
@@ -22,20 +22,29 @@ they win:*
   re-homing of existing proofs (§3), exceptions (§4), status vocabulary (§5).
 * `hyperpolymath/standards` → `docs/README-EXPLAINME-STANDARD.adoc` §5 — the
   closed proof-ledger vocabulary.
-* `hyperpolymath/mathesis` → `estate-mathematical-architecture` §5 (graded proof
-  architecture) and §6 (epistemic precision, receipts, regressions).
+* `hyperpolymath/standards` → `3-practice/PROOF-POLICY.adoc` §8 — *Proof Witness
+  Grades* (owner ruling 2026-11-04). Grades are written `PWG-3`, `PWG-2i`,
+  `PWG-2ii`, `PWG-1` or `ungraded`, are *derived from receipts* and are never
+  asserted by hand. In this repository they are derived by
+  `crates/jtv-proof-ledger` into `verification/ledger/PWG.adoc` (§4), and CI
+  fails if that file drifts from the receipts.
+* `hyperpolymath/mathesis` → `docs/proposals/estate-mathematical-architecture.adoc`
+  — the *unratified* brief that PROOF-POLICY §8 adopted with corrections. It is
+  provenance only; where it differs from §8 (its Grade 2ii, its Grade 1 checker
+  services), §8 governs.
 * `verification/PROOF-CAPABILITY-MATRIX.adoc` — JtV's own detail matrix
   (per-library, per-theorem). This file is the ledger summary that matrix feeds.
 
 == 1. Conformance summary — the honest headline
 
-JtV was an *engineering-first* project with a *Lean-first* theory layer. As of
+JtV was an *engineering-first* project with a *Lean-first* theory layer. Since
 2026-11-01 it also has an **Agda theory layer** for part of its model
-(`theory/agda/`, four modules, receipt in
-`verification/receipts/2026-11-01-agda.adoc`), which is what makes a mathesis
-grade assignable at all. The Lean layer remains — and remains valuable — but its
-standing changed: the statements it covers now have an Agda source, so it is on
-its way to being a *leg* rather than target-only evidence.
+(`theory/agda/`, four modules), which is what makes a Proof Witness Grade
+derivable at all. The current receipts are `verification/receipts/agda.json` and
+`verification/receipts/lean.json`; the derived grades are in §4. As of
+2026-11-09 every Agda theorem has a Lean declaration of the same strength, so the
+Lean development is a candidate *leg*; it counts only once the owner records each
+comparison as `RECONCILED` (PROOF-POLICY §2.2, §8.2).
 
 [cols="1,3",options="header"]
 |===
@@ -53,21 +62,26 @@ its way to being a *leg* rather than target-only evidence.
 | *Absent.* No `.v`, no Dedukti/Lambdapi transport. Open.
 
 | Theory — *Lean* recheck leg
-| *Present, `re-proved` route, correspondence recorded per theorem*
-  (`theory/agda/README.adoc` §4). One discrepancy stands between it and a clean
-  leg: the Agda `rev-forward-backward-*` statements are **strictly stronger**
-  (`∀` variables) than the Lean ones (value at `x` only), so the Lean theorem is
-  the restriction of the Agda statement. Grade 2i therefore awaits *either*
-  strengthening the Lean statement or recording the restriction explicitly.
+| *Present, `re-proved` route, every leg `BRIDGE-PENDING`.* Each of the 24 Agda
+  theorems in §4 now has a Lean declaration of the same strength: the
+  full-state `rev_forward_backward_add_full`, `rev_forward_backward_sub`,
+  `rev_forward_backward_with_token_sub`, `Jtv.Echo.le_iff_join` and the
+  `JtvConditional` module were added on 2026-11-09 for that purpose. The
+  per-theorem comparisons are drafted in `verification/ledger/theorems.json`.
+  They are an agent's reading, so no leg is `RECONCILED` until the owner reviews
+  it (doctrine 4). Until then the Lean leg does not count, and no theorem is above
+  `PWG-3`.
 
 | Engineering — *Idris2* (ABIs, wire formats, totality)
-| *Present.* `src/abi/Types.idr`, `%default total`.
+| *Present.* `src/abi/Types.idr`, `%default total`, no escape hatches.
+  `idris2 --check` passed locally under Idris2 0.7.0 on 2026-11-09, and the
+  `idris2-abi` CI job passed at `dd41f29`.
 
-| Engineering — *Rust/Creusot* (contracts on first-party Rust)
-| *Absent.* No Creusot contract, no `why3` artefact anywhere in `crates/`. This
-  could not be started in the audit session either: the sandbox has no
-  `static.rust-lang.org`, no Debian mirror and no GitHub release-asset access, so
-  neither Rust nor Creusot could be installed. Recorded, not worked around.
+| Engineering — *Rust: Creusot with Pearlite contracts, and Verus* (PROOF-POLICY §1.2)
+| *Absent.* No Creusot contract, no Pearlite specification, no Verus proof and no
+  `why3` artefact anywhere in `crates/`. Both verifiers are the default for
+  first-party Rust (owner ruling 2026-11-07); neither has been run here. Every
+  Rust obligation in §2.4 therefore stays `open`, with the explanation beside it.
 
 | Engineering — *Kani* (standing exception: `unsafe`, FFI seams)
 | *Absent* (rows K-1…K-2).
@@ -82,8 +96,8 @@ the Rust runtime — the model↔code rows are in §2.3. Every row's trust bound
 says the same load-bearing thing, so it is stated once here and referenced:
 **T-BOUNDARY-THEORY** = "statement is about the Int-only semantic model; under
 PROOF-POLICY §1 the theory prover is Agda and under §3 a Lean-only proof is
-target-only evidence, so this row carries no mathesis grade until an Agda
-statement exists and the Lean statement is compared to it."
+target-only evidence, so this row is `ungraded` (§8.1) until an Agda statement
+exists and the Lean statement is compared to it."
 
 [cols="2,1,2,2,3",options="header"]
 |===
@@ -175,11 +189,13 @@ statement exists and the Lean statement is compared to it."
   so the graded arrow is latent
 |===
 
-=== 2.1b Theory obligations — Agda source (new, 2026-11-01)
+=== 2.1b Theory obligations — Agda source (2026-11-01, extended 2026-11-09)
 
 These rows are the *source of truth* under PROOF-POLICY §1. Checker for all of
 them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
-2.4, `theory/agda/check.sh`, receipt `verification/receipts/2026-11-01-agda.adoc`.
+2.4 at `2a5a0dec`, run through `theory/agda/check.sh`. The current receipt is
+`verification/receipts/agda.json`, which records a sha256 digest of every input;
+the 2026-11-01 receipt is superseded. Each row's grade is in §4, not here.
 
 [cols="2,1,2,3",options="header"]
 |===
@@ -195,9 +211,10 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | `Jtv/Reversal.agda:rev-forward-backward-add`, `-sub`
 | One operation; no conditional, no log
 
-| Neutral-tier reversal from a retained residue (unconditional, incl. `x += x`)
+| Neutral-tier reversal from a retained residue (unconditional, incl. `x += x`),
+  for `+=` and `-=`
 | `proven`
-| `Jtv/Reversal.agda:rev-forward-backward-with-token`
+| `Jtv/Reversal.agda:rev-forward-backward-with-token`, `-with-token-sub`
 | The residue is a single saved value, not the runtime's log. **Exactness holds
   for the `ℤ` carrier and the `Snapshot` residue only** — per the owner's §9
   refinement (`bd32a96`), a Neutral step graded by *carrier* (float) records no
@@ -208,10 +225,14 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | `Jtv/Reversal.agda:naive-backward-fails-self-ref`
 | Counterexample only
 
-| Echo lattice laws; Safe-only and residue admissibility; the block theorem
+| Echo lattice laws; the order agrees with the join; Safe-only and residue
+  admissibility (the residue policy as a full iff); the block theorem
 | `proven`
-| `Jtv/Echo.agda` (`⊔-idem`…`blockEcho-admissibleWithResidue`)
-| Abstract lattice; no carrier/typing interaction
+| `Jtv/Echo.agda` (`⊔-idem`…`blockEcho-admissibleWithResidue`, `⊑⇒⊔`, `⊔⇒⊑`,
+  `admissibleWithResidue-iff` with its converse `admissibleWithResidue-if`)
+| Abstract lattice; no carrier/typing interaction. No theorem yet links a
+  construct's tier to its semantics (that a Safe step is injective): that is the
+  grading-soundness hole H10/H19
 
 | Neutral is exactly what the token buys
 | `proven`
@@ -260,40 +281,34 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 
 | T-LEAN
 | Lean recheck of the Agda witness
-| `open` (leg) / `proven` (evidence)
-| The Lean proofs exist and are the strongest artefact in this repository. The
-  statement-level comparison is **recorded**: `theory/agda/README.adoc` §4 gives
-  the per-theorem correspondence between the Lean and Agda developments. The leg
-  is nevertheless `open`, and not because the comparison is missing: the Lean
-  `rev_forward_backward` concludes the round trip only *at* `x`, while the Agda
-  reversal theorems conclude it for all `y` (`∀ y`), so the Agda witness is
-  strictly stronger than the Lean statement it would be checked against. Closing
-  the leg needs either a Lean statement strengthened to full-state equality or
-  an explicitly weakened Agda corollary — a real proof obligation, not
-  bookkeeping (PROOF-POLICY §2.2, §3). That is **not the only blocker**, and
-  strengthening one theorem would not close the leg. Three Agda statements have
-  no Lean counterpart *at all*:
-
-  * `rev-forward-backward-sub` — the Lean `rev_forward_backward` carries
-    `hop : op = RevOp.addAssign x e`, so there is no Lean subtraction round-trip
-    theorem (recorded `open` in `theory/agda/README.adoc` §4);
-  * `blockEcho-admissible` — the Safe-only block theorem exists in Lean as
-    `blockEcho_admissible`, but the Agda statement has not been compared against
-    it since it was added late;
-  * the two `Jtv.Conditional` theorems (`tokenless-conditional-not-identity`,
-    `reversible-if-with-residue`) — no Lean statement covers conditionals.
-
-  Grade 2i therefore needs the reconciliation of *all* of these, of which the
-  full-state strengthening is one item.
+| `open` (leg, `BRIDGE-PENDING`) / `proven` or `proven-with-postulates` (evidence)
+| Every Agda theorem in §4 now has a Lean declaration of the same strength. The
+  gaps recorded on 2026-11-01 are closed by proof, not by bookkeeping:
+  `rev_forward_backward_add_full` concludes the round trip for every variable
+  (the older `rev_forward_backward` is its restriction to `x`);
+  `rev_forward_backward_sub` and `rev_forward_backward_with_token_sub` cover
+  subtraction; `JtvConditional.lean` states both conditional theorems; and
+  `Jtv.Echo.le_iff_join` pairs with Agda's new `⊑⇒⊔`/`⊔⇒⊑`. The per-theorem
+  comparisons, routes and residual assumptions are in
+  `verification/ledger/theorems.json`. One comparison is recorded as *not* exact:
+  Lean's `residue_lossy` is a weaker existential than Agda's `loss-is-real`.
+  Every leg stays `BRIDGE-PENDING` until the owner reviews its comparison and
+  records `RECONCILED`; only then does it count. The Lean axioms each theorem
+  rests on (`propext`, `Quot.sound` for some) are in `verification/receipts/lean.json`;
+  a leg resting on axioms counts only once the owner rules them admissible under
+  TRUSTED-BASE-REDUCTION-POLICY disposition (c).
 
 | T-GRADE
-| Mathesis verification grade
-| `Grade 3` (four modules) ; `Grade 2i` *pending*
-| Grade 3 is held for the theorems in §2.1b: Agda, canonical invocation, no
-  escape hatches, receipt filed. Grade 2i needs the Lean leg reconciled (one
-  strengthening discrepancy, T-LEAN). Grade 2ii needs a non-DTT leg
-  (Isabelle/HOL) — absent. Grade 1 needs a headless checker API receipt (AXLE /
-  coq-lsp / Isabelle server) — absent.
+| Proof Witness Grade (PROOF-POLICY §8)
+| derived, §4
+| Never written by hand. `crates/jtv-proof-ledger` computes it from the receipts
+  and `theorems.json`: `PWG-3` needs a current Agda receipt under the canonical
+  flags with a clean escape-hatch scan; `PWG-2i` adds one counted recheck leg
+  (Rocq or Lean, kernel-checked *and* `RECONCILED`); `PWG-2ii` needs both the
+  Rocq and the Lean leg; `PWG-1` adds per-commit receipts from a pinned,
+  headless, isolated checker for every witness (a pinned CI kernel run
+  qualifies). A non-DTT witness such as Isabelle/HOL is the tag
+  `+foundation-diverse`, not a grade. The generator never derives `PWG-1`.
 |===
 
 === 2.3 Model ↔ code obligations (the honest gap)
@@ -317,7 +332,7 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | Nothing exists. Nothing may be claimed above `argued` until it does.
 |===
 
-=== 2.4 Engineering-ledger rows (Idris2, Rust/Creusot, Kani)
+=== 2.4 Engineering-ledger rows (Idris2; Rust: Creusot with Pearlite, and Verus; Kani)
 
 [cols="1,2,1,2,3",options="header"]
 |===
@@ -327,8 +342,9 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | Harvard GADT separation: `isControl`, `dataIsNeverControl`
 | `proven`
 | `src/abi/Types.idr`, Idris2 `%default total`
-| Uses no `believe_me`; verified by the repo's `idris2-abi` CI job. Not re-run in
-  this session.
+| Uses no `believe_me` or `assert_total`. `idris2 --check` passed under Idris2
+  0.7.0 on 2026-11-09, and the `idris2-abi` CI job passed at `dd41f29`.
+  Engineering proofs are not graded on the PWG ladder (PROOF-POLICY §8.1).
 
 | E-2
 | Purity ordering is a preorder (`purityLeqTrans`); numeric widening
@@ -363,8 +379,8 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 
 | R-1
 | Reversibility contract on `ReversibleInterpreter` (forward ∘ reverse = id)
-| `open` (Creusot) / `tested-only` (current evidence)
-| Creusot absent; `crates/jtv-core/tests/reversibility_tests.rs`,
+| `open` (Creusot/Pearlite and Verus) / `tested-only` (current evidence)
+| Neither verifier present; `crates/jtv-core/tests/reversibility_tests.rs`,
   `reversibility_c2_tests.rs`
 | Tested at unit and language-surface level for Safe blocks; **no** integration
   round-trip for the Neutral tier and no proof. Findings F1–F3 in the 2026-11-01
@@ -381,8 +397,11 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 | R-3
 | Contract on first-party Rust generally (PROOF-POLICY §1 mapping)
 | `open`
-| Creusot — none present
-| Whole-crate obligation; JtV's core runtime has no contracts. Sequencing in §5.
+| Creusot with Pearlite contracts, and Verus (PROOF-POLICY §1.2) — none present
+| Whole-crate obligation; JtV's core runtime has no contracts and no Verus proofs.
+  Both verifiers are planned by default; scopes may differ per obligation, and
+  where both verify one property the statement correspondence is recorded.
+  Sequencing in §5.
 |===
 
 ''''
@@ -394,7 +413,7 @@ them: `Agda 2.7.0.1`, `agda --safe --without-K --cubical-compatible`, stdlib
 # Theory (Agda — the estate source of truth; this is the receipted one)
 ( cd theory/agda && ./check.sh )     # pin: Agda 2.7.0.1, agda-stdlib 2.4
 
-# Theory (Lean leg, target-only evidence) — run from the repo root: a bare
+# Theory (Lean leg) — run from the repo root: a bare
 # `cd jtv_proofs` would persist and break the commands below it.
 ( cd jtv_proofs && lake build )      # pin: leanprover/lean4:v4.12.0
 grep -rnwE 'sorry|admit|axiom' jtv_proofs/*.lean   # must be empty
@@ -405,9 +424,13 @@ idris2 --check src/abi/Types.idr
 # Engineering (Rust behaviour — tested-only)
 cargo test --all
 
-# Theory (Agda) — the canonical invocation is the script, not a bare agda call:
-# it supplies the library configuration and the hole/postulate scan.
-(cd theory/agda && ./check.sh)
+# Receipts and grades (PROOF-POLICY §8). A receipt is written only when its
+# checker run succeeds; `check` needs no prover and is what CI runs.
+AGDA_STDLIB=/path/to/standard-library.agda-lib \
+  cargo run -p jtv-proof-ledger -- receipt agda   # runs theory/agda/check.sh
+cargo run -p jtv-proof-ledger -- receipt lean     # lake build + #print axioms
+cargo run -p jtv-proof-ledger -- render           # writes verification/ledger/PWG.adoc
+cargo run -p jtv-proof-ledger -- check            # fails if PWG.adoc has drifted
 ----
 
 *Toolchain honesty (PROOF-POLICY §6).* A session without Agda, Rocq/Lambdapi, or
@@ -417,9 +440,13 @@ in `setup.sh` (agent sessions) and the Guix manifest/container (CI) per
 `standards/LANGUAGE-POLICY.adoc` §2.
 
 *Recorded deviation — CI install route.* `.github/workflows/agda-proof-policy.yml`
-builds Agda 2.7.0.1 and agda-stdlib 2.4 from upstream tagged sources rather than
-through a Guix manifest or container, because this repository has no such
-manifest or Agda image (the only `Containerfile` is ClusterFuzzLite's). The job
+installs the upstream Agda 2.7.0.1 release binary (sha256-pinned), the matching
+primitive library from the pinned source commit, and agda-stdlib 2.4 at a pinned
+commit, rather than through a Guix manifest or container, because this repository
+has no such manifest or Agda image (the only `Containerfile` is
+ClusterFuzzLite's). Until 2026-11-09 it installed the PyPI `agda` wheel instead,
+which the estate's Python ban does not permit; this ledger previously described
+that route, inaccurately, as building from tagged sources. The job
 compensates by asserting the *installed* stdlib library name against this
 project's `depend: standard-library-2.4`, so a silent substitution fails rather
 than passes. This is a documented exception, not compliance; the remediation is
@@ -429,43 +456,37 @@ tags) and takes the credential half of that fix (`persist-credentials: false`).
 
 ''''
 
-== 4. Grade status by topic (mathesis §6 vocabulary)
+== 4. Proof Witness Grades (PROOF-POLICY §8)
 
-No percentages — the estate forbids flattening confidence (mathesis §6).
+The section below is generated: `crates/jtv-proof-ledger` derives every grade
+from the receipts in `verification/receipts/` and the records in
+`verification/ledger/theorems.json`, and CI fails when it drifts. A receipt counts
+only while the sha256 digests it recorded still match the files on disk, so any
+edit to a proof drops its theorems to `ungraded` until the checker is re-run
+(§8.4). Grades are reported as a census with its denominator, never as a
+percentage.
+
+include::ledger/PWG.adoc[]
+
+=== 4.1 Topics the grades do not cover
+
+These rows use the closed §5 vocabulary. Engineering obligations are not on the
+PWG ladder (§8.1).
 
 [cols="2,1,3",options="header"]
 |===
-| Topic | Mathesis status | Why
+| Topic | Status | Why
 
-| Data totality / determinism / purity | `Claimed` | Kernel-checked in Lean;
-  **not yet ported to Agda** (the port covered evaluation independence, not the
-  totality induction), so no grade on this row.
+| Data totality / determinism / purity; injection impossibility; type
+  preservation | `proven` in Lean, `ungraded` | Kernel-checked in Lean but **not
+  yet stated in Agda**, so they are target-only evidence (§3) and listed
+  `ungraded` in §4.
 
-| Injection impossibility / Harvard separation (theory) | `Claimed` | As above.
+| Echo lattice ↔ the `echo-types` library | `argued` | JtV states the same
+  fibre construction; no statement comparison against *that* library has been
+  recorded, and this repo neither imports nor transports from it.
 
-| Type preservation (integer-represented family) | `Claimed` | As above; also
-  axiom-free, which is recorded in the detail matrix.
-
-| Echo lattice + admissibility | `Grade 3` | Ported to Agda (`Jtv/Echo.agda`)
-  and rechecked. The correspondence to the `echo-types` library stays `argued`:
-  no statement comparison against *that* library has been recorded, and this repo
-  neither imports nor transports from it.
-
-| Echo block theorem, Safe-only policy | `Grade 3` |
-  `Jtv/Echo.agda:blockEcho-admissible` (with `join-admissible`). Was absent from
-  the first revision of the module while the section header advertised it;
-  restored and rechecked.
-
-| Reversibility (Safe step, Neutral residue step) | `Grade 3` | Ported to Agda
-  and rechecked under the canonical invocation; receipt filed. **The token
-  theorem is addition-only:** `rev-forward-backward-with-token` is specialised to
-  `addAssign` on both sides of the composition, so although
-  `execBackwardWithToken` has a `subAssign` arm, no theorem exercises it — the
-  Neutral tier is proved for addition, and subtraction's token path is untested
-  and unproved. Per-operation model only — no log semantics, and the runtime
-  diverges from it (F1–F3).
-
-| Reversibility (runtime, token/log semantics) | `Open` | Untested end-to-end for
+| Reversibility (runtime, token/log semantics) | `open` | Untested end-to-end for
   the Neutral tier; findings F1–F3 open. `Jtv/Conditional.agda` proves that the
   *model's* tokenless strategy (re-check the guard on the reversed state) is
   unsound. That is model-level evidence, and it discharges nothing about the
@@ -474,21 +495,23 @@ No percentages — the estate forbids flattening confidence (mathesis §6).
   which is the independent audit finding F3 — cite that, not the Agda module, for
   any statement about the interpreter.
 
-| Interpreter ↔ model refinement (`gap-001`) | `Open` | `tested-only` at the
+| Interpreter ↔ model refinement (`gap-001`) | `open` | `tested-only` at the
   integer-fragment level; no refinement.
 
-| Rust contracts (Creusot) | `Open` | Absent.
+| Rust contracts (Creusot with Pearlite, and Verus) | `open` | Absent.
 
-| ABI contracts (Idris2) | `Claimed` | `%default total` proofs present; not re-run
-  in this session.
+| ABI contracts (Idris2) | `proven` | `%default total`, no escape hatches;
+  checked 2026-11-09 (Idris2 0.7.0) and by CI at `dd41f29`.
 |===
 
 ''''
 
-== 5. Path to Grade 3 and beyond (sequenced per PROOF-POLICY §2.3)
+== 5. Path to PWG-2i and beyond (sequenced per PROOF-POLICY §2.3)
 
 Evidence-first order; each step keeps the existing gates green rather than
-replacing them. *Progress 2026-11-01: steps 1–2 done, step 3 next.*
+replacing them. *Progress 2026-11-09: steps 1–2 done for the 24 theorems in §4;
+every one of them now has a Lean statement of equal strength, so step 4 is
+waiting on the owner's review of the drafted comparisons. Step 3 has not started.*
 
 . *Keep the Lean and Idris2 gates exactly as they are.* ~Done~ — unchanged;
   `proof-regression.yml` still runs them.
@@ -504,27 +527,33 @@ replacing them. *Progress 2026-11-01: steps 1–2 done, step 3 next.*
   `JtvExtended`.
 . *Then the Rocq leg* for that same statement (Dedukti transport via echidna's
   exchange layer, or hand re-proof — PROOF-POLICY §2 lets either stand, provided
-  the route is recorded per theorem). *This supplies the Rocq leg required for
-  Grade 2i — it does not by itself award the grade:* the reconciliation in the
-  next step is what makes 2i mean anything, and it is still outstanding.
+  the route is recorded per theorem). A Rocq leg alone would give `PWG-2i`
+  once it is `RECONCILED`; it does not by itself award the grade.
 . *Reconcile statements, don't just compile both.* Record, per theorem: exact
   proposition, assumptions, type/universe discipline, source revision, versions,
   invocation, observed result, and the declared route (`transported` /
   `re-proved`). A green build in both provers is **not** evidence they proved the
-  same proposition (PROOF-POLICY §2.2). This is the obligation most likely to be
-  skipped and it is the one that makes 2i mean anything.
-. *Grade 2ii* additionally needs a non-DTT leg — Isabelle/HOL — because Agda,
-  Rocq and Lean are all in the same DTT/CIC family and a second DTT leg buys no
-  foundational diversity (mathesis §5).
-. *Grade 1 / receipts* needs the headless checker API leg (AXLE for Lean,
-  coq-lsp for Rocq, Isabelle server for HOL) plus the pinned commit hash, so
-  mathesis can detect `Regressed`/`Superseded` states later.
+  same proposition (PROOF-POLICY §2.2). For the Lean leg the comparisons are
+  drafted in `verification/ledger/theorems.json`; the owner moves each to
+  `RECONCILED`, and the grade follows automatically (`PWG-2i`).
+. *`PWG-2ii`* needs both the Rocq and the Lean leg to count; that is the grade at
+  which §2's recheck obligation is discharged. A non-DTT witness such as
+  Isabelle/HOL is recorded as the tag `+foundation-diverse` beside the grade; it
+  never stands in for either leg (§8.3).
+. *`PWG-1`* adds a current receipt for every counted witness from a pinned,
+  headless, isolated checker run on the exact source commit, with the checker
+  version, invocation, input digest, observed result, axioms and the full
+  40-character commit (§8.2). A pinned kernel run in CI (`agda`, `rocq compile`,
+  `lean` under `lake`) qualifies; checker services such as AXLE are examples, not
+  requirements.
 
-=== 5.1 The Rust/Creusot route — and the Aeneas temptation
+=== 5.1 The Rust route (Creusot with Pearlite, and Verus) — and the Aeneas temptation
 
-PROOF-POLICY §1 puts JtV's core runtime under Creusot: contracts and proofs on
-the first-party Rust itself. None exist, so every behavioural claim about
-`reversible.rs`/`interpreter.rs` is currently `tested-only` at best.
+PROOF-POLICY §1.2 puts JtV's core runtime under Creusot, with contracts written
+in Pearlite, and Verus as the complementary default verifier. None of the three
+appears in the repository, so every behavioural claim about
+`reversible.rs`/`interpreter.rs` is currently `tested-only` at best. Using both
+verifiers does not raise any theory theorem's Proof Witness Grade (§1.2, §8).
 
 Aeneas is *the* estate route for "Rust code implements a theorem proved in a
 proof assistant" (§4.1), which is exactly JtV's `gap-001`. It is **not** adoptable
@@ -549,6 +578,18 @@ recorded owner decision to adopt the backend at all.
 |===
 | Date | Change | By
 
+| 2026-11-09 | Brought into line with PROOF-POLICY §8 (Proof Witness Grades,
+  2026-11-04) and §1.2 (Rust defaults, 2026-11-07). Grades are now derived by
+  `crates/jtv-proof-ledger` from machine receipts (`verification/receipts/*.json`,
+  with sha256 input digests and Lean axiom lists) and gated in CI; the
+  2026-11-01 receipt is superseded (its commit is not on `main`). Bare "Grade N"
+  replaced by `PWG-N`, and the 2ii and 1 conditions corrected. Closed the
+  Agda/Lean statement gaps by proof: Agda `admissibleWithResidue-if`, `⊑⇒⊔`,
+  `⊔⇒⊑`, `rev-forward-backward-with-token-sub`; Lean
+  `rev_forward_backward_add_full`, `rev_forward_backward_sub`,
+  `rev_forward_backward_with_token_sub`, `le_iff_join`, `JtvConditional`. Lean
+  legs drafted, all `BRIDGE-PENDING` pending owner review. Idris2 re-run. CI
+  stops installing Agda through pip. Census: 24 `PWG-3`, 10 `ungraded`. | agent session, owner review pending
 | 2026-11-01 (later) | Agda theory layer added (`theory/agda/`, four modules) with
   receipt; Grade 3 recorded for §2.1b rows; grade status raises the reversibility
   and Echo rows from `Claimed` to `Grade 3`; Lean↔Agda correspondence recorded per

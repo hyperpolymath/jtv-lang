@@ -174,8 +174,8 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 
 === What changed
 
-* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. They are at *Grade 3* per `verification/receipts/2026-11-01-agda.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Not re-run here: no Agda toolchain in this session.
-* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and carry no grade. Quote grades only from `verification/PROOF-STATUS.adoc` §2.1b, in the estate vocabulary (`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1`), never as percentages.
+* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. Their theorems are `PWG-3` (PROOF-POLICY §8), derived from `verification/receipts/agda.json` into `verification/ledger/PWG.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Re-run on 2026-11-09 with the pinned toolchain.
+* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and are `ungraded`. Quote grades only from the derived `verification/ledger/PWG.adoc`, as Proof Witness Grades (`ungraded`, `PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`), never as percentages.
 * *Aeneas is not adoptable* for the proof-to-interpreter gap (audit §9.4). This plan's test-based refinement tables (B7, PR4) stay; they are evidence, not a proof.
 
 === Prover assignment (supersedes the "Home" column below and Q1)
@@ -198,7 +198,7 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 
 |`check()`, purity LFP, resolver, `jtv-cert` checker, interpreter refinement (PR4, PR7)
 |Contracts on first-party Rust
-|Creusot; Kani for the `jtv-wasm` shim and any `unsafe`/FFI
+|Creusot with Pearlite contracts, and Verus (PROOF-POLICY §1.2); Kani for the `jtv-wasm` shim and any `unsafe`/FFI
 
 |PR8 reversibility round-trip
 |Rust proptest now; the theorem is Theory
@@ -209,7 +209,7 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 |Agda in echo-types / secret-types (unchanged)
 |===
 
-The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim Grade 2i until the statement reconciliation in `verification/PROOF-STATUS.adoc` is done.
+The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim `PWG-2i`: it is derived, and appears only once the owner records a Lean comparison as `RECONCILED`.
 
 === Audit findings added to the hole register
 

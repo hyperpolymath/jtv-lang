@@ -7,7 +7,7 @@
 -- the estate's Theory Path source of truth:
 --   * standards/3-practice/PROOF-POLICY.adoc §1   (theory -> Agda)
 --   * standards/3-practice/PROOF-POLICY.adoc §2.1 (canonical invocation)
---   * mathesis:estate-mathematical-architecture §5 (Grade 3 basis)
+--   * standards/3-practice/PROOF-POLICY.adoc §8   (PWG-3 basis)
 --
 -- Statement correspondence with Lean is recorded per theorem in
 -- `theory/agda/README.adoc` and `verification/PROOF-STATUS.adoc`.

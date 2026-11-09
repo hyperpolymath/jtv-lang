@@ -26,7 +26,7 @@ source (`theory/agda/`, four modules, receipted 2026-11-01) and therefore a
 mathesis grade — see `theory/agda/README.adoc` for the per-theorem Lean↔Agda
 correspondence, and `verification/PROOF-STATUS.adoc` §2.1b for the graded rows.
 The Lean-only remainder still confers **no grade**. JtV's proof ledger, the estate legs
-per obligation, and the ordered path to Grade 3 are in
+per obligation, the derived Proof Witness Grades and the path beyond `PWG-3` are in
 `verification/PROOF-STATUS.adoc` — read it before quoting a `verified` row
 externally.
 
@@ -151,9 +151,9 @@ in that table — the two vocabularies are deliberately not mixed.
 
 `typechecks` here means: the module builds under `agda --safe --without-K
 --cubical-compatible` with the receipt's toolchain, with a clean hole/postulate
-scan. Mathesis grading is separately recorded in `verification/PROOF-STATUS.adoc`
-§2.1b (Grade 3 held for these four modules; Grade 2i pending). Receipt:
-`verification/receipts/2026-11-01-agda.adoc`.
+scan. Proof Witness Grades are derived in `verification/ledger/PWG.adoc`
+(`PWG-3` for these four modules; `PWG-2i` waits on the owner's review of the
+Lean comparisons). Receipt: `verification/receipts/agda.json`.
 
 == Key theorems
 

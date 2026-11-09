@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MPL-2.0
+# JtV - Proof Witness Grade ledger generator
+
+[package]
+name = "jtv-proof-ledger"
+description = "Derives JtV's Proof Witness Grades (PROOF-POLICY §8) from checker receipts"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "jtv-proof-ledger"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"

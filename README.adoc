@@ -139,8 +139,9 @@ Seven libraries, all compiling cleanly under Lean 4 v4.12.0, zero `sorry`
 
 Note on grading: these libraries are *not* what carries JtV's verification grade.
 The estate's Theory Path puts Agda first, so the graded evidence is the four Agda
-modules under `theory/agda/` (Grade 3); the Lean leg's reconciliation is the
-outstanding item for Grade 2i. See `verification/PROOF-STATUS.adoc`.
+modules under `theory/agda/` (`PWG-3`, derived from receipts); every Agda theorem
+now has a Lean statement of equal strength, and the owner's review of those
+comparisons is the outstanding item for `PWG-2i`. See `verification/PROOF-STATUS.adoc` §4.
 
 === Idris2 (`src/abi/Types.idr`)
 

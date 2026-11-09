@@ -259,7 +259,7 @@ Key theorems verified:
 
 * **Totality**: `evalDataExpr` terminates by structural recursion (no `termination_by` needed)
 * **Determinism**: `data_step_deterministic` — the Data Language has a unique evaluation result
-* **State independence**: `eval_state_independent` — if no free variables, result is state-independent
+* **State independence**: `free_vars_sufficient` and `update_non_free_var` — the result depends only on the free variables
 * **No infinite loops**: `no_infinite_dataExpr` — Data expressions cannot loop
 * **Injection impossibility** (`JtvSecurity.lean`): attacker-controlled data cannot inject control flow
 
@@ -297,24 +297,24 @@ Two separate questions, often conflated:
 * *Is it mechanised?* Yes, for the model: seven `sorry`-free Lean libraries, and
   an Idris2 ABI development under `%default total`. See
   `verification/PROOF-CAPABILITY-MATRIX.adoc` for per-library detail.
-* *What verification grade does that earn in the estate?* Grades follow
-  `hyperpolymath/mathesis:estate-mathematical-architecture` §5, where a *theory*
+* *What verification grade does that earn in the estate?* Grades are Proof
+  Witness Grades (`hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §8), where a *theory*
   statement's source of truth is **Agda**; under
   `hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §3 a Lean-only theory
   proof is *target-only evidence* and the Agda row stays `open`.
-  **Grade 3 is now held for the four modules in `theory/agda/`** — the Data
+  **The theorems of the four modules in `theory/agda/` are `PWG-3`** — the Data
   model, the Safe/Neutral reversal theorems, the Echo lattice + fibre, and the
   tokenless-`if` counterexample — checked with the canonical invocation and
   receipted. The Lean-only remainder (Control-plane, `JtvExtended`, non-`isIntRepr`
-  type preservation, the AOLD bundle) still carries **no grade**. Grade 2i is
-  pending one Lean↔Agda statement reconciliation; the Rocq leg, a non-DTT leg and
-  any Rust/Creusot leg are absent.
+  type preservation, the AOLD bundle) is **`ungraded`**. `PWG-2i` waits on the
+  owner's review of the Lean comparisons; the Rocq leg and any Rust verification
+  (Creusot with Pearlite contracts, and Verus) are absent.
 
 Practical consequence: quote the matrix for "what is mechanised", and
 `verification/PROOF-STATUS.adoc` for "how strongly this is established, against
-which prover, and what remains". Grades are recorded as one of
-`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1` — never as a
-percentage.
+which prover, and what remains". Grades are `ungraded`, `PWG-3`, `PWG-2i`,
+`PWG-2ii` or `PWG-1`, derived from receipts into `verification/ledger/PWG.adoc`
+— never as a percentage.
 
 [[proof-ledger]]
 === 7.5 Proof ledger
