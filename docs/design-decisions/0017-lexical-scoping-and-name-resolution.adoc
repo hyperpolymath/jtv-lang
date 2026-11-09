@@ -75,7 +75,12 @@ Until the interpreter implements D1–D3, the checker rejects, with a handled
 error:
 
 * any variable read inside a function body that is neither a parameter nor a
-  local assigned earlier in that body;
+  local *definitely assigned* before the read: assigned on every path that
+  reaches it. An assignment in one branch of an `if`, or in a loop body that
+  may run zero times, does not count, because when it is skipped the dynamic
+  interpreter falls through to the caller's frame. (The current typechecker
+  keeps assignments from conditional branches, so this check is new code, not a
+  reuse of its environment.)
 * any assignment inside a function body to a name that is also a top-level
   variable (the dynamic interpreter may write the global; D2 would create a
   local);

@@ -20,7 +20,11 @@ algebra — not a re-proof of the reversibility spine.
 NOTE: *Amended 2026-11-09 by ADR-0015*: `symbolic` (a string, not a group) and
 `complex` (`f64` components, an approximate group) are not `abelianGroup` as D2
 lists them. Symbolic becomes the free abelian group over atoms; complex is
-`Neutral`. The rest of this ADR stands.
+`Neutral`. The float-only remarks in D2 and D4 are corrected in place (marked
+_amended_). D4's default-carrier rule covers names that are bound but
+unannotated; a `reverse` target that is not bound at all is not thereby an
+integer, and the Wave 1 carrier lane rejects it (fail closed; this narrowing is
+a proposal awaiting owner review). The rest of this ADR stands.
 
 *Decided (2026-06-18).* Proof, type-, value-level classifiers and the
 carrier-aware typechecker gate all landed (PRs #44, #45, and the float-locals
@@ -70,9 +74,10 @@ same three tiers.
   they carry int's tier exactly. Encoding ≠ algebra.
 * *float is the qualified case:* IEEE-754 `+` is non-associative
   (`(a+b)+c ≠ a+(b+c)`) and non-cancellative under rounding
-  (`(x+v)-v ≠ x`), so reverse-add is lossy — `Neutral`, not `Safe`. This is the
-  one place the surface slogan "addition-only ⇒ reversible" is qualified by the
-  carrier.
+  (`(x+v)-v ≠ x`), so reverse-add is lossy — `Neutral`, not `Safe`. This is
+  where the surface slogan "addition-only ⇒ reversible" is qualified by the
+  carrier. _Amended 2026-11-09 (ADR-0015 D3):_ complex, whose components are
+  `f64`, is qualified the same way, so float is no longer the only such place.
 * *Breaking is presently empty,* reserved for a future non-invertible system.
 
 === D3 — Reconciliation with ADR-0007 D6 (honest note)
@@ -110,9 +115,12 @@ echo(x += v)  =  shape(x += v)  ⊔  carrier_echo(typeof x)
 A `CarrierEnv` (variable -> `BasicType`) is threaded through classification.
 *Default-carrier soundness:* a variable absent from the env is treated as `Int`
 (`Safe`), not "unknown-lossy". JtV numeric literals default to `int`
-(`inferType (lit _) = int` in Lean), so an unannotated numeric *is* int; the only
-lossy carrier (float) is exactly the one that must be annotated/inferred to
-exist — so the default cannot under-report loss for a *typed* program.
+(`inferType (lit _) = int` in Lean), so an unannotated numeric *is* int; the
+lossy carriers (float and, _amended 2026-11-09_ per ADR-0015 D3, complex) are
+exactly the ones that must be annotated/inferred to exist — so the default
+cannot under-report loss for a *typed* program. The default applies to a name
+the type environment binds; an unbound name is not covered (see the amendment
+note above).
 
 === D5 — One algebra, three surfaces
 

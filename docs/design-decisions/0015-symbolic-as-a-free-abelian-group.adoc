@@ -66,15 +66,28 @@ is never used for equality or arithmetic.
 === D3 — Complex is `Neutral`
 
 `complex` is graded by its component carrier. With `f64` components it is an
-approximate group and its reversible steps are `Neutral`, recovered from the
-`Snapshot` residue exactly as `float` is. A future exact-component complex type
+approximate group and its reversible steps are `Neutral`: they are recoverable
+only from a `Snapshot` of the old value. A future exact-component complex type
 (Gaussian integers, or rational components) would be `Safe`.
+
+That recovery does not hold today, for complex or for float.
+`ReversibleInterpreter::execute_reversible_stmt` (`reversible.rs`) records a
+`Snapshot` only when the step refers to its own target (`x += x`). An
+independent `x += v` is recorded as `AddAssign` and undone by subtraction, which
+is not exact for `f64` components and grows a string `Symbolic`. Hole H25.
 
 === D4 — Interim: fail closed
 
 Until D1 is implemented, the checker rejects a tokenless `reverse { }` on a
 `symbolic` or `complex` target (the Wave 1 carrier lane), and the runtime grade
 `Value::reversal_echo` stops reporting them `Safe`.
+
+A token-bound `reversible { } -> tok` on a float, complex or symbolic target is
+recoverable only once H25 is fixed: a step whose target value is not runtime
+`Safe` must record a `Snapshot`, whether or not it refers to itself. The Wave 1
+reversible-if lane owns that fix and its test (a float `x += 0.1` round trip is
+bit-identical). If that lane does not land with the carrier lane, the checker
+must also reject these token-bound blocks until it does.
 
 == Proof obligations
 

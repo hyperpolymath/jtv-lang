@@ -243,7 +243,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |verified
 
 |H2
-|Keyword prefix. `identifier = @{ !keyword ~ …}` has no word boundary, so `int_a` fails. *The proposed fix `!(keyword ~ !(ALNUM|"_"))` is wrong under PEG ordered choice:* `"in"` precedes `"intrinsic"` and `"insn"` in the keyword list, so those reserved words would become identifiers.
+|Keyword prefix. `identifier = @{ !keyword ~ …}` has no word boundary, so `int_a` fails. *The proposed fix `!(keyword ~ !(ALNUM\|"_"))` is wrong under PEG ordered choice:* `"in"` precedes `"intrinsic"` and `"insn"` in the keyword list, so those reserved words would become identifiers.
 |grammar.pest:196-202 (keyword order verified); red-team scratch pest crate
 |verified (order); stated (crate run)
 
@@ -273,7 +273,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |verified
 
 |H8
-|Coercion lattice is not a preorder (Hex→Int→Float but not Hex→Float). `Any` is both top and bottom (`(Any,_)|(_,Any) ⇒ true`), so transitive closure would make every type coercible to every other. typell-jtv uses `mem::discriminant` (rules.rs:25).
+|Coercion lattice is not a preorder (Hex→Int→Float but not Hex→Float). `Any` is both top and bottom (`(Any,_)\|(_,Any) ⇒ true`), so transitive closure would make every type coercible to every other. typell-jtv uses `mem::discriminant` (rules.rs:25).
 |typechecker.rs:31-55; typell rules.rs:25
 |verified
 
@@ -356,6 +356,11 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |Tokenless `reversible {}` keeps an unreachable log forever.
 |interpreter.rs:466-470
 |stated (audit)
+
+|H25 (review 2026-11-09)
+|A token-bound `x += v` on a float, complex or symbolic target is recorded as `AddAssign` and undone by subtraction, which does not restore the old value; only self-reference records a `Snapshot`.
+|reversible.rs:226-250
+|verified (code read)
 |===
 
 === Stated vs verified (selected)
@@ -418,7 +423,7 @@ Ratings are 0–10, from the two judges (average, rounded). Order of priority: e
 Corrections applied (from the judges and red team):
 
 . The overflow witness is per AST node, never on the final NF. Falsifier: `(x+C)+(-C)` has NF `x`, yet the checked interpreter errors when `x+C` overflows.
-. Symbolic is a word/term algebra (free semigroup over atoms closed under a formal `-(…)`), not a LinForm. The value-models doc says "no identity".
+. Symbolic is the free abelian group over atoms (ADR-0015, decided 2026-11-09): its NF is a LinForm over ℤ with atoms as the basis, kept canonical (atoms sorted, no zero coefficients), so `a + b` and `b + a` have the same NF and `(x + b) + neg b` normalises to `x`. This replaces the earlier reading of Symbolic as a free semigroup of term words, which matched the string implementation ADR-0015 retires. The fail-closed reverse interim (ADR-0015 D4) is separate and unchanged.
 . Summaries compose by substitution with hash-consed sharing. Words do not compress, so a DAG representation is needed to keep NF size polynomial (H16).
 . Scope: "single-carrier exact islands". PwLin, Float/Complex and mixed-carrier islands have no NF theorem. Their properties are not projections of a proved identity.
 
@@ -509,7 +514,7 @@ Corrections applied (from the judges and red team):
 |`scripts/cert-oracle-diff.sh` prints "disagreements: 0"; an edge-deletion mutant is rejected
 
 |PR2 JtvNormalForm
-|LinForm over ℤ (core Lean, no Mathlib): `nf_sound`, `nf_complete`, `dataExpr_equiv_decidable`. Projections: `support_noninterference` (error-free runs, explicit flows), `reverse_gate_sound`, `lossClass_sound`. Separate modules: term-word NF for Symbolic/String/List; ℚ as a setoid. `cost_eq_size` dropped unless cost is defined independently (e.g. step count).
+|LinForm over ℤ (core Lean, no Mathlib): `nf_sound`, `nf_complete`, `dataExpr_equiv_decidable`. Projections: `support_noninterference` (error-free runs, explicit flows), `reverse_gate_sound`, `lossClass_sound`. Symbolic shares the LinForm NF with atoms as basis (ADR-0015). Separate modules: term-word NF for String/List; ℚ as a setoid. `cost_eq_size` dropped unless cost is defined independently (e.g. step count).
 |Lean
 |Pins compile; audit clean
 
@@ -1098,6 +1103,11 @@ Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconci
 |What a reversible `if` may contain (H20–H22, audit F1–F3)
 |Branches are `+=`/`-=` only (the audit's recommendation); fail closed until decided
 |ELEGANT and DEPENDABLE
+
+|Q45 (new)
+|How Control code calls a non-`Total` function (ADR-0013 D6). The grammar puts every call inside a Data expression, so D5 recursion cannot be called today.
+|A grammatical Control call form, e.g. `x = call f(args)`; until decided, every call is a Data call and must be `Total`
+|ELEGANT
 |===
 
 *Top five, by what they block:* Q36 (signing; nothing lands), Q26 (purity semantics; Wave 1 core), Q39 (scoping; every semantic layer), Q31 (Symbolic; reverse claims and ADR-0010), Q28 (toolchains; proof lanes).
@@ -1191,8 +1201,8 @@ Each finding was checked against the repos on 2026-11-04 where a check was possi
 |Both kept. Suffix-strip labelled ELEGANT (exact, token-free). Neutral labelled DEPENDABLE and recommended for v1. The finding that called Neutral "elegant" is rejected on labelling only.
 
 |Symbolic is a free semigroup, not a monoid
-|Applied
-|Doc says "no identity"; Symbolic has a formal neg.
+|Superseded 2026-11-09
+|True of the string implementation. ADR-0015 (owner Q31) makes Symbolic the free abelian group over atoms, with identity `0` and exact inverses.
 
 |H10 is an ADR-0010 amendment, owner-gated; X11 first
 |Applied

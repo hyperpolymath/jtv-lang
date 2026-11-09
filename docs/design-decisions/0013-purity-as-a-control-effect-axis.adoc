@@ -100,6 +100,29 @@ purity falsifiers exercise exactly those two cases: `total_self_recursion` is a
 annotated `@total` or called from Data; `data_calls_looping_pure` calls a
 looping function from a Data expression.
 
+D5 needs a way to call a function outside a Data expression, and today's grammar
+has none: `function_call` appears only as a `factor` of `data_expr`
+(`grammar.pest`), and `x = f(n)` and `return f(n)` parse their right-hand side
+as a Data expression. Until D6 is decided, every call is a Data call, so D4
+applies to every call: a non-`Total` function may be defined but not called.
+That is fail-closed and consistent; it does not yet deliver D5.
+
+=== D6 — A Control call form (proposal; owner question Q45)
+
+A call whose result is not part of a larger Data expression is a *Control call*.
+It may have any `ctl` grade, and that grade is joined into the calling
+function's own grade. Its arguments are Data expressions and stay `Total`.
+
+* *Recommended, and the most elegant:* a grammatical form, so the separation
+  stays a matter of grammar, as JtV's Harvard rule requires. For example
+  `x = call f(args)` and `call f(args)` as a statement. The grammar lane adds it.
+* *Alternative:* the same distinction by position, with no new keyword. An
+  assignment or `return` whose whole right-hand side is one call is a Control
+  call. This is smaller to implement, but the parser then admits as Data text
+  that the checker treats as Control.
+
+Which form (or neither, keeping recursion uncallable) is the owner's call.
+
 == Proof obligations
 
 * *Theory (Agda, rechecked in Lean):* extend `Jtv.Echo` with the `Control` chain
@@ -123,6 +146,7 @@ looping function from a Data expression.
 
 == Open
 
+* The Control call form of D6 (owner question Q45).
 * Whether a later termination checker (size-change, or the PR1 rank certificate)
   may grade some recursion `Total`.
 * Whether `Effectful` should split by capability once the host IO mechanism
