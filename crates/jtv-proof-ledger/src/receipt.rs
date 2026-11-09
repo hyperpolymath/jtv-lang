@@ -51,8 +51,9 @@ fn commit_info(root: &Path) -> Result<(String, bool)> {
     Ok((head, clean))
 }
 
-/// The pinned standard library, as `name@commit`. The commit comes from the
-/// library's own git checkout or, failing that, `AGDA_STDLIB_COMMIT`.
+/// The standard library as `name@commit`. The commit comes from Git run in the
+/// library file's parent directory, or from `AGDA_STDLIB_COMMIT` if Git fails
+/// or does not return a full hash. File, name and fallback pin errors propagate.
 fn stdlib_pin(lib_file: &Path) -> Result<String> {
     let text = std::fs::read_to_string(lib_file)
         .map_err(|e| format!("cannot read {}: {e}", lib_file.display()))?;
@@ -78,7 +79,12 @@ fn stdlib_pin(lib_file: &Path) -> Result<String> {
     Ok(format!("{name}@{commit}"))
 }
 
-/// Run `theory/agda/check.sh` and record the result.
+/// Run `theory/agda/check.sh` and return a receipt; the caller writes it.
+///
+/// `AGDA_STDLIB` must name the standard library file. The check script may
+/// write build outputs and a log. An error is returned for a failed check,
+/// missing required output, a non-clean escape-hatch scan or changed inputs,
+/// as well as for input, pin, Git, date and process errors.
 pub fn agda(root: &Path) -> Result<Receipt> {
     let lib = std::env::var("AGDA_STDLIB")
         .map_err(|_| "set AGDA_STDLIB to the pinned standard-library.agda-lib".to_string())?;
@@ -154,6 +160,7 @@ fn escape_hatches(axioms: &BTreeMap<String, Vec<String>>) -> Vec<String> {
 }
 
 /// Parse one line of `#print axioms` output.
+/// Returns `None` for an unrecognised line and sorts any reported axioms.
 fn parse_axioms_line(line: &str) -> Option<(String, Vec<String>)> {
     let rest = line.strip_prefix('\'')?;
     let (name, tail) = rest.split_once('\'')?;
@@ -170,7 +177,13 @@ fn parse_axioms_line(line: &str) -> Option<(String, Vec<String>)> {
 }
 
 /// Build the Lean project, then ask the kernel for the axioms of every Lean
-/// declaration that `theorems.json` names.
+/// declaration named by the records and return a receipt; the caller writes it.
+///
+/// The build writes project outputs, and the axiom probe is written under
+/// `.lake`; its removal is attempted after the probe returns output. An error
+/// is returned if the build or probe fails, a declaration has no axiom report,
+/// a report contains `sorryAx` or `Lean.ofReduceBool`, or the inputs change.
+/// Input, process, probe-write, Git and date errors also propagate.
 pub fn lean(root: &Path, records: &Records) -> Result<Receipt> {
     let proj = root.join("jtv_proofs");
     let before = current_inputs(root, Prover::Lean).map_err(|e| e.to_string())?;

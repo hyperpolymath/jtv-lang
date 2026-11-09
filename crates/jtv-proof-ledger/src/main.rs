@@ -36,6 +36,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Read a prover's receipt, returning `None` if its path cannot be confirmed
+/// to exist. Read and JSON parsing errors after the existence check are returned.
 fn read_receipt(root: &Path, prover: Prover) -> Result<Option<Receipt>, String> {
     let p = root.join(format!("verification/receipts/{}.json", prover.name()));
     if p.exists() {

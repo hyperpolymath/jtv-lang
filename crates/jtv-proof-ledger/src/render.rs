@@ -70,6 +70,9 @@ pub struct Inputs<'a> {
     pub lean_now: &'a BTreeMap<String, String>,
 }
 
+/// Render the grade census, receipt currency and per-theorem results as
+/// AsciiDoc. The supplied current digests determine receipt currency; missing
+/// receipts are shown as missing and do not contribute evidence.
 pub fn render(i: &Inputs) -> String {
     let agda_cur = currency(i.agda, i.agda_now);
     let lean_cur = currency(i.lean, i.lean_now);

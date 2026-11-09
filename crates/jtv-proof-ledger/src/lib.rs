@@ -158,6 +158,8 @@ pub struct Receipt {
 }
 
 /// sha256 of a file, as lowercase hex.
+///
+/// Returns the file read error if the file cannot be read.
 pub fn file_digest(path: &Path) -> std::io::Result<String> {
     let bytes = std::fs::read(path)?;
     Ok(hex(&Sha256::digest(&bytes)))
@@ -168,6 +170,12 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// The input files a prover's receipt must cover, found on disk now.
+///
+/// Returns repository-relative paths mapped to sha256 digests. Agda inputs
+/// include the `.agda` sources, library file and check script; Lean inputs
+/// include the `.lean` sources and toolchain file. Hidden directories and
+/// `_build` directories are skipped when collecting sources. Directory and
+/// file read errors are returned to the caller.
 pub fn current_inputs(root: &Path, prover: Prover) -> std::io::Result<BTreeMap<String, String>> {
     let mut files: Vec<PathBuf> = Vec::new();
     match prover {
@@ -224,6 +232,10 @@ pub enum Currency {
 }
 
 /// Compare a receipt's recorded inputs with the files on disk.
+///
+/// `now` is the current path-to-digest map. A missing receipt yields
+/// `Missing`; a mismatch yields `Stale` with sorted paths for changed, added
+/// or removed inputs. No other receipt fields are checked.
 pub fn currency(receipt: Option<&Receipt>, now: &BTreeMap<String, String>) -> Currency {
     let Some(r) = receipt else {
         return Currency::Missing;
@@ -258,6 +270,7 @@ pub enum Token {
 }
 
 impl Token {
+    /// Format the status as an AsciiDoc token, including any listed axioms.
     pub fn label(&self) -> String {
         match self {
             Token::Proven => "`proven`".into(),
@@ -286,6 +299,7 @@ pub enum Pwg {
 }
 
 impl Pwg {
+    /// Return the ledger spelling of the grade.
     pub fn label(self) -> &'static str {
         match self {
             Pwg::Ungraded => "ungraded",
@@ -344,6 +358,12 @@ fn lean_leg(leg: &Leg, ev: &Evidence) -> (Token, bool) {
 }
 
 /// Apply PROOF-POLICY §8.2 to one theorem.
+///
+/// The supplied currency flags decide whether the receipts can be used. An
+/// open Agda leg leaves the theorem ungraded. A checked Lean leg counts only
+/// when it is reconciled, has a transported or re-proved route, and any
+/// reported axioms are admissible. Rocq legs are always open and do not count.
+/// The result includes each present leg's token and whether it counts.
 pub fn derive(t: &Theorem, ev: &Evidence) -> Graded {
     let agda = t.agda.as_ref().map_or(Token::Open, |s| agda_token(s, ev));
     let lean = t.lean.as_ref().map(|l| lean_leg(l, ev));
