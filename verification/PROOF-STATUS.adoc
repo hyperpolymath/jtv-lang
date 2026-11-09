@@ -42,8 +42,9 @@ JtV was an *engineering-first* project with a *Lean-first* theory layer. Since
 (`theory/agda/`, four modules), which is what makes a Proof Witness Grade
 derivable at all. The current receipts are `verification/receipts/agda.json` and
 `verification/receipts/lean.json`; the derived grades are in §4. As of
-2026-11-09 every Agda theorem has a Lean declaration of the same strength, so the
-Lean development is a candidate *leg*; it counts only once the owner records each
+2026-11-09 every Agda theorem has a Lean declaration of the same strength except
+`loss-is-real`, whose Lean counterpart `residue_lossy` is a weaker existential
+(recorded in `theorems.json`), so the Lean development is a candidate *leg*; it counts only once the owner records each
 comparison as `RECONCILED` (PROOF-POLICY §2.2, §8.2).
 
 [cols="1,3",options="header"]
@@ -62,8 +63,10 @@ comparison as `RECONCILED` (PROOF-POLICY §2.2, §8.2).
 | *Absent.* No `.v`, no Dedukti/Lambdapi transport. Open.
 
 | Theory — *Lean* recheck leg
-| *Present, `re-proved` route, every leg `BRIDGE-PENDING`.* Each of the 24 Agda
-  theorems in §4 now has a Lean declaration of the same strength: the
+| *Present, `re-proved` route, every leg `BRIDGE-PENDING`.* Of the 24 Agda
+  theorems in §4, 23 now have a Lean declaration of the same strength; the
+  exception is `loss-is-real`, where Lean's `residue_lossy` is a weaker
+  existential and the comparison records the discrepancy. The
   full-state `rev_forward_backward_add_full`, `rev_forward_backward_sub`,
   `rev_forward_backward_with_token_sub`, `Jtv.Echo.le_iff_join` and the
   `JtvConditional` module were added on 2026-11-09 for that purpose. The
@@ -270,8 +273,9 @@ the 2026-11-01 receipt is superseded. Each row's grade is in §4, not here.
 | Agda source of truth
 | `proven` (§2.1b) / `open` (remaining Lean theorems)
 | Held for four modules. The *remaining* Lean theorems — Control-plane,
-  `JtvExtended`, `JtvTypes` beyond `isIntRepr`, `JtvSecurity`'s AOLD bundle —
-  have no Agda statement yet.
+  `JtvExtended`, **all of** `JtvTypes` type preservation (including
+  `type_preservation` and `type_preservation_int`, the `isIntRepr` family),
+  `JtvSecurity`'s AOLD bundle — have no Agda statement yet.
 
 | T-ROCQ
 | Rocq recheck of the Agda witness
@@ -282,8 +286,8 @@ the 2026-11-01 receipt is superseded. Each row's grade is in §4, not here.
 | T-LEAN
 | Lean recheck of the Agda witness
 | `open` (leg, `BRIDGE-PENDING`) / `proven` or `proven-with-postulates` (evidence)
-| Every Agda theorem in §4 now has a Lean declaration of the same strength. The
-  gaps recorded on 2026-11-01 are closed by proof, not by bookkeeping:
+| Every Agda theorem in §4 except `loss-is-real` now has a Lean declaration of the
+  same strength (Lean's `residue_lossy` is a weaker existential). The gaps recorded on 2026-11-01 are closed by proof, not by bookkeeping:
   `rev_forward_backward_add_full` concludes the round trip for every variable
   (the older `rev_forward_backward` is its restriction to `x`);
   `rev_forward_backward_sub` and `rev_forward_backward_with_token_sub` cover
@@ -394,6 +398,16 @@ the 2026-11-01 receipt is superseded. Each row's grade is in §4, not here.
 | The Lean rule is proved; the *executed* path is not gated unless the host
   typechecks first. Recorded as `tested-only`, not `proven`, for that reason.
 
+| R-4
+| `crates/jtv-proof-ledger` derives grades soundly: a stale receipt never yields
+  a counted leg, a leg counts only when `RECONCILED`, and `PWG-1` is never derived
+| `tested-only` (unit tests) / `open` (Creusot/Pearlite and Verus)
+| `crates/jtv-proof-ledger/src/lib.rs` (`derive`, `agda_token`, `lean_leg`,
+  `currency`); 15 unit tests
+| The crate decides every grade in §4, so a bug in it would misstate them. Its
+  rules are tested, not proved; contracts for the three properties are a
+  follow-up under the §1.2 default, not done in the change that added it.
+
 | R-3
 | Contract on first-party Rust generally (PROOF-POLICY §1 mapping)
 | `open`
@@ -461,9 +475,11 @@ tags) and takes the credential half of that fix (`persist-credentials: false`).
 The section below is generated: `crates/jtv-proof-ledger` derives every grade
 from the receipts in `verification/receipts/` and the records in
 `verification/ledger/theorems.json`, and CI fails when it drifts. A receipt counts
-only while the sha256 digests it recorded still match the files on disk, so any
-edit to a proof drops its theorems to `ungraded` until the checker is re-run
-(§8.4). Grades are reported as a census with its denominator, never as a
+only while the sha256 digests it recorded still match the files on disk (§8.4).
+The two provers' receipts go stale independently. Editing an Agda input drops
+every theorem to `ungraded` until `receipt agda` is re-run, because no Agda leg
+then counts. Editing a Lean input stops every Lean leg counting until
+`receipt lean` is re-run; theorems with a current Agda receipt stay `PWG-3`. Grades are reported as a census with its denominator, never as a
 percentage.
 
 include::ledger/PWG.adoc[]
@@ -510,7 +526,8 @@ PWG ladder (§8.1).
 
 Evidence-first order; each step keeps the existing gates green rather than
 replacing them. *Progress 2026-11-09: steps 1–2 done for the 24 theorems in §4;
-every one of them now has a Lean statement of equal strength, so step 4 is
+23 of them now have a Lean statement of equal strength (not `loss-is-real`,
+whose Lean counterpart is weaker), so step 4 is
 waiting on the owner's review of the drafted comparisons. Step 3 has not started.*
 
 . *Keep the Lean and Idris2 gates exactly as they are.* ~Done~ — unchanged;

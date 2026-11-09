@@ -86,12 +86,12 @@ jobs:
           # library under the path it was built with, so the matching
           # src/data/lib from the pinned source commit is installed and named
           # through Agda_datadir.
-          curl -sSfL "${AGDA_BINARY_URL}" -o /tmp/agda.tar.xz
+          curl --proto =https --tlsv1.2 -sSfL "${AGDA_BINARY_URL}" -o /tmp/agda.tar.xz
           echo "${AGDA_BINARY_SHA256}  /tmp/agda.tar.xz" | sha256sum -c -
           mkdir -p /tmp/agda-bin
           tar xJf /tmp/agda.tar.xz -C /tmp/agda-bin
           echo "/tmp/agda-bin/Agda-v${AGDA_VERSION}/bin" >> "$GITHUB_PATH"
-          curl -sSfL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
+          curl --proto =https --tlsv1.2 -sSfL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
           echo "${AGDA_SHA256}  /tmp/agda-src.tar.gz" | sha256sum -c -
           tar xzf /tmp/agda-src.tar.gz -C /tmp
           mv "/tmp/agda-${AGDA_COMMIT}" "/tmp/agda-${AGDA_VERSION}"
@@ -101,7 +101,7 @@ jobs:
           export Agda_datadir=/tmp/agda-data
 
           # Standard library at the pinned tag.
-          curl -sSfL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
+          curl --proto =https --tlsv1.2 -sSfL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
           echo "${AGDA_STDLIB_SHA256}  /tmp/stdlib.tar.gz" | sha256sum -c -
           tar xzf /tmp/stdlib.tar.gz -C /tmp
           mv "/tmp/agda-stdlib-${AGDA_STDLIB_COMMIT}" "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}"

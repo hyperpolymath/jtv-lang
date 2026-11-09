@@ -12,8 +12,10 @@
 //! * [`Receipt`] — `verification/receipts/{agda,lean}.json`: what a pinned
 //!   checker observed, with a sha256 digest of every input file.
 //! * [`derive`] — the grade rules. A receipt counts only while its digests
-//!   match the files on disk, so editing a proof drops its grade until the
-//!   checker is re-run (§8.4, "regression drops the grade").
+//!   match the files on disk (§8.4, "regression drops the grade"). The two
+//!   provers go stale independently: an Agda edit leaves no Agda leg, so every
+//!   theorem is `ungraded`; a Lean edit stops the Lean legs counting, and
+//!   theorems with a current Agda receipt stay `PWG-3`.
 //!
 //! The crate never awards `PWG-1`: that needs per-commit receipts from a
 //! headless, isolated checker for every witness, which this repository does
@@ -107,11 +109,30 @@ pub struct Records {
     pub theorems: Vec<Theorem>,
 }
 
+/// The provers a receipt can come from. A closed set: a typo in a caller is a
+/// compile error, not a run-time one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Prover {
+    Agda,
+    Lean,
+}
+
+impl Prover {
+    /// The lowercase name used in receipt file names and in the JSON.
+    pub fn name(self) -> &'static str {
+        match self {
+            Prover::Agda => "agda",
+            Prover::Lean => "lean",
+        }
+    }
+}
+
 /// What a checker run observed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Receipt {
     pub schema: u32,
-    pub prover: String,
+    pub prover: Prover,
     /// The checker's own version string.
     pub checker: String,
     /// Library pins, e.g. `standard-library-2.4@2a5a0dec…`.
@@ -147,23 +168,17 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// The input files a prover's receipt must cover, found on disk now.
-pub fn current_inputs(root: &Path, prover: &str) -> std::io::Result<BTreeMap<String, String>> {
+pub fn current_inputs(root: &Path, prover: Prover) -> std::io::Result<BTreeMap<String, String>> {
     let mut files: Vec<PathBuf> = Vec::new();
     match prover {
-        "agda" => {
+        Prover::Agda => {
             collect(&root.join("theory/agda/src"), "agda", &mut files)?;
             files.push(root.join("theory/agda/jtv-theory.agda-lib"));
             files.push(root.join("theory/agda/check.sh"));
         }
-        "lean" => {
+        Prover::Lean => {
             collect(&root.join("jtv_proofs"), "lean", &mut files)?;
             files.push(root.join("jtv_proofs/lean-toolchain"));
-        }
-        other => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("unknown prover {other}"),
-            ))
         }
     }
     let mut out = BTreeMap::new();
@@ -182,7 +197,7 @@ pub fn current_inputs(root: &Path, prover: &str) -> std::io::Result<BTreeMap<Str
 /// skipped: `.lake` and `_build` hold outputs, not inputs.
 fn collect(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<Result<_, _>>()?;
-    entries.sort_by_key(|e| e.path());
+    entries.sort_by_key(std::fs::DirEntry::path);
     for e in entries {
         let p = e.path();
         let name = e.file_name();
@@ -359,10 +374,10 @@ pub fn derive(t: &Theorem, ev: &Evidence) -> Graded {
 mod tests {
     use super::*;
 
-    fn receipt(prover: &str) -> Receipt {
+    fn receipt(prover: Prover) -> Receipt {
         Receipt {
             schema: 1,
-            prover: prover.into(),
+            prover,
             checker: "test".into(),
             libraries: vec![],
             invocation: "test".into(),
@@ -411,7 +426,7 @@ mod tests {
 
     #[test]
     fn agda_alone_is_pwg3() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let g = derive(
             &theorem(Correspondence::BridgePending),
             &ev(&a, &l, true, true),
@@ -422,7 +437,7 @@ mod tests {
 
     #[test]
     fn reconciled_lean_leg_gives_pwg2i() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let g = derive(
             &theorem(Correspondence::Reconciled),
             &ev(&a, &l, true, true),
@@ -432,7 +447,7 @@ mod tests {
 
     #[test]
     fn stale_agda_receipt_drops_to_ungraded() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let g = derive(
             &theorem(Correspondence::Reconciled),
             &ev(&a, &l, false, true),
@@ -443,7 +458,7 @@ mod tests {
 
     #[test]
     fn stale_lean_receipt_stops_the_leg_counting() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let g = derive(
             &theorem(Correspondence::Reconciled),
             &ev(&a, &l, true, false),
@@ -453,7 +468,7 @@ mod tests {
 
     #[test]
     fn non_canonical_flags_do_not_count() {
-        let (mut a, l) = (receipt("agda"), receipt("lean"));
+        let (mut a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         a.flags = vec!["--safe".into()];
         let g = derive(
             &theorem(Correspondence::Reconciled),
@@ -464,7 +479,7 @@ mod tests {
 
     #[test]
     fn dirty_escape_scan_does_not_count() {
-        let (mut a, l) = (receipt("agda"), receipt("lean"));
+        let (mut a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         a.escape_scan = "postulate found".into();
         let g = derive(
             &theorem(Correspondence::Reconciled),
@@ -475,7 +490,7 @@ mod tests {
 
     #[test]
     fn axioms_need_an_admissibility_ruling() {
-        let (a, mut l) = (receipt("agda"), receipt("lean"));
+        let (a, mut l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         l.axioms.insert("thm".into(), vec!["propext".into()]);
         let mut t = theorem(Correspondence::Reconciled);
         let g = derive(&t, &ev(&a, &l, true, true));
@@ -490,7 +505,7 @@ mod tests {
 
     #[test]
     fn unavailable_or_waived_legs_never_count() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         for route in [Route::Unavailable, Route::Waived] {
             let mut t = theorem(Correspondence::Reconciled);
             t.lean.as_mut().unwrap().route = route;
@@ -500,7 +515,7 @@ mod tests {
 
     #[test]
     fn missing_lean_declaration_is_open() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let mut t = theorem(Correspondence::Reconciled);
         t.lean.as_mut().unwrap().decl = Some("absent".into());
         let g = derive(&t, &ev(&a, &l, true, true));
@@ -510,7 +525,7 @@ mod tests {
 
     #[test]
     fn rocq_never_counts_without_a_development() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let mut t = theorem(Correspondence::Reconciled);
         t.rocq = t.lean.clone();
         assert_eq!(derive(&t, &ev(&a, &l, true, true)).pwg, Pwg::TwoI);
@@ -518,7 +533,7 @@ mod tests {
 
     #[test]
     fn no_agda_source_is_ungraded() {
-        let (a, l) = (receipt("agda"), receipt("lean"));
+        let (a, l) = (receipt(Prover::Agda), receipt(Prover::Lean));
         let mut t = theorem(Correspondence::Reconciled);
         t.agda = None;
         assert_eq!(derive(&t, &ev(&a, &l, true, true)).pwg, Pwg::Ungraded);
@@ -526,7 +541,7 @@ mod tests {
 
     #[test]
     fn currency_detects_changed_added_and_removed_files() {
-        let mut r = receipt("agda");
+        let mut r = receipt(Prover::Agda);
         r.inputs = BTreeMap::from([("a".into(), "1".into()), ("b".into(), "2".into())]);
         let same = r.inputs.clone();
         assert_eq!(currency(Some(&r), &same), Currency::Current);

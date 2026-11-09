@@ -13,7 +13,7 @@
 //! read the committed receipts and hash the files on disk.
 
 use jtv_proof_ledger::render::{render, Inputs};
-use jtv_proof_ledger::{current_inputs, receipt, Receipt, Records};
+use jtv_proof_ledger::{current_inputs, receipt, Prover, Receipt, Records};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -36,8 +36,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-fn read_receipt(root: &Path, prover: &str) -> Result<Option<Receipt>, String> {
-    let p = root.join(format!("verification/receipts/{prover}.json"));
+fn read_receipt(root: &Path, prover: Prover) -> Result<Option<Receipt>, String> {
+    let p = root.join(format!("verification/receipts/{}.json", prover.name()));
     if p.exists() {
         read_json(&p).map(Some)
     } else {
@@ -55,10 +55,10 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String>
 
 fn rendered(root: &Path) -> Result<String, String> {
     let records: Records = read_json(&root.join(RECORDS))?;
-    let agda = read_receipt(root, "agda")?;
-    let lean = read_receipt(root, "lean")?;
-    let agda_now = current_inputs(root, "agda").map_err(|e| e.to_string())?;
-    let lean_now = current_inputs(root, "lean").map_err(|e| e.to_string())?;
+    let agda = read_receipt(root, Prover::Agda)?;
+    let lean = read_receipt(root, Prover::Lean)?;
+    let agda_now = current_inputs(root, Prover::Agda).map_err(|e| e.to_string())?;
+    let lean_now = current_inputs(root, Prover::Lean).map_err(|e| e.to_string())?;
     Ok(render(&Inputs {
         records: &records,
         agda: agda.as_ref(),
@@ -85,7 +85,8 @@ fn main() -> ExitCode {
         ["render"] => rendered(&root)
             .and_then(|text| std::fs::write(root.join(RENDERED), text).map_err(|e| e.to_string())),
         ["check"] => rendered(&root).and_then(|fresh| {
-            let committed = std::fs::read_to_string(root.join(RENDERED)).unwrap_or_default();
+            let committed = std::fs::read_to_string(root.join(RENDERED))
+                .map_err(|e| format!("{RENDERED}: {e}"))?;
             if committed == fresh {
                 println!("{RENDERED} matches the receipts and records");
                 Ok(())

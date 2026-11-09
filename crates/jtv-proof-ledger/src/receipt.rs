@@ -5,7 +5,7 @@
 //! not change while it ran. Anything else is an error, never a partial
 //! receipt: a receipt that overstates what was checked is worse than none.
 
-use crate::{current_inputs, Receipt, Records};
+use crate::{current_inputs, Prover, Receipt, Records};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
@@ -37,9 +37,14 @@ fn now_utc() -> Result<String> {
     Ok(out.trim().to_string())
 }
 
+/// A full 40-character hexadecimal commit hash.
+fn is_full_commit(s: &str) -> bool {
+    s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 fn commit_info(root: &Path) -> Result<(String, bool)> {
     let head = git(root, &["rev-parse", "HEAD"])?;
-    if head.len() != 40 {
+    if !is_full_commit(&head) {
         return Err(format!("HEAD is not a full commit hash: {head}"));
     }
     let clean = git(root, &["status", "--porcelain"])?.is_empty();
@@ -58,11 +63,17 @@ fn stdlib_pin(lib_file: &Path) -> Result<String> {
         .ok_or_else(|| format!("no name: line in {}", lib_file.display()))?;
     let dir = lib_file.parent().unwrap_or(Path::new("."));
     let commit = match git(dir, &["rev-parse", "HEAD"]) {
-        Ok(c) if c.len() == 40 => c,
-        _ => std::env::var("AGDA_STDLIB_COMMIT").map_err(|_| {
-            "the stdlib is not a git checkout; set AGDA_STDLIB_COMMIT to its pinned commit"
-                .to_string()
-        })?,
+        Ok(c) if is_full_commit(&c) => c,
+        _ => {
+            let c = std::env::var("AGDA_STDLIB_COMMIT").map_err(|_| {
+                "the stdlib is not a git checkout; set AGDA_STDLIB_COMMIT to its pinned commit"
+                    .to_string()
+            })?;
+            if !is_full_commit(&c) {
+                return Err(format!("AGDA_STDLIB_COMMIT is not a full commit hash: {c}"));
+            }
+            c
+        }
     };
     Ok(format!("{name}@{commit}"))
 }
@@ -72,12 +83,12 @@ pub fn agda(root: &Path) -> Result<Receipt> {
     let lib = std::env::var("AGDA_STDLIB")
         .map_err(|_| "set AGDA_STDLIB to the pinned standard-library.agda-lib".to_string())?;
     let stdlib = stdlib_pin(Path::new(&lib))?;
-    let before = current_inputs(root, "agda").map_err(|e| e.to_string())?;
+    let before = current_inputs(root, Prover::Agda).map_err(|e| e.to_string())?;
     let (ok, out) = run(&mut Command::new(root.join("theory/agda/check.sh")))?;
     if !ok {
         return Err(format!("check.sh failed; no receipt written:\n{out}"));
     }
-    let after = current_inputs(root, "agda").map_err(|e| e.to_string())?;
+    let after = current_inputs(root, Prover::Agda).map_err(|e| e.to_string())?;
     if before != after {
         return Err("the Agda sources changed during the run; no receipt written".into());
     }
@@ -115,7 +126,7 @@ pub fn agda(root: &Path) -> Result<Receipt> {
     let (base_commit, worktree_clean) = commit_info(root)?;
     Ok(Receipt {
         schema: 1,
-        prover: "agda".into(),
+        prover: Prover::Agda,
         checker,
         libraries: vec![stdlib],
         invocation: "theory/agda/check.sh (agda <flags> <module>.agda per module)".into(),
@@ -128,6 +139,18 @@ pub fn agda(root: &Path) -> Result<Receipt> {
         axioms: BTreeMap::new(),
         escape_scan,
     })
+}
+
+/// Declarations whose axioms include an escape hatch.
+fn escape_hatches(axioms: &BTreeMap<String, Vec<String>>) -> Vec<String> {
+    axioms
+        .iter()
+        .filter(|(_, ax)| {
+            ax.iter()
+                .any(|a| a == "sorryAx" || a == "Lean.ofReduceBool")
+        })
+        .map(|(name, _)| name.clone())
+        .collect()
 }
 
 /// Parse one line of `#print axioms` output.
@@ -150,7 +173,7 @@ fn parse_axioms_line(line: &str) -> Option<(String, Vec<String>)> {
 /// declaration that `theorems.json` names.
 pub fn lean(root: &Path, records: &Records) -> Result<Receipt> {
     let proj = root.join("jtv_proofs");
-    let before = current_inputs(root, "lean").map_err(|e| e.to_string())?;
+    let before = current_inputs(root, Prover::Lean).map_err(|e| e.to_string())?;
     let (ok, out) = run(Command::new("lake").arg("build").current_dir(&proj))?;
     if !ok {
         return Err(format!("lake build failed; no receipt written:\n{out}"));
@@ -199,7 +222,16 @@ pub fn lean(root: &Path, records: &Records) -> Result<Receipt> {
     if !missing.is_empty() {
         return Err(format!("no axiom report for {missing:?}"));
     }
-    let after = current_inputs(root, "lean").map_err(|e| e.to_string())?;
+    // An escape hatch is never recorded as a checked proof: `sorryAx` is an
+    // unfinished proof, and `Lean.ofReduceBool` is `native_decide` trusting the
+    // compiler. Either one means no receipt at all, not a leg with an axiom.
+    let escaped = escape_hatches(&axioms);
+    if !escaped.is_empty() {
+        return Err(format!(
+            "escape hatches found; no receipt written: {escaped:?}"
+        ));
+    }
+    let after = current_inputs(root, Prover::Lean).map_err(|e| e.to_string())?;
     if before != after {
         return Err("the Lean sources changed during the run; no receipt written".into());
     }
@@ -216,7 +248,7 @@ pub fn lean(root: &Path, records: &Records) -> Result<Receipt> {
         .collect();
     Ok(Receipt {
         schema: 1,
-        prover: "lean".into(),
+        prover: Prover::Lean,
         checker: version.trim().to_string(),
         libraries: vec!["Lean core only (no Mathlib; empty lake-manifest packages)".into()],
         invocation: "lake build; lake env lean <#print axioms probe>".into(),
@@ -233,7 +265,28 @@ pub fn lean(root: &Path, records: &Records) -> Result<Receipt> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_axioms_line;
+    use super::{escape_hatches, is_full_commit, parse_axioms_line};
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn rejects_escape_hatches() {
+        let ax = BTreeMap::from([
+            ("ok".to_string(), vec!["propext".to_string()]),
+            ("sorried".to_string(), vec!["sorryAx".to_string()]),
+            ("native".to_string(), vec!["Lean.ofReduceBool".to_string()]),
+        ]);
+        assert_eq!(
+            escape_hatches(&ax),
+            vec!["native".to_string(), "sorried".to_string()]
+        );
+    }
+
+    #[test]
+    fn full_commit_hashes_only() {
+        assert!(is_full_commit("2a5a0dec0a3cb5c87468ce101388a513d39dbf10"));
+        assert!(!is_full_commit("2a5a0dec"));
+        assert!(!is_full_commit("zz5a0dec0a3cb5c87468ce101388a513d39dbf10"));
+    }
 
     #[test]
     fn parses_axiom_lists() {
