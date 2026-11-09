@@ -440,7 +440,7 @@ Corrections applied (from the judges and red team):
 |Topic |ELEGANT arm |DEPENDABLE arm |Recommended now
 
 |D2 `@pure` meaning (Q26)
-|Three *computed* levels Total ⊑ Pure ⊑ Impure. Data calls need computed Total. Annotations are upper bounds. Bounded `for` over a range or collection evaluated once is Total if its body is Total (length measure in `TotalCert`).
+|*Decided 2026-11-09 (ADR-0013):* the owner chose the effect-row arm, so the computed levels become the `Control` axis `Total ⊑ Divergent ⊑ Effectful` of the ADR-0009 effect row. Data calls need computed Total. Annotations are upper bounds; `@pure` means no IO and may loop, which matches the `pure_function_with_loop.jtv` fixture. Recursion is legal in Control and graded Divergent. Bounded `for` over a range or collection evaluated once is Total if its body is Total (length measure in `TotalCert`).
 |`@pure ≡ @total`. *Not* "zero spec change": the conformance fixture `pure_function_with_loop.jtv` says `@pure` may loop, and stdlib `@pure` functions use `for`.
 |Elegant. Security outcome is the same; accept/reject sets differ.
 
@@ -593,11 +593,11 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 |`module_shadows_total.jtv`, `total_reads_global.jtv`, `reverse_in_fn.jtv` fail check; resolution proptest passes
 
 |E1b Purity (H6, H7, H17, H18)
-|LFP over SCC condensation; `PurityTable` consumed by a separate DataCallRule pass; bodiless callees Impure; for-over-List typed correctly; `TotalCert` frozen.
+|LFP over SCC condensation; `PurityTable` (the ADR-0013 `Control` grades) consumed by a separate DataCallRule pass; bodiless callees Effectful; for-over-List typed correctly; `TotalCert` frozen.
 |invalid fixtures non-zero; `callgraph_props` ≥ 1000 graphs; no *new* failures vs the E0 baseline set
 
 |E1c Carrier fail-closed (H10, H19)
-|Reject token-free reverse on Symbolic, String, Bool, Any. Complex pending X11. ADR-0015 drafted, owner-gated.
+|Reject token-free reverse on Symbolic, Complex, String, Bool, Any. This is the fail-closed interim (D4) of ADR-0015, decided 2026-11-09: Symbolic becomes the free abelian group over atoms, Complex is `Neutral`.
 |sym_rev3, str_rev, any_rev fail check
 
 |E5 jtv-wasm (H12) — before E1a
@@ -723,7 +723,7 @@ Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, an
 |Inside IS (reference implementation + its proofs). New docs carry CC-BY-SA-4.0; new code MPL-2.0, per the LICENSING.adoc table.
 
 |jtv-lang ADRs
-|0011 Echo framing; 0012 checked entry point / API break; 0013 computed purity and recursion; 0014 scope-arrest superseded; 0015 ADR-0010 D2 amendment (Symbolic/Complex); 0016 jtvcert sidecar; 0017 lexical scoping and name resolution; 0018 host IO capabilities (separate from coproc); candidate 0019 divergence-as-effect.
+|0011 Echo framing; 0012 checked entry point / API break; 0013 purity and totality as the `Control` effect axis (decided 2026-11-09, absorbs candidate 0019); 0014 scope-arrest superseded; 0015 Symbolic as the free abelian group over atoms, Complex `Neutral` (decided 2026-11-09); 0016 jtvcert sidecar; 0017 lexical scoping and name resolution (decided 2026-11-09); 0018 host IO capabilities (separate from coproc); 0019 is no longer separate (merged into 0013).
 |0015 amends a do_not_reopen ADR: owner-gated.
 
 |echo-types
@@ -1101,6 +1101,35 @@ Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconci
 |===
 
 *Top five, by what they block:* Q36 (signing; nothing lands), Q26 (purity semantics; Wave 1 core), Q39 (scoping; every semantic layer), Q31 (Symbolic; reverse claims and ADR-0010), Q28 (toolchains; proof lanes).
+
+=== Decided 2026-11-09
+
+[cols="1,3,3",options="header"]
+|===
+|Q |Owner's choice |Where it is recorded
+
+|Q36
+|Enable platform-managed commit signing for the environment, so every agent commit carries a real signature. This is the elegant arm, at source.
+|A platform setting the owner changes (Claude Code environment or account settings, or Anthropic support). Not a repository change.
+
+|Q26
+|Out of the box: purity and totality as a third axis (`Control`: `Total ⊑ Divergent ⊑ Effectful`) of the ADR-0009 effect row, computed by least fixed point; annotations are upper bounds; Data may call only `Total`.
+|`docs/design-decisions/0013-purity-as-a-control-effect-axis.adoc` (absorbs candidate 0019). Amends ADR-0009 D4.
+
+|Q39
+|Lexical scoping ADR (elegant), with a fail-closed interim in Wave 1 (dependable).
+|`docs/design-decisions/0017-lexical-scoping-and-name-resolution.adoc`.
+
+|Q31
+|Out of the box: Symbolic as the free abelian group over atoms, so it is `Safe` by construction; Complex (`f64` components) regraded `Neutral`.
+|`docs/design-decisions/0015-symbolic-as-a-free-abelian-group.adoc`. Amends ADR-0010 D2.
+
+|Q28
+|Answered in practice: Agda 2.7.0.1 + stdlib 2.4, Lean 4.12.0 and Idris2 0.7.0 run in agent sessions and in CI.
+|`verification/receipts/*.json`; `verification/PROOF-STATUS.adoc` §3.
+|===
+
+The ADRs record the direction the owner chose; their detailed rules are proposals awaiting owner review.
 
 == Contradictions and stale docs to fix
 

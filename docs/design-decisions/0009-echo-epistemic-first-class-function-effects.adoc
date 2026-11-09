@@ -17,6 +17,9 @@ join. This is the "echo + epistemic first-class" design.
 
 == Status
 
+NOTE: *Amended 2026-11-09 by ADR-0013*, which moves purity and totality into the
+effect row as a third axis (`Control`), superseding D4 below. D1–D3 stand.
+
 *Decided (2026-06-18).* The Echo-as-function-effect half is unambiguous and is
 the first implementation slice. The epistemic axis is committed to the
 *knowledge/observability* reading (the belief/certainty alternative was offered

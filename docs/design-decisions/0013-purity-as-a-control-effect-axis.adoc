@@ -1,0 +1,135 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0013: Purity and Totality as a Third Axis of the Function Effect Row
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-09
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+`@pure`, `@total`, Data-call totality, recursion and bounded `for` are decided
+by one more graded axis on the function arrow, alongside Echo and Epistemic
+(ADR-0009). The checker *computes* each function's grade on that axis; Data code
+may call only functions whose computed grade is `Total`. Annotations become
+upper-bound checks against the computed grade, never trusted labels.
+
+== Status
+
+*Decided in direction by the owner, 2026-11-09* (owner question Q26: "effect
+rows" chosen over separate computed purity levels, local annotation checks and
+structural recursion). The lattice points, the inference rules and the
+interaction with ADR-0017 below are this ADR's *proposal* and await owner
+review. *Amends ADR-0009 D4*, which kept purity outside the effect row.
+
+== Context
+
+* `@pure` is defined three different ways today (`purity.rs:13`, `ast.rs:247`,
+  a conformance fixture), and the hole register records several ways a function
+  marked `@total` can loop or recurse (H6, H7, H17, H18). The Harvard guarantee
+  — Data is total — rests on that check.
+* ADR-0009 made Echo (what a function loses) and Epistemic (what it reveals)
+  graded effects carried by the arrow and composed by join, but kept purity
+  separate (D4).
+* The alternatives offered with Q26 were: computed purity levels with a
+  separate rule for Data calls; a local check of `@pure` annotations; and
+  structural recursion with a termination check. The owner chose to fold the
+  question into the effect row instead, so one mechanism — inference by join
+  over the call graph — serves all three axes.
+
+== Decision
+
+=== D1 — A third graded axis, `Control`
+
+The function effect row becomes the product of three idempotent lattices:
+
+[source]
+----
+f : A -[echo E, epi K, ctl C]-> B
+    C ∈ { Total ⊑ Divergent ⊑ Effectful }
+----
+
+* `Total` — terminates on every input and performs no IO. The only grade Data
+  code may call.
+* `Divergent` — may fail to terminate (an unbounded loop, or a call cycle),
+  and performs no IO.
+* `Effectful` — performs IO (host calls, `print`, coprocessor calls), whether or
+  not it terminates.
+
+All three axes run bottom = best, top = worst, and compose componentwise by join
+(ADR-0009 D3 is extended, not replaced).
+
+=== D2 — The grade is computed, not declared
+
+The checker computes `ctl` as the least fixed point over the call graph, one
+strongly connected component at a time. The lattice is finite, so the
+computation terminates. Per construct:
+
+* literals, variables, `+`, `neg`, assignment: `Total`;
+* a bounded `for` over a finite range or list: the grade of its body;
+* `while`: `Divergent` joined with the grade of its body;
+* a call: the callee's grade;
+* a *cycle* in the call graph (self or mutual recursion): `Divergent` for every
+  function in the strongly connected component. v1 has no termination checker,
+  so no recursion is `Total`;
+* IO builtins and coprocessor calls: `Effectful`;
+* a callee with no body the checker can see (an extern, a missing definition):
+  `Effectful`, failing closed.
+
+=== D3 — Annotations are upper bounds
+
+`@total` asserts `ctl ⊑ Total`; `@pure` asserts `ctl ⊑ Divergent` (no IO, may
+loop). Each is checked against the computed grade and is a check-time error when
+exceeded. An annotation never lowers a grade. This replaces the three current
+definitions of `@pure` with one.
+
+=== D4 — The Data-call rule
+
+A call that appears in a Data expression is accepted only when the callee's
+computed `ctl` is `Total`. This is the rule that makes "Data is total" hold
+through calls, and it is checked statically, before any program runs.
+
+=== D5 — Recursion is permitted in Control
+
+A recursive function is legal in Control code; it is graded `Divergent`. What is
+refused is a Data call to it (D4) and a `@total` annotation on it (D3). The Wave 1
+purity falsifiers exercise exactly those two cases: `total_self_recursion` is a
+`@total` self-recursive function; `mutual_recursion` and
+`recursion_via_module` are mutually recursive functions that are either
+annotated `@total` or called from Data; `data_calls_looping_pure` calls a
+looping function from a Data expression.
+
+== Proof obligations
+
+* *Theory (Agda, rechecked in Lean):* extend `Jtv.Echo` with the `Control` chain
+  and the three-way product; prove the join laws componentwise (the same shape as
+  `⊔-idem`, `⊔-comm`, `⊔-assoc`), and that the fixed point of D2 is the least
+  one. The Lean `FunctionEffect` product in `JtvEcho.lean` gains the third axis.
+* *Soundness:* "a function computed `Total` terminates without IO" over the Data
+  model with calls. This is the totality theorem the plan's rank-certificate rung
+  (PR1) targets; until it exists the D2 rules are argued, not proved.
+* *Engineering:* the certificate format (`jtv check --cert --json`) records the
+  computed grade per function, so a checker independent of the compiler can
+  re-derive it.
+
+== Consequences
+
+* The purity lane of Wave 1 implements D2–D5 in `purity.rs` / the resolver
+  (ADR-0017 supplies name resolution, which the call graph needs).
+* ADR-0009 D4 is amended: purity is now inside the effect row.
+* `@pure` changes meaning for any program that relied on one of the three old
+  definitions; the semver-0.x API break (Q32) covers this.
+
+== Open
+
+* Whether a later termination checker (size-change, or the PR1 rank certificate)
+  may grade some recursion `Total`.
+* Whether `Effectful` should split by capability once the host IO mechanism
+  (ADR-0018) exists.
+
+== References
+
+* `docs/design-decisions/0009-echo-epistemic-first-class-function-effects.adoc`
+* `docs/architecture/LANGUAGE-SYSTEM-ARCHITECTURE.adoc` — hole register H6, H7,
+  H17, H18; owner question Q26.
