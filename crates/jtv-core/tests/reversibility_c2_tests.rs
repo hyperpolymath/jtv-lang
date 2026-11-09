@@ -100,3 +100,37 @@ reverse tok
     assert_eq!(get_var(&interp, "x"), Some(Value::Int(100)));
     assert_eq!(get_var(&interp, "y"), Some(Value::Int(0)));
 }
+
+// Independent lossy updates must restore the saved value, not subtract the RHS.
+#[test]
+fn token_lossy_carriers_restore_exactly() {
+    for (setup, expected) in [
+        ("x = 0.1\ny = 0.2", Value::Float(0.1)),
+        (
+            "x = 0.1+0.1i\ny = 0.2+0.2i",
+            Value::Complex(num_complex::Complex64::new(0.1, 0.1)),
+        ),
+        ("x = #a\ny = #b", Value::Symbolic("a".into())),
+        // Promotion must also restore the target's original type and value.
+        (
+            "x = 9007199254740993\ny = 0.2",
+            Value::Int(9007199254740993),
+        ),
+    ] {
+        for op in ["+=", "-="] {
+            let src = format!("{setup}\nreversible {{ x {op} y }} -> tok\nreverse tok");
+            let prog = parse_program(&src).expect("should parse");
+            let mut interp = Interpreter::new();
+            interp.run(&prog).expect("should run");
+            let restored = get_var(&interp, "x").unwrap();
+            match (&restored, &expected) {
+                (Value::Float(a), Value::Float(b)) => assert_eq!(a.to_bits(), b.to_bits()),
+                (Value::Complex(a), Value::Complex(b)) => {
+                    assert_eq!(a.re.to_bits(), b.re.to_bits());
+                    assert_eq!(a.im.to_bits(), b.im.to_bits());
+                }
+                _ => assert_eq!(restored, expected),
+            }
+        }
+    }
+}
