@@ -34,6 +34,11 @@ lean_lib JtvEcho where
   -- (aligns with the echo-types Agda library / EchoTypes.jl)
   roots := #[`JtvEcho]
 
+lean_lib JtvConditional where
+  -- The reversible `if`: the tokenless strategy is not an identity, and the
+  -- recorded-branch repair is (Lean counterpart of theory/agda Jtv.Conditional)
+  roots := #[`JtvConditional]
+
 lean_lib JtvExtended where
   -- Extended metatheory: algebraic cancellation/distribution, expression
   -- size/complexity, semantic-equivalence congruences, optimization
@@ -44,4 +49,4 @@ lean_lib JtvExtended where
 -- Build all proofs
 @[default_target]
 lean_lib JtvAll where
-  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho, `JtvExtended]
+  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho, `JtvConditional, `JtvExtended]

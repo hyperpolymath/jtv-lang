@@ -3,7 +3,7 @@
 # Enforces the estate Theory Path for JtV: theory proofs are checked in Agda
 # with the canonical invocation.
 #   hyperpolymath/standards:3-practice/PROOF-POLICY.adoc §2.1, §6
-#   hyperpolymath/mathesis:estate-mathematical-architecture §5
+#   hyperpolymath/standards:3-practice/PROOF-POLICY.adoc §8 (Proof Witness Grades)
 #
 # Verify this gate both ways (PROOF-POLICY §7): it must fail on a planted
 # `{!!}` as well as pass on the tree. theory/agda/check.sh does the latter
@@ -11,10 +11,12 @@
 #
 # TOOLCHAIN PINNING: the ubuntu-latest archive ships agda-stdlib 1.7.3, which
 # cannot satisfy this project's `depend: standard-library-2.4`, so distro
-# packages are NOT used here. Agda 2.7.0.1 and agda-stdlib 2.4 are fetched
-# from their own release source trees at fixed tags. PROOF-POLICY §6 prefers
-# the repo's Guix manifest/container; this is the fallback until that exists,
-# and the versions below are the pin — do not "simplify" this to apt.
+# packages are NOT used here. Agda 2.7.0.1 is the upstream release binary
+# (sha256-pinned), its primitive library comes from the pinned source commit,
+# and agda-stdlib 2.4 is fetched at a pinned commit. No Python is involved: the
+# estate bans it, and this job previously installed Agda through pip.
+# PROOF-POLICY §6 prefers the repo's Guix manifest/container; this is the
+# fallback until that exists, and the versions below are the pin — do not "simplify" this to apt.
 #
 # RECORDED DEVIATIONS from PROOF-POLICY §6 / the SHA-pin hook (both reviewed;
 # both are repo-wide conditions, not choices made by this workflow):
@@ -24,7 +26,7 @@
 #      guix/ manifest, no flake, and no Agda container image (the only
 #      Containerfile is ClusterFuzzLite's). Writing an untested manifest here
 #      would move the problem rather than solve it, so the deviation is
-#      recorded instead: the toolchain is built from upstream tags and the
+#      recorded instead: the toolchain is fetched from pinned upstream bytes and the
 #      step below *asserts* the installed stdlib name against the project's
 #      `depend:`, so a silent substitution fails the job. Remediation: add an
 #      Agda entry to the estate manifest and switch this job to it.
@@ -58,6 +60,9 @@ env:
   # Fetching by commit makes the bytes immutable; the digest makes even a
   # compromised archive detectable.
   AGDA_COMMIT: 'a6fc20c27ae953149b53a8997ba4a1c8b17d628a'
+  # The upstream Linux release binary for AGDA_VERSION, and its sha256.
+  AGDA_BINARY_URL: 'https://github.com/agda/agda/releases/download/v2.7.0.1/Agda-v2.7.0.1-linux.tar.xz'
+  AGDA_BINARY_SHA256: '975b515a14877ab6bce5bfc641e16c4a3ee52ca5d7f846577dee80aa2145db8a'
   AGDA_SHA256: '036bcca0ebf6cb2ceb17be58240f7634b99b7e9cd81521be56b2f3e9926d33d5'
   AGDA_STDLIB_COMMIT: '2a5a0dec0a3cb5c87468ce101388a513d39dbf10'
   AGDA_STDLIB_SHA256: '9c643759e49eca6b3538edd3cc1c0f30b572e629f2ad154a835ff97eca21c737'
@@ -77,26 +82,32 @@ jobs:
       - name: Install pinned Agda + agda-stdlib
         run: |
           set -euo pipefail
-          # Agda: the PyPI wheel packages the upstream 2.7.0.1 binary, but
-          # ships without data/lib/prim — fetched from the matching source tag.
-          pip install "agda==${AGDA_VERSION}"
-          AGDA_DATA="$(python -c 'import agda,os;print(os.path.join(os.path.dirname(agda.__file__),"data"))')"
-          curl -sSL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
+          # Agda: the upstream release binary. It looks for its primitive
+          # library under the path it was built with, so the matching
+          # src/data/lib from the pinned source commit is installed and named
+          # through Agda_datadir.
+          curl --proto =https --tlsv1.2 -sSfL "${AGDA_BINARY_URL}" -o /tmp/agda.tar.xz
+          echo "${AGDA_BINARY_SHA256}  /tmp/agda.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/agda-bin
+          tar xJf /tmp/agda.tar.xz -C /tmp/agda-bin
+          echo "/tmp/agda-bin/Agda-v${AGDA_VERSION}/bin" >> "$GITHUB_PATH"
+          curl --proto =https --tlsv1.2 -sSfL "https://codeload.github.com/agda/agda/tar.gz/${AGDA_COMMIT}" -o /tmp/agda-src.tar.gz
           echo "${AGDA_SHA256}  /tmp/agda-src.tar.gz" | sha256sum -c -
           tar xzf /tmp/agda-src.tar.gz -C /tmp
           mv "/tmp/agda-${AGDA_COMMIT}" "/tmp/agda-${AGDA_VERSION}"
-          rm -rf "$AGDA_DATA/lib"
-          mkdir -p "$AGDA_DATA"
-          cp -r "/tmp/agda-${AGDA_VERSION}/src/data/lib" "$AGDA_DATA/lib"
+          mkdir -p /tmp/agda-data
+          cp -r "/tmp/agda-${AGDA_VERSION}/src/data/lib" /tmp/agda-data/lib
+          echo "Agda_datadir=/tmp/agda-data" >> "$GITHUB_ENV"
+          export Agda_datadir=/tmp/agda-data
 
           # Standard library at the pinned tag.
-          curl -sSL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
+          curl --proto =https --tlsv1.2 -sSfL "https://codeload.github.com/agda/agda-stdlib/tar.gz/${AGDA_STDLIB_COMMIT}" -o /tmp/stdlib.tar.gz
           echo "${AGDA_STDLIB_SHA256}  /tmp/stdlib.tar.gz" | sha256sum -c -
           tar xzf /tmp/stdlib.tar.gz -C /tmp
           mv "/tmp/agda-stdlib-${AGDA_STDLIB_COMMIT}" "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}"
           echo "AGDA_STDLIB=/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib" >> "$GITHUB_ENV"
 
-          agda --version
+          "/tmp/agda-bin/Agda-v${AGDA_VERSION}/bin/agda" --version
           awk '/^name:/{print $2}' "/tmp/agda-stdlib-${AGDA_STDLIB_TAG#v}/standard-library.agda-lib"
 
       - name: Assert the pin matches the project's declared dependency

@@ -422,6 +422,50 @@ theorem rev_backward_naive_fails_self_ref :
   · simp [DataExpr.freeVars]
   · simp [RevOp.execForward, RevOp.execBackward, State.update, evalDataExpr]
 
+/-- **Full-state Safe round trip for `x += e`.** Every variable, not only `x`,
+    is restored when `x` is not free in `e`. This is the statement of the Agda
+    `Jtv.Reversal.rev-forward-backward-add`; `rev_forward_backward` above is its
+    restriction to `y = x` and is kept for its existing callers. -/
+theorem rev_forward_backward_add_full (σ : State) (x : String) (e : DataExpr)
+    (hfree : x ∉ e.freeVars) (y : String) :
+    RevOp.execBackward (RevOp.addAssign x e)
+      (RevOp.execForward (RevOp.addAssign x e) σ) y = σ y := by
+  have h : evalDataExpr e (σ[x ↦ σ x + evalDataExpr e σ]) = evalDataExpr e σ :=
+    update_non_free_var e σ x _ hfree
+  simp only [RevOp.execForward, RevOp.execBackward]
+  rw [h]
+  by_cases hy : y = x
+  · subst hy; simp [State.update]
+  · simp [State.update, hy]
+
+/-- **Full-state Safe round trip for `x -= e`** (Agda
+    `Jtv.Reversal.rev-forward-backward-sub`). Lean writes the forward step as
+    `σ x - evalDataExpr e σ`; Agda writes `σ x + (- eval e σ)`, the same integer
+    because `Int.sub` is defined as addition of the negation. -/
+theorem rev_forward_backward_sub (σ : State) (x : String) (e : DataExpr)
+    (hfree : x ∉ e.freeVars) (y : String) :
+    RevOp.execBackward (RevOp.subAssign x e)
+      (RevOp.execForward (RevOp.subAssign x e) σ) y = σ y := by
+  have h : evalDataExpr e (σ[x ↦ σ x - evalDataExpr e σ]) = evalDataExpr e σ :=
+    update_non_free_var e σ x _ hfree
+  simp only [RevOp.execForward, RevOp.execBackward]
+  rw [h]
+  by_cases hy : y = x
+  · subst hy; simp [State.update]
+  · simp [State.update, hy]
+
+/-- **Neutral tier for `x -= e`**: restoring `x` from the residue `σ x` recovers
+    every variable, unconditionally (Agda
+    `Jtv.Reversal.rev-forward-backward-with-token-sub`). -/
+theorem rev_forward_backward_with_token_sub (σ : State) (x : String) (e : DataExpr)
+    (y : String) :
+    RevOp.execBackwardWithToken (RevOp.subAssign x e)
+      (RevOp.execForward (RevOp.subAssign x e) σ) (σ x) y = σ y := by
+  simp only [RevOp.execForward, RevOp.execBackwardWithToken, State.update]
+  by_cases h : y = x
+  · subst h; simp
+  · simp [h]
+
 -- ============================================================================
 -- SECTION 10: ADDITIONAL PROPERTIES
 -- ============================================================================

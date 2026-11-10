@@ -100,6 +100,24 @@ Breaking ⊔ _       = Breaking
 ⊔-absorbingʳ Neutral = refl
 ⊔-absorbingʳ Breaking = refl
 
+-- The order agrees with the join: `a ⊑ b` exactly when `a ⊔ b ≡ b`. Lean
+-- defines its order this way (`Echo.le a b := a ⊔ b = b`); these two lemmas are
+-- what lets the Agda order be compared with it.
+⊑⇒⊔ : ∀ a b → a ⊑ b → a ⊔ b ≡ b
+⊑⇒⊔ Safe b _ = refl
+⊑⇒⊔ Neutral Neutral _ = refl
+⊑⇒⊔ Neutral Breaking _ = refl
+⊑⇒⊔ Breaking Breaking _ = refl
+
+⊔⇒⊑ : ∀ a b → a ⊔ b ≡ b → a ⊑ b
+⊔⇒⊑ Safe b _ = tt′
+⊔⇒⊑ Neutral Safe ()
+⊔⇒⊑ Neutral Neutral _ = tt′
+⊔⇒⊑ Neutral Breaking _ = tt′
+⊔⇒⊑ Breaking Safe ()
+⊔⇒⊑ Breaking Neutral ()
+⊔⇒⊑ Breaking Breaking _ = tt′
+
 ------------------------------------------------------------------------
 -- SECTION 2: the two admissibility policies (ADR-0007 D5).
 --
@@ -123,6 +141,14 @@ admissibleWithResidue-iff : ∀ (e : Echo) → admissibleWithResidue e ≡ true 
 admissibleWithResidue-iff Safe _ = inj₁ refl
 admissibleWithResidue-iff Neutral _ = inj₂ refl
 admissibleWithResidue-iff Breaking ()
+
+-- The converse, so the two together are the iff the name promises (Lean states
+-- it as `admissibleWithResidue_iff : ... = true ↔ e ≠ breaking`).
+admissibleWithResidue-if : ∀ (e : Echo) → e ≡ Safe ⊎ e ≡ Neutral → admissibleWithResidue e ≡ true
+admissibleWithResidue-if Safe _ = refl
+admissibleWithResidue-if Neutral _ = refl
+admissibleWithResidue-if Breaking (inj₁ ())
+admissibleWithResidue-if Breaking (inj₂ ())
 
 -- The Safe-only policy is the stricter one: it implies the residue one.
 admissible⇒admissibleWithResidue :

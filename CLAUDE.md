@@ -177,7 +177,7 @@ policy file wins and changes in the same change as it.
 |---|---|
 | Theory (lattices, orders, soundness of a calculus — "true of any implementation") | **Agda**, rechecked in **Rocq** and **Lean** |
 | APIs, ABIs, wire formats, totality/dispatch/round-trip properties of *this* system | **Idris2** |
-| Contracts and proofs on first-party **Rust** | **Creusot** (plus Kani for `unsafe`/FFI, Aeneas only where Rust implements a proved theorem) |
+| Contracts and proofs on first-party **Rust** | **Creusot** with **Pearlite** contracts, and **Verus**, both by default (PROOF-POLICY §1.2, owner ruling 2026-11-07); Kani for `unsafe`/FFI, Aeneas only where Rust implements a proved theorem |
 | Ada | SPARK (not applicable here) |
 
 Two rules with teeth for this repo:
@@ -186,7 +186,8 @@ Two rules with teeth for this repo:
   a Lean-only proof of a theory statement is *target-only evidence*; the Agda row
   stays `open`. JtV now has an Agda layer for **part** of the model
   (`theory/agda/`: `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`, `Jtv.Conditional`,
-  **Grade 3**, receipt in `verification/receipts/`). The *remaining* Lean
+  `PWG-3`, derived from `verification/receipts/*.json` into
+  `verification/ledger/PWG.adoc`). The *remaining* Lean
   theorems — Control-plane, `JtvExtended`, **all of `JtvTypes` type preservation
   including the `isIntRepr` family**, `JtvSecurity`'s AOLD bundle — are still
   Lean-only and carry **no grade**. (None of the four Agda modules defines
@@ -195,16 +196,19 @@ Two rules with teeth for this repo:
   `isIntRepr` type preservation", which wrongly implied the integer family had
   been ported.) So:
   quote the graded subset from `verification/PROOF-STATUS.adoc` §2.1b, and treat
-  every other Lean theorem as `Claimed`.
+  every other Lean theorem as `ungraded` target-only evidence.
 * **No Mathlib**, and no weakening flags to make a check green. Theory proofs must
   be Mathlib-free (they currently are) and Agda entrypoints use
   `agda --safe --without-K --cubical-compatible`.
 
 Ledger and grade vocabulary: `verification/PROOF-STATUS.adoc` (estate-closed
 status tokens) and `verification/PROOF-CAPABILITY-MATRIX.adoc` (per-library
-detail). Grades are `Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` /
-`Grade 1` per `hyperpolymath/mathesis:estate-mathematical-architecture` §5 — never
-a percentage.
+detail). Grades are Proof Witness Grades per `hyperpolymath/standards`
+`3-practice/PROOF-POLICY.adoc` §8: `ungraded`, `PWG-3`, `PWG-2i`, `PWG-2ii`,
+`PWG-1`, always with the `PWG-` prefix, never a percentage. They are derived by
+`cargo run -p jtv-proof-ledger -- render` from the receipts, never written by
+hand; CI runs `jtv-proof-ledger check`. After editing any `.agda` or `.lean`
+file, re-run `jtv-proof-ledger receipt agda|lean` and `render`, or the gate fails.
 
 ## Contact & Contribution
 

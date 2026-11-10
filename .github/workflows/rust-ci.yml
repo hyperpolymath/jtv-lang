@@ -82,6 +82,16 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets
 
+      # PROOF-POLICY §8: Proof Witness Grades are derived from receipts, never
+      # asserted. This fails when verification/ledger/PWG.adoc no longer matches
+      # the receipts, theorems.json and the digests of the proof files on disk —
+      # e.g. a .agda or .lean file changed without a fresh receipt. Linux only:
+      # the digests are of LF-terminated files, which a Windows checkout may
+      # convert.
+      - name: Proof Witness Grade ledger is current
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo run -q -p jtv-proof-ledger -- check
+
       - name: Write summary
         if: always()
         run: |

@@ -202,6 +202,15 @@ rev-forward-backward-with-token x e σ =
   rev-token-general x σ (update σ x (σ x + eval e σ))
     (λ y p → update-diff σ x (σ x + eval e σ) y p)
 
+-- The Neutral tier for subtraction: `execBackwardWithToken` has a `subAssign`
+-- arm, and this is the theorem that exercises it.
+rev-forward-backward-with-token-sub :
+  ∀ x e σ → ∀ y
+  → execBackwardWithToken (subAssign x e) (execForward (subAssign x e) σ) (σ x) y ≡ σ y
+rev-forward-backward-with-token-sub x e σ =
+  rev-token-general x σ (update σ x (σ x + (- eval e σ)))
+    (λ y p → update-diff σ x (σ x + (- eval e σ)) y p)
+
 ------------------------------------------------------------------------
 -- And the residue is necessary: the naive inverse fails on `x += x`
 -- (σ x = 1 gives 1 + 1 = 2, and 2 + (- 2) = 0 ≠ 1).

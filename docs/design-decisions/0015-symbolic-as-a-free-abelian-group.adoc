@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0015: Symbolic Values as the Free Abelian Group over Atoms (amends ADR-0010 D2)
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-09
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+A symbolic value becomes a formal sum of named atoms with integer coefficients.
+Under that representation `+` has a true inverse, so `Symbolic` is `Safe` by
+construction instead of by assertion. `Complex`, whose components are
+floating-point, is regraded `Neutral`.
+
+== Status
+
+*Decided in direction by the owner, 2026-11-09* (owner question Q31: the free
+abelian group over atoms, chosen over a Snapshot-based `Neutral` grade, a
+suffix-stripping inverse, and leaving the rule open). The representation and the
+proof obligations below are this ADR's *proposal* and await owner review.
+*Amends ADR-0010 D2* for `symbolic` and `complex`.
+
+== Context
+
+ADR-0010 D2 lists `int, rational, complex, symbolic` as abelian groups, graded
+`Safe`. Two of those four are not groups as implemented:
+
+* `Value::Symbolic(String)` adds by formatting `"a + b"` and negates by
+  formatting `"-(s)"` (`crates/jtv-core/src/number.rs`). Reversing `x += b`
+  gives `"x + b + -(b)"`, which is not equal to `"x"`: the inverse grows the
+  value instead of restoring it. The checker still grades such a step `Safe`, so
+  a tokenless `reverse { }` silently fails to restore it.
+* `Value::Complex(Complex64)` has `f64` components, so it inherits IEEE-754
+  rounding: `(z + w) - w ≠ z` in general. That is ADR-0010's `approxGroup`, the
+  `float` case, not `abelianGroup`.
+
+`docs/proofs/number-system-value-models.adoc` already described `complex` as
+approximate and `symbolic` as a non-group, so the Lean classifier
+(`exact_groups_safe`), the Rust classifier and the design document disagree.
+PROOF-STATUS records the `complex`/`symbolic` rows as regressed for that reason.
+
+== Decision
+
+=== D1 — The symbolic carrier is ℤ⁽ᴬᵗᵒᵐˢ⁾
+
+A symbolic value is a finitely supported map from atoms (identifiers) to nonzero
+integer coefficients, kept in a canonical form: atoms sorted, no zero
+coefficients. The empty map is `0`.
+
+* `a + b` adds coefficients pointwise and drops zeros.
+* `neg a` negates every coefficient.
+* Equality is equality of canonical forms.
+
+This is the free abelian group on the set of atoms. Addition is associative and
+commutative, `0` is the unit, and `neg` is the inverse, so `(x + b) + neg b = x`
+holds exactly. A symbolic `x += b` is therefore `Safe`, which is what ADR-0010
+D1's `abelianGroup → Safe` row now actually describes.
+
+=== D2 — Display is a rendering, not the value
+
+The value prints as a sum such as `x + 2·y - z`. Printing is not invertible and
+is never used for equality or arithmetic.
+
+=== D3 — Complex is `Neutral`
+
+`complex` is graded by its component carrier. With `f64` components it is an
+approximate group and its reversible steps are `Neutral`: they are recoverable
+only from a `Snapshot` of the old value. A future exact-component complex type
+(Gaussian integers, or rational components) would be `Safe`.
+
+`ReversibleInterpreter::execute_reversible_stmt` (`reversible.rs`) records a
+`Snapshot` for both `+=` and `-=` when the old or resulting value is float,
+complex or string-backed symbolic, as well as for self-reference. Reversal
+restores the original value, including its type and floating-point bits; it
+does not attempt subtraction to recover these carriers (H25).
+
+=== D4 — Interim: fail closed
+
+Until D1 is implemented, the checker rejects a tokenless `reverse { }` on a
+`symbolic` or `complex` target (the Wave 1 carrier lane), and the runtime grade
+`Value::reversal_echo` stops reporting them `Safe`.
+
+A token-bound `reversible { } -> tok` on a float, complex or symbolic target is
+recoverable using the snapshots described in D3, whether or not the step
+refers to itself. The Wave 1 reversible-if lane must preserve this safeguard
+and its bit-identical round-trip tests. Implementations without snapshot
+recording must reject these token-bound operations until it is supported.
+
+== Proof obligations
+
+* *Theory (Agda, rechecked in Lean):* generalise `Jtv.Reversal` from `ℤ` to any
+  abelian group, so the Safe-tier theorems (`rev-forward-backward-add`,
+  `-sub`) are proved once and instantiated twice: at `ℤ`, and at the free abelian
+  group on atoms. The free-group instance needs its group laws, which hold
+  pointwise from `ℤ`'s once canonical forms are shown unique.
+* *Classification:* `exact_groups_safe` in Lean and the `NumSystem.echo` map are
+  restated so that `symbolic` is `Safe` because its carrier is an abelian group,
+  and `complex` is `Neutral` because its carrier is not.
+* *Engineering:* a property test that `(x + b) - b == x` for symbolic values, and
+  that the canonical form is unique.
+
+== Consequences
+
+* `Value::Symbolic` changes representation. Code that pattern-matches on the
+  string, and tests such as `test_symbolic_addition` (which expects the string
+  `"x + y"`), change with it.
+* ADR-0010 D2's table becomes: `int, rational, symbolic` (and `hex`, `binary`)
+  `Safe`; `float, complex` `Neutral`.
+
+== Open
+
+* `Rational` is `Ratio<i64>`: exact until a numerator or denominator overflows.
+  Whether overflow is an error, a promotion to an unbounded representation, or a
+  `Neutral` grade is the compiled-island overflow question (Q29) and is not
+  decided here.
+* Whether atoms may carry rational coefficients (a free ℚ-vector space) instead
+  of integer ones.
+
+== References
+
+* `docs/design-decisions/0010-number-system-stratification.adoc` — D1, D2, D4.
+* `crates/jtv-core/src/number.rs` — `Value::Symbolic`, `Value::Complex`,
+  `reversal_echo`.
+* `verification/PROOF-STATUS.adoc` — the regressed `complex`/`symbolic` rows.

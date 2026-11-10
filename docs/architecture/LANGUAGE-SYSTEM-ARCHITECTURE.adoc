@@ -46,7 +46,7 @@ The plan puts every surface (CLI, REPL, wasm embedding, playground, LSP) behind 
 |jtv-lang
 
 |L4 Normal-form engine (`nf.rs`, PROPOSED)
-|Per-function summaries composed by substitution, with hash-consed sharing. Carriers: LinForm over ℤ (Int/Hex/Binary), over ℕ (purist), over ℚ (Rational); a word/term algebra for Symbolic/String/List; piecewise-linear (PwLin) for islands calling `@total` functions with `if`; none for Float/Complex. Projections: support, reverse-gate class, loss class, cost, per-node overflow bound.
+|Per-function summaries composed by substitution, with hash-consed sharing. Carriers: LinForm over ℤ (Int/Hex/Binary), over ℕ (purist), over ℚ (Rational); LinForm over ℤ with atoms as the basis for Symbolic (ADR-0015); a word/term algebra for String/List; piecewise-linear (PwLin) for islands calling `@total` functions with `if`; none for Float/Complex. Projections: support, reverse-gate class, loss class, cost, per-node overflow bound.
 |jtv-lang
 
 |L5 Hosts
@@ -99,7 +99,7 @@ flowchart TB
     RES --> CHECK["check(): types, purity LFP over SCC, DataCall = computed Total, epistemic(pc)"]
     CHECK -->|"CheckedProgram (private ctor)"| INT["Interpreter::run: step fuel + depth cap + size budget"]
     CHECK -->|"TotalCert JSON"| CERTJ["cert data"]
-    CHECK --> NF["nf.rs: LinForm Z/N/Q | term words (shared DAG) | PwLin | none"]
+    CHECK --> NF["nf.rs: LinForm Z/N/Q + Symbolic atoms | String/List words (shared DAG) | PwLin | none"]
     NF --> PROJ["support, reverse class, loss class, cost, per-node bound"]
     INT --> CLI["jtv-cli run/check/repl"]
     INT --> JW["jtv-wasm cdylib (forbid unsafe, index shim)"]
@@ -174,8 +174,8 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 
 === What changed
 
-* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. They are at *Grade 3* per `verification/receipts/2026-11-01-agda.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Not re-run here: no Agda toolchain in this session.
-* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and carry no grade. Quote grades only from `verification/PROOF-STATUS.adoc` §2.1b, in the estate vocabulary (`Open` / `Claimed` / `Grade 3` / `Grade 2i` / `Grade 2ii` / `Grade 1`), never as percentages.
+* *Theory has an Agda home already.* `theory/agda/` holds `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo` and `Jtv.Conditional`. Their theorems are `PWG-3` (PROOF-POLICY §8), derived from `verification/receipts/agda.json` into `verification/ledger/PWG.adoc` (Agda 2.7.0.1, stdlib 2.4, `--safe --without-K --cubical-compatible`, gate `theory/agda/check.sh`, workflow `agda-proof-policy.yml`). Re-run on 2026-11-09 with the pinned toolchain.
+* *The Lean suite is not the theory source of truth.* Lean-only theory statements are target-only evidence and are `ungraded`. Quote grades only from the derived `verification/ledger/PWG.adoc`, as Proof Witness Grades (`ungraded`, `PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`), never as percentages.
 * *Aeneas is not adoptable* for the proof-to-interpreter gap (audit §9.4). This plan's test-based refinement tables (B7, PR4) stay; they are evidence, not a proof.
 
 === Prover assignment (supersedes the "Home" column below and Q1)
@@ -198,7 +198,7 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 
 |`check()`, purity LFP, resolver, `jtv-cert` checker, interpreter refinement (PR4, PR7)
 |Contracts on first-party Rust
-|Creusot; Kani for the `jtv-wasm` shim and any `unsafe`/FFI
+|Creusot with Pearlite contracts, and Verus (PROOF-POLICY §1.2); Kani for the `jtv-wasm` shim and any `unsafe`/FFI
 
 |PR8 reversibility round-trip
 |Rust proptest now; the theorem is Theory
@@ -209,7 +209,7 @@ This plan was mapped from jtv-lang `b23f8e9`. Two things on `main` landed before
 |Agda in echo-types / secret-types (unchanged)
 |===
 
-The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim Grade 2i until the statement reconciliation in `verification/PROOF-STATUS.adoc` is done.
+The PR0 hygiene items still apply to the Lean leg. Lean rechecks follow the policy's evidence-first order: keep them running, compare statements, and do not claim `PWG-2i`: it is derived, and appears only once the owner records a Lean comparison as `RECONCILED`.
 
 === Audit findings added to the hole register
 
@@ -243,7 +243,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |verified
 
 |H2
-|Keyword prefix. `identifier = @{ !keyword ~ …}` has no word boundary, so `int_a` fails. *The proposed fix `!(keyword ~ !(ALNUM|"_"))` is wrong under PEG ordered choice:* `"in"` precedes `"intrinsic"` and `"insn"` in the keyword list, so those reserved words would become identifiers.
+|Keyword prefix. `identifier = @{ !keyword ~ …}` has no word boundary, so `int_a` fails. *The proposed fix `!(keyword ~ !(ALNUM\|"_"))` is wrong under PEG ordered choice:* `"in"` precedes `"intrinsic"` and `"insn"` in the keyword list, so those reserved words would become identifiers.
 |grammar.pest:196-202 (keyword order verified); red-team scratch pest crate
 |verified (order); stated (crate run)
 
@@ -273,7 +273,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |verified
 
 |H8
-|Coercion lattice is not a preorder (Hex→Int→Float but not Hex→Float). `Any` is both top and bottom (`(Any,_)|(_,Any) ⇒ true`), so transitive closure would make every type coercible to every other. typell-jtv uses `mem::discriminant` (rules.rs:25).
+|Coercion lattice is not a preorder (Hex→Int→Float but not Hex→Float). `Any` is both top and bottom (`(Any,_)\|(_,Any) ⇒ true`), so transitive closure would make every type coercible to every other. typell-jtv uses `mem::discriminant` (rules.rs:25).
 |typechecker.rs:31-55; typell rules.rs:25
 |verified
 
@@ -356,6 +356,11 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |Tokenless `reversible {}` keeps an unreachable log forever.
 |interpreter.rs:466-470
 |stated (audit)
+
+|H25 (review 2026-11-09)
+|Token-bound updates on float, complex or symbolic values previously used arithmetic inversion and failed to restore the old value. Both `+=` and `-=` now snapshot the original value, including when coercion produces float or complex.
+|`reversible.rs` snapshot safeguard; `reversibility_c2_tests::token_lossy_carriers_restore_exactly`
+|fixed; jtv-core tests passed
 |===
 
 === Stated vs verified (selected)
@@ -418,8 +423,8 @@ Ratings are 0–10, from the two judges (average, rounded). Order of priority: e
 Corrections applied (from the judges and red team):
 
 . The overflow witness is per AST node, never on the final NF. Falsifier: `(x+C)+(-C)` has NF `x`, yet the checked interpreter errors when `x+C` overflows.
-. Symbolic is a word/term algebra (free semigroup over atoms closed under a formal `-(…)`), not a LinForm. The value-models doc says "no identity".
-. Summaries compose by substitution with hash-consed sharing. Words do not compress, so a DAG representation is needed to keep NF size polynomial (H16).
+. Symbolic is the free abelian group over atoms (ADR-0015, decided 2026-11-09): its NF is a LinForm over ℤ with atoms as the basis, kept canonical (atoms sorted, no zero coefficients), so `a + b` and `b + a` have the same NF and `(x + b) + neg b` normalises to `x`. This replaces the earlier reading of Symbolic as a free semigroup of term words, which matched the string implementation ADR-0015 retires. The fail-closed reverse interim (ADR-0015 D4) is separate and unchanged.
+. Summaries compose by substitution with hash-consed sharing. String/List words do not compress, so a DAG representation is needed to keep NF size polynomial (H16).
 . Scope: "single-carrier exact islands". PwLin, Float/Complex and mixed-carrier islands have no NF theorem. Their properties are not projections of a proved identity.
 
 === Recommended hybrid (and the departure)
@@ -440,7 +445,7 @@ Corrections applied (from the judges and red team):
 |Topic |ELEGANT arm |DEPENDABLE arm |Recommended now
 
 |D2 `@pure` meaning (Q26)
-|Three *computed* levels Total ⊑ Pure ⊑ Impure. Data calls need computed Total. Annotations are upper bounds. Bounded `for` over a range or collection evaluated once is Total if its body is Total (length measure in `TotalCert`).
+|*Decided 2026-11-09 (ADR-0013):* the owner chose the effect-row arm, so the computed levels become the `Control` axis `Total ⊑ Divergent ⊑ Effectful` of the ADR-0009 effect row. Data calls need computed Total. Annotations are upper bounds; `@pure` means no IO and may loop, which matches the `pure_function_with_loop.jtv` fixture. Recursion is legal in Control and graded Divergent. Bounded `for` over a range or collection evaluated once is Total if its body is Total (length measure in `TotalCert`).
 |`@pure ≡ @total`. *Not* "zero spec change": the conformance fixture `pure_function_with_loop.jtv` says `@pure` may loop, and stdlib `@pure` functions use `for`.
 |Elegant. Security outcome is the same; accept/reject sets differ.
 
@@ -509,7 +514,7 @@ Corrections applied (from the judges and red team):
 |`scripts/cert-oracle-diff.sh` prints "disagreements: 0"; an edge-deletion mutant is rejected
 
 |PR2 JtvNormalForm
-|LinForm over ℤ (core Lean, no Mathlib): `nf_sound`, `nf_complete`, `dataExpr_equiv_decidable`. Projections: `support_noninterference` (error-free runs, explicit flows), `reverse_gate_sound`, `lossClass_sound`. Separate modules: term-word NF for Symbolic/String/List; ℚ as a setoid. `cost_eq_size` dropped unless cost is defined independently (e.g. step count).
+|LinForm over ℤ (core Lean, no Mathlib): `nf_sound`, `nf_complete`, `dataExpr_equiv_decidable`. Projections: `support_noninterference` (error-free runs, explicit flows), `reverse_gate_sound`, `lossClass_sound`. Symbolic shares the LinForm NF with atoms as basis (ADR-0015). Separate modules: term-word NF for String/List; ℚ as a setoid. `cost_eq_size` dropped unless cost is defined independently (e.g. step count).
 |Lean
 |Pins compile; audit clean
 
@@ -593,11 +598,11 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 |`module_shadows_total.jtv`, `total_reads_global.jtv`, `reverse_in_fn.jtv` fail check; resolution proptest passes
 
 |E1b Purity (H6, H7, H17, H18)
-|LFP over SCC condensation; `PurityTable` consumed by a separate DataCallRule pass; bodiless callees Impure; for-over-List typed correctly; `TotalCert` frozen.
+|LFP over SCC condensation; `PurityTable` (the ADR-0013 `Control` grades) consumed by a separate DataCallRule pass; bodiless callees Effectful; for-over-List typed correctly; `TotalCert` frozen.
 |invalid fixtures non-zero; `callgraph_props` ≥ 1000 graphs; no *new* failures vs the E0 baseline set
 
 |E1c Carrier fail-closed (H10, H19)
-|Reject token-free reverse on Symbolic, String, Bool, Any. Complex pending X11. ADR-0015 drafted, owner-gated.
+|Reject token-free reverse on Symbolic, Complex, String, Bool, Any. This is the fail-closed interim (D4) of ADR-0015, decided 2026-11-09: Symbolic becomes the free abelian group over atoms, Complex is `Neutral`.
 |sym_rev3, str_rev, any_rev fail check
 
 |E5 jtv-wasm (H12) — before E1a
@@ -629,8 +634,8 @@ Every gate is a command with an exit code. Steps are grouped by wave; the sessio
 |lock consistent; uses-grep on `^\s*-?\s*uses:` excludes comments
 
 |E7 nf.rs
-|Corrections built in; DAG words; per-node bound.
-|`nf_differential` 0 mismatches; `(x+C)+(-C)` falsifier passes
+|Symbolic: free abelian group over atoms, canonical LinForm over ℤ (sorted atoms, zero coefficients removed); String/List: DAG words; per-node bound. ADR-0015 D4 reverse-token policy remains separate.
+|`nf_differential` 0 mismatches; Symbolic `a + b` and `b + a` have identical NFs and `(x + b) + neg b` normalises to `x`; `(x+C)+(-C)` falsifier passes
 
 |E8 Grading from NF
 |After X4 and X7 (not X3) and ADR-0011.
@@ -723,7 +728,7 @@ Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, an
 |Inside IS (reference implementation + its proofs). New docs carry CC-BY-SA-4.0; new code MPL-2.0, per the LICENSING.adoc table.
 
 |jtv-lang ADRs
-|0011 Echo framing; 0012 checked entry point / API break; 0013 computed purity and recursion; 0014 scope-arrest superseded; 0015 ADR-0010 D2 amendment (Symbolic/Complex); 0016 jtvcert sidecar; 0017 lexical scoping and name resolution; 0018 host IO capabilities (separate from coproc); candidate 0019 divergence-as-effect.
+|0011 Echo framing; 0012 checked entry point / API break; 0013 purity and totality as the `Control` effect axis (decided 2026-11-09, absorbs candidate 0019); 0014 scope-arrest superseded; 0015 Symbolic as the free abelian group over atoms, Complex `Neutral` (decided 2026-11-09); 0016 jtvcert sidecar; 0017 lexical scoping and name resolution (decided 2026-11-09); 0018 host IO capabilities (separate from coproc); 0019 is no longer separate (merged into 0013).
 |0015 amends a do_not_reopen ADR: owner-gated.
 
 |echo-types
@@ -777,9 +782,9 @@ Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, an
 |Overflow becomes part of the semantics.
 |D6/D8 overflow caveats; Err ⇔ trap parity.
 
-|Cancellative semigroups / term algebras
-|Exact token-free inverse for Symbolic without changing its algebra.
-|H10 (elegant arm of Q31).
+|Free abelian group over atoms
+|Canonical Symbolic sums with exact inverses (ADR-0015); String/List retain term algebras.
+|Q31 decided; H10 fail-closed interim stays in force until the carrier is implemented.
 
 |Lexical scoping as a stated semantics (closure conversion if globals stay)
 |Function summaries over parameters become sound.
@@ -815,7 +820,7 @@ Not on the path: PataCL, R11–R15, the Idris seal, the registry, native/EVM, an
 |X1 (Wave 0)
 |The computed-Total rule rejects few legitimate programs once bounded `for` is admitted
 |Read-only prototype SCC + loop analysis over examples, stdlib, conformance
-|false rejections per corpus; island buckets IntZ/ℕ/ℚ/words/PwLin/none
+|false rejections per corpus; island buckets IntZ/ℕ/ℚ/SymbolicAtoms/StringListWords/PwLin/none
 |Q26 fallout, D3 urgency, E18 scope, Wave 1 STOP rule
 
 |X11 (Wave 0)
@@ -1098,9 +1103,43 @@ Graph Q1–Q25 keep their numbers and defaults (see Appendix B). New and reconci
 |What a reversible `if` may contain (H20–H22, audit F1–F3)
 |Branches are `+=`/`-=` only (the audit's recommendation); fail closed until decided
 |ELEGANT and DEPENDABLE
+
+|Q45 (specified by this revision)
+|How Control code calls a non-`Total` function (ADR-0013 D6). The grammar puts every call inside a Data expression, so D5 recursion cannot be called today.
+|A grammatical Control call form: `x = call f(args)` or `call f(args)` (ADR-0013 D6); Data calls still require `Total`
+|ELEGANT
 |===
 
 *Top five, by what they block:* Q36 (signing; nothing lands), Q26 (purity semantics; Wave 1 core), Q39 (scoping; every semantic layer), Q31 (Symbolic; reverse claims and ADR-0010), Q28 (toolchains; proof lanes).
+
+=== Decided 2026-11-09
+
+[cols="1,3,3",options="header"]
+|===
+|Q |Owner's choice |Where it is recorded
+
+|Q36
+|Enable platform-managed commit signing for the environment, so every agent commit carries a real signature. This is the elegant arm, at source.
+|A platform setting the owner changes (Claude Code environment or account settings, or Anthropic support). Not a repository change.
+
+|Q26
+|Out of the box: purity and totality as a third axis (`Control`: `Total ⊑ Divergent ⊑ Effectful`) of the ADR-0009 effect row, computed by least fixed point; annotations are upper bounds; Data may call only `Total`.
+|`docs/design-decisions/0013-purity-as-a-control-effect-axis.adoc` (absorbs candidate 0019). Amends ADR-0009 D4.
+
+|Q39
+|Lexical scoping ADR (elegant), with a fail-closed interim in Wave 1 (dependable).
+|`docs/design-decisions/0017-lexical-scoping-and-name-resolution.adoc`.
+
+|Q31
+|Out of the box: Symbolic as the free abelian group over atoms, so it is `Safe` by construction; Complex (`f64` components) regraded `Neutral`.
+|`docs/design-decisions/0015-symbolic-as-a-free-abelian-group.adoc`. Amends ADR-0010 D2.
+
+|Q28
+|Answered in practice: Agda 2.7.0.1 + stdlib 2.4, Lean 4.12.0 and Idris2 0.7.0 run in agent sessions and in CI.
+|`verification/receipts/*.json`; `verification/PROOF-STATUS.adoc` §3.
+|===
+
+The ADRs record the direction the owner chose; their detailed rules are proposals awaiting owner review.
 
 == Contradictions and stale docs to fix
 
@@ -1162,8 +1201,8 @@ Each finding was checked against the repos on 2026-11-04 where a check was possi
 |Both kept. Suffix-strip labelled ELEGANT (exact, token-free). Neutral labelled DEPENDABLE and recommended for v1. The finding that called Neutral "elegant" is rejected on labelling only.
 
 |Symbolic is a free semigroup, not a monoid
-|Applied
-|Doc says "no identity"; Symbolic has a formal neg.
+|Superseded 2026-11-09
+|True of the string implementation. ADR-0015 (owner Q31) makes Symbolic the free abelian group over atoms, with identity `0` and exact inverses.
 
 |H10 is an ADR-0010 amendment, owner-gated; X11 first
 |Applied

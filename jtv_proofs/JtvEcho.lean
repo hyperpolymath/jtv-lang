@@ -98,6 +98,11 @@ def Echo.le (a b : Echo) : Prop := a ⊔ b = b
 
 instance : LE Echo := ⟨Echo.le⟩
 
+/-- The order *is* the join order: `a ≤ b` exactly when `a ⊔ b = b`. True by
+    definition here; the Agda module defines `_⊑_` independently and proves the
+    same equivalence as `⊑⇒⊔` and `⊔⇒⊑`, which is what the two are compared on. -/
+theorem le_iff_join (a b : Echo) : a ≤ b ↔ a ⊔ b = b := Iff.rfl
+
 theorem le_refl (a : Echo) : a ≤ a := join_idem a
 
 theorem le_trans (a b c : Echo) : a ≤ b → b ≤ c → a ≤ c := by

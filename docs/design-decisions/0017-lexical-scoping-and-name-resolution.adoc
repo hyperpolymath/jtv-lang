@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+= ADR-0017: Lexical Scoping and Name Resolution
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:revdate: 2026-11-09
+:revnumber: 0.1
+:toc: left
+:sectnums:
+
+[.lead]
+A function body sees its parameters and its own locals, and nothing from the
+stack of its callers. Names of functions are resolved once, before checking, to
+stable identifiers. Until the interpreter implements this, the checker refuses
+any program whose meaning would depend on the difference.
+
+== Status
+
+*Decided in direction by the owner, 2026-11-09* (owner question Q39: a lexical
+scoping ADR, with a fail-closed interim, chosen over documenting dynamic scope
+and over explicit capture lists). The rules below are this ADR's *proposal* and
+await owner review.
+
+== Context
+
+The interpreter scopes dynamically: `get_variable` searches every call-stack
+frame, then the globals. Probe `docs/architecture/probes/dyn.jtv` shows the
+consequence: a `@total` function `f(x) = x + k` returns 6 when called at top
+level but 105 when called from `g`, which assigns `k = 100` first. The same
+function gives different answers depending on who calls it. A `reverse { }`
+block inside a function acts on the globals and ignores the parameters.
+Probes `shadow.jtv` and `shadow_loop.jtv` show the second half of the problem:
+a function in `module M` and a top-level function of the same name are not
+resolved consistently, so the checker can grade one while the interpreter runs
+the other.
+
+Every theorem about JtV programs — totality, purity (ADR-0013), reversal —
+assumes a function's meaning is fixed by its text. Dynamic scope breaks that
+assumption, so scoping has to be settled before any of those proofs can be
+connected to the interpreter.
+
+== Decision
+
+=== D1 — Function bodies are closed over their parameters
+
+Inside a function body the visible variables are the parameters and the locals
+the body assigns. Neither the caller's locals nor top-level variables are
+visible. A value a function needs is passed as an argument. JtV has no
+first-class functions or closures today, so there is nothing else to capture.
+
+=== D2 — Assignment inside a function binds a local
+
+`x = e` inside a function body creates or updates a local of that call. It never
+writes a top-level variable or a caller's variable. Combined with D1, a function
+call cannot change any state outside its own frame, which is what ADR-0013 needs
+for `Total` to mean "no effect".
+
+=== D3 — Reverse blocks act on the current frame
+
+A `reverse { }` or `reversible { } -> tok` block inside a function reverses the
+statements of that block in that function's frame, including its parameters.
+
+=== D4 — Functions are resolved to identifiers before checking
+
+A resolver pass maps every call to a function identifier (`FnId`): a name in
+`module M` is `M.f`; an unqualified name resolves in the current module, then at
+top level. Two functions whose names resolve to the same identifier are an
+error unless one is qualified (owner question Q40). The checker, the purity
+inference of ADR-0013 and the interpreter all use the same `FnId`, so they
+cannot disagree about which function a call means.
+
+=== D5 — Interim: fail closed
+
+Until the interpreter implements D1–D3, the checker rejects, with a handled
+error:
+
+* any variable read inside a function body that is neither a parameter nor a
+  local *definitely assigned* before the read: assigned on every path that
+  reaches it. An assignment in one branch of an `if`, or in a loop body that
+  may run zero times, does not count, because when it is skipped the dynamic
+  interpreter falls through to the caller's frame. (The current typechecker
+  keeps assignments from conditional branches, so this check is new code, not a
+  reuse of its environment.)
+* any assignment inside a function body to a name that is also a top-level
+  variable (the dynamic interpreter may write the global; D2 would create a
+  local);
+* any `reverse { }` or `reversible { }` block inside a function body.
+
+The intent is that a program passing this check means the same thing under the
+current dynamic interpreter and under D1–D3, so the interim refuses only programs
+whose meaning is in question. That equivalence is an argued claim until the
+refinement test below exists; the Wave 1 lane must add it, not assume it.
+
+== Proof obligations
+
+* The fuel semantics of the rank-certificate rung (PR1) and the Lean model are
+  stated under D1–D3: a function's value depends only on its arguments.
+* A refinement test: for every program the interim D5 check accepts, the
+  interpreter's result equals the lexical semantics' result (property test now,
+  part of the interpreter-refinement obligation `gap-001` later).
+
+== Consequences
+
+* `dyn.jtv` is rejected under D5 (`f` reads `k`, which is neither a parameter nor
+  a local); under D1 it is an unbound-variable error at check time.
+* Programs that used top-level variables inside functions must pass them as
+  arguments. This is a source break, covered by the semver-0.x break (Q32).
+
+== Open
+
+* Whether top-level *constants* (assigned once, never reassigned) should be
+  readable inside functions. Allowing them is convenient and keeps D2; it needs
+  a definition of "constant" the checker can verify.
+
+== References
+
+* `docs/architecture/LANGUAGE-SYSTEM-ARCHITECTURE.adoc` — hole register (dynamic
+  scoping row), H14, H15; owner questions Q39, Q40.
+* `docs/architecture/probes/dyn.jtv`, `shadow.jtv`, `shadow_loop.jtv`.

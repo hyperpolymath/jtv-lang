@@ -231,12 +231,10 @@ impl ReversibleInterpreter {
                 let current = self.get_variable(target)?;
                 let new_value = current.add(&value)?;
 
-                // Record the operation. Self-reference (`x += x`) is the Neutral
-                // tier: the naive `-value` inverse is wrong, so snapshot the
-                // overwritten value (the residue/token) and invert by restoring
-                // it (Bennett). Independent targets are Safe: record the added
-                // value and invert by subtraction.
-                if expr_contains_var(expr, target) {
+                // Self-reference and non-exact carriers need the original value.
+                // Inspect the result too: coercion can promote an exact target
+                // to a float or complex value. Symbolic is still string-backed.
+                if expr_contains_var(expr, target) || needs_snapshot(&current, &new_value) {
                     self.trace.record(RecordedOp::Snapshot {
                         target: target.clone(),
                         old_value: current,
@@ -257,9 +255,8 @@ impl ReversibleInterpreter {
                 let neg_value = value.negate()?;
                 let new_value = current.add(&neg_value)?;
 
-                // See AddAssign: self-reference snapshots the residue (Neutral);
-                // independent targets record the value and invert by addition.
-                if expr_contains_var(expr, target) {
+                // Use the same exact-recovery safeguard as AddAssign.
+                if expr_contains_var(expr, target) || needs_snapshot(&current, &new_value) {
                     self.trace.record(RecordedOp::Snapshot {
                         target: target.clone(),
                         old_value: current,
@@ -504,6 +501,16 @@ fn check_reversible_stmt(stmt: &ReversibleStmt) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// These carriers cannot be restored exactly by arithmetic inversion.
+fn needs_snapshot(current: &Value, result: &Value) -> bool {
+    [current, result].iter().any(|value| {
+        matches!(
+            value,
+            Value::Float(_) | Value::Complex(_) | Value::Symbolic(_)
+        )
+    })
 }
 
 fn expr_contains_var(expr: &DataExpr, var: &str) -> bool {

@@ -2,6 +2,18 @@
 = Receipt — Agda theory proofs, 2026-11-01
 :toc: none
 
+[IMPORTANT]
+.state: superseded (2026-11-09)
+====
+Replaced by the machine receipt `verification/receipts/agda.json`, written by
+`cargo run -p jtv-proof-ledger -- receipt agda`. Reasons, per PROOF-POLICY §8.4:
+the commit this receipt cites (`afea85c`, on a rebased `arena/` branch) is not
+in `main`'s history, so it cannot be current for any commit on `main`; it records
+no input digests or import cone; and the modules have since gained theorems. Kept
+as lineage, not as evidence. Its "Grade 3 / Grade 1" wording predates the
+`PWG-` names of PROOF-POLICY §8.
+====
+
 A receipt records *an execution*: tool, version, invocation, what was
 checked, and the commit it describes. It is not a policy statement. Per
 `hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §2.3, "this text
