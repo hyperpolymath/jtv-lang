@@ -3,7 +3,7 @@
 // change verification/ledger/theorems.json or re-run a receipt, then re-render.
 // CI runs `jtv-proof-ledger check`, which fails if this file differs from a fresh render.
 
-*PWG census* (34 theory theorems): PWG-1 0 · PWG-2ii 0 · PWG-2i 0 · PWG-3 24 · ungraded 10.
+*PWG census* (45 theory theorems): PWG-1 0 · PWG-2ii 0 · PWG-2i 0 · PWG-3 35 · ungraded 10.
 PWG-1 is never derived here: it needs per-commit receipts from a headless, isolated checker for every witness.
 
 .Receipts
@@ -12,12 +12,12 @@ PWG-1 is never derived here: it needs per-commit receipts from a headless, isola
 |Prover |Checker |Libraries and flags |Base commit, date |Currency
 
 |Agda |Agda version 2.7.0.1 |standard-library-2.4@2a5a0dec0a3cb5c87468ce101388a513d39dbf10 +
---safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch |`dd41f2954857e17269c482eb09755adf6fcae87d` (with the uncommitted changes the digests record) +
-2026-11-09T13:45:08Z |current (every input digest matches)
+--safe --without-K --cubical-compatible --warning=noUnsupportedIndexedMatch |`294451ae82e8653464043155a9e256ceea2c1306` +
+2026-11-17T00:39:22Z |current (every input digest matches)
 
 |Lean |Lean (version 4.12.0, x86_64-unknown-linux-gnu, commit dc2533473114, Release) |Lean core only (no Mathlib; empty lake-manifest packages) +
-autoImplicit=false |`dd41f2954857e17269c482eb09755adf6fcae87d` (with the uncommitted changes the digests record) +
-2026-11-09T13:44:40Z |current (every input digest matches)
+autoImplicit=false |`294451ae82e8653464043155a9e256ceea2c1306` +
+2026-11-17T00:39:35Z |current (every input digest matches)
 |===
 
 .Per-theorem grades
@@ -169,6 +169,72 @@ Replaying the recorded branch makes reverse(if g { x += v }) the identity at eve
 re-proved · `proven-with-postulates` (propext) · BRIDGE-PENDING · counts: no |— +
 unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
 
+|*promote-absorb* +
+If a + b lands in carrier c, then c + b stays in c: adding the same operand again does not promote further. |`Jtv.Promotion` +
+`promote-absorb` |`proven` |`Jtv.Promotion.promote_absorb` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*target-bounds-grade* +
+The grade of a reversible step is at least the tier of the target's carrier. |`Jtv.Promotion` +
+`target-bounds-grade` |`proven` |`Jtv.Promotion.target_bounds_grade` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*result-bounds-grade* +
+The grade of a reversible step is at least the tier of the promoted result's carrier. |`Jtv.Promotion` +
+`result-bounds-grade` |`proven` |`Jtv.Promotion.result_bounds_grade` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*safe-grade-sound* +
+A step graded Safe has a Safe shape, a Safe target carrier, a Safe result carrier and no change of carrier. |`Jtv.Promotion` +
+`safe-grade-sound` |`proven` |`Jtv.Promotion.safe_grade_sound` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*promoting-step-not-safe* +
+A step whose result carrier differs from its target carrier is never graded Safe. |`Jtv.Promotion` +
+`promoting-step-not-safe` |`proven` |`Jtv.Promotion.promoting_step_not_safe` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*promoting-step-at-least-neutral* +
+A step whose result carrier differs from its target carrier is graded at least Neutral. |`Jtv.Promotion` +
+`promoting-step-at-least-neutral` |`proven` |`Jtv.Promotion.promoting_step_at_least_neutral` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*promoted-add-not-restored* +
+For any implementation whose add follows the promotion table: if x += v changed the carrier, undoing it by adding neg v does not return x. |`Jtv.Promotion` +
+`RoundTrip.promoted-add-not-restored` |`proven` |`Jtv.Promotion.promoted_add_not_restored` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*promoted-sub-not-restored* +
+For any implementation whose add follows the promotion table: if x -= v changed the carrier, undoing it by adding v does not return x. |`Jtv.Promotion` +
+`RoundTrip.promoted-sub-not-restored` |`proven` |`Jtv.Promotion.promoted_sub_not_restored` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*safe-step-keeps-carrier* +
+A step graded Safe leaves the value in its original carrier, so the two non-restoration theorems do not apply to it. |`Jtv.Promotion` +
+`RoundTrip.safe-step-keeps-carrier` |`proven` |`Jtv.Promotion.safe_step_keeps_carrier` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*int-plus-float-not-restored* +
+Int += Float: whatever carrier the arithmetic inverse returns, it is not Int. |`Jtv.Promotion` +
+`int-plus-float-not-restored` |`proven` |`Jtv.Promotion.int_plus_float_not_restored` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
+|*int-plus-rational-not-restored* +
+Int += Rational: whatever carrier the arithmetic inverse returns, it is not Int. |`Jtv.Promotion` +
+`int-plus-rational-not-restored` |`proven` |`Jtv.Promotion.int_plus_rational_not_restored` +
+re-proved · `proven` · BRIDGE-PENDING · counts: no |— +
+unavailable · `open` · BRIDGE-PENDING · counts: no |PWG-3
+
 |*data-totality* +
 Evaluating a Data expression always yields a value. |— (no Agda source) |`open` |`dataExpr_totality` +
 re-proved · `proven` · AGDA-PENDING · counts: no |— |ungraded
@@ -283,6 +349,36 @@ re-proved · `proven` · AGDA-PENDING · counts: no |— |ungraded
 
 `reversible-if-with-residue`:: Same proposition. Overwriting branches are out of scope in both.
 * Variables are ℕ in Agda and String in Lean; integers are the stdlib ℤ and core Int. Compared up to that encoding.
+
+`promote-absorb`:: Same proposition over the same 13-arm promotion table.
+
+`target-bounds-grade`:: Same proposition, for every tier map.
+* Agda decides carrier equality through a ℕ encoding of the seven carriers; Lean uses the derived DecidableEq. Compared up to that choice of decision procedure.
+
+`result-bounds-grade`:: Same proposition, for every tier map.
+* Agda decides carrier equality through a ℕ encoding of the seven carriers; Lean uses the derived DecidableEq. Compared up to that choice of decision procedure.
+
+`safe-grade-sound`:: Same proposition; Agda returns a nested product, Lean a nested conjunction.
+* Agda decides carrier equality through a ℕ encoding of the seven carriers; Lean uses the derived DecidableEq. Compared up to that choice of decision procedure.
+
+`promoting-step-not-safe`:: Same proposition.
+* Agda decides carrier equality through a ℕ encoding of the seven carriers; Lean uses the derived DecidableEq. Compared up to that choice of decision procedure.
+
+`promoting-step-at-least-neutral`:: Same proposition.
+* Agda decides carrier equality through a ℕ encoding of the seven carriers; Lean uses the derived DecidableEq. Compared up to that choice of decision procedure.
+
+`promoted-add-not-restored`:: Same proposition.
+* Agda states this inside the parameterised module RoundTrip; Lean takes the same five parameters (V, tag, add, neg and the two tag laws) as explicit arguments.
+
+`promoted-sub-not-restored`:: Same proposition.
+* Agda states this inside the parameterised module RoundTrip; Lean takes the same five parameters (V, tag, add, neg and the two tag laws) as explicit arguments.
+
+`safe-step-keeps-carrier`:: Same proposition, including the forward-step premise that neither proof uses.
+* Agda states this inside the parameterised module RoundTrip; Lean takes the same five parameters (V, tag, add, neg and the two tag laws) as explicit arguments.
+
+`int-plus-float-not-restored`:: Same proposition, obtained by instantiating the round-trip theorem at carriers-as-values.
+
+`int-plus-rational-not-restored`:: Same proposition, obtained by instantiating the round-trip theorem at carriers-as-values.
 
 `data-totality`:: Lean only. A structural-recursion statement; no Agda source yet.
 
