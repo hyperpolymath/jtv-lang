@@ -110,7 +110,10 @@ looping function from a Data expression.
 Today's grammar has only Data calls: `function_call` is a factor of
 `data_expr`, so D4 applies to every call and a non-`Total` function can be
 defined but not called. D6 specifies the form that lifts this. Until it is
-implemented, non-`Total` calls remain rejected.
+implemented, non-`Total` calls must be rejected by a static grade check,
+including calls to `Purity::Pure` functions, which may diverge. The current
+typechecker conservatively requires a `@total` declaration; checking computed
+grades transitively remains the responsibility of purity analysis.
 
 === D6 — A non-`Total` call is an effect operation
 
@@ -129,8 +132,10 @@ function_call = qualified_name, "(", [ data_expr, { ",", data_expr } ], ")" ;
 
 * `perform Diverge f(n)` and `x = perform Diverge f(n)` call `f` from Control
   code. `perform_stmt` is a `control_stmt` alternative. It is *not* a factor of
-  `data_expr`, so no Data expression can contain one: D4 stays a property of
-  the grammar, not of a check that could be skipped.
+  `data_expr`, so no Data expression can contain a perform operation.
+  The grammar still permits ordinary calls such as `f(n)` regardless of
+  `f`'s computed grade. D4 therefore requires a static grade check rejecting
+  non-`Total` callees; the grammar does not enforce that distinction.
 * *The named effect is an upper bound*, checked like an annotation (D3): the
   callee's computed grade must be at most the grade of the named operation.
   `perform Diverge f(n)` with an `Effectful` `f` is a check-time error;

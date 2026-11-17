@@ -303,8 +303,12 @@ fn classify_stmt(stmt: &ReversibleStmt, cx: Carriers<'_>) -> Echo {
 
 /// Aggregate echo of reversible statements under a carrier env: the join of
 /// their echoes (from `Safe`). Matches `blockEcho` in `JtvEcho.lean`.
-pub fn classify_stmts_in_env(stmts: &[ReversibleStmt], env: &CarrierEnv) -> Echo {
-    classify_stmts_with(stmts, env, &ReturnCarriers::new())
+pub fn classify_stmts_in_env(
+    stmts: &[ReversibleStmt],
+    env: &CarrierEnv,
+    returns: &ReturnCarriers,
+) -> Echo {
+    classify_stmts_with(stmts, env, returns)
 }
 
 /// As `classify_stmts_in_env`, with the carriers function calls return, so an
@@ -349,7 +353,7 @@ pub fn classify_reversible_stmt(stmt: &ReversibleStmt) -> Echo {
 
 /// Shape-only aggregate echo of reversible statements (empty carrier env).
 pub fn classify_stmts(stmts: &[ReversibleStmt]) -> Echo {
-    classify_stmts_in_env(stmts, &CarrierEnv::new())
+    classify_stmts_in_env(stmts, &CarrierEnv::new(), &ReturnCarriers::new())
 }
 
 // ============================================================================
@@ -366,29 +370,33 @@ pub fn classify_stmts(stmts: &[ReversibleStmt]) -> Echo {
 /// Computes a function's *own* body grade; resolving the grade of
 /// `FunctionCall`s (joining the callee's into the caller's) is `resolved_effects`
 /// in `effect.rs`.
-pub fn function_echo_in_env(body: &[ControlStmt], env: &CarrierEnv) -> Echo {
+pub fn function_echo_in_env(
+    body: &[ControlStmt],
+    env: &CarrierEnv,
+    returns: &ReturnCarriers,
+) -> Echo {
     body.iter()
-        .map(|s| control_stmt_echo_in_env(s, env))
+        .map(|s| control_stmt_echo_in_env(s, env, returns))
         .fold(Echo::Safe, Echo::join)
 }
 
-fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv) -> Echo {
+fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv, returns: &ReturnCarriers) -> Echo {
     match s {
         // Addition-only data assignment: no loss.
         ControlStmt::Assignment(_) => Echo::Safe,
         ControlStmt::If(i) => {
-            let then_echo = function_echo_in_env(&i.then_branch, env);
+            let then_echo = function_echo_in_env(&i.then_branch, env, returns);
             match &i.else_branch {
-                Some(b) => then_echo.join(function_echo_in_env(b, env)),
+                Some(b) => then_echo.join(function_echo_in_env(b, env, returns)),
                 None => then_echo,
             }
         }
-        ControlStmt::While(w) => function_echo_in_env(&w.body, env),
-        ControlStmt::For(f) => function_echo_in_env(&f.body, env),
+        ControlStmt::While(w) => function_echo_in_env(&w.body, env, returns),
+        ControlStmt::For(f) => function_echo_in_env(&f.body, env, returns),
         // Reverse / reversible blocks carry their own block echo (carrier-aware).
-        ControlStmt::ReverseBlock(b) => classify_stmts_in_env(&b.body, env),
-        ControlStmt::ReversibleBlock(b) => classify_stmts_in_env(&b.body, env),
-        ControlStmt::Block(ss) => function_echo_in_env(ss, env),
+        ControlStmt::ReverseBlock(b) => classify_stmts_in_env(&b.body, env, returns),
+        ControlStmt::ReversibleBlock(b) => classify_stmts_in_env(&b.body, env, returns),
+        ControlStmt::Block(ss) => function_echo_in_env(ss, env, returns),
         // Reading, printing, and token consumption induce no data loss here.
         ControlStmt::Return(_)
         | ControlStmt::Print(_)
@@ -400,7 +408,7 @@ fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv) -> Echo {
 /// Shape-only function-body echo (no carrier context): every carrier defaults to
 /// JtV's `Int` (Safe). Equivalent to `function_echo_in_env` with an empty env.
 pub fn function_echo(body: &[ControlStmt]) -> Echo {
-    function_echo_in_env(body, &CarrierEnv::new())
+    function_echo_in_env(body, &CarrierEnv::new(), &ReturnCarriers::new())
 }
 
 #[cfg(test)]
@@ -564,7 +572,10 @@ mod tests {
             )],
         })];
         let float_env = CarrierEnv::from([("x".to_string(), BasicType::Float)]);
-        assert_eq!(function_echo_in_env(&body, &float_env), Echo::Neutral);
+        assert_eq!(
+            function_echo_in_env(&body, &float_env, &ReturnCarriers::new()),
+            Echo::Neutral
+        );
         // Without carrier context, default int -> Safe.
         assert_eq!(function_echo(&body), Echo::Safe);
     }

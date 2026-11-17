@@ -219,6 +219,7 @@ impl Default for TypeEnv {
 pub struct TypeChecker {
     env: TypeEnv,
     errors: Vec<JtvError>,
+    return_type: Option<Type>,
 }
 
 impl TypeChecker {
@@ -226,6 +227,7 @@ impl TypeChecker {
         TypeChecker {
             env: TypeEnv::new(),
             errors: vec![],
+            return_type: None,
         }
     }
 
@@ -394,14 +396,20 @@ impl TypeChecker {
             self.env.set_var(param.name.clone(), ty);
         }
 
-        // Check function body
-        for stmt in &func.body {
-            self.check_control_stmt(stmt)?;
-        }
+        let declared = func
+            .return_type
+            .as_ref()
+            .map(|t| self.annotation_to_type(&Some(t.clone())))
+            .unwrap_or(Type::Unit);
+        let old_return = self.return_type.replace(declared);
+        let result = func
+            .body
+            .iter()
+            .try_for_each(|stmt| self.check_control_stmt(stmt));
 
-        // Restore environment
+        self.return_type = old_return;
         self.env = old_env;
-        Ok(())
+        result
     }
 
     fn check_control_stmt(&mut self, stmt: &ControlStmt) -> Result<()> {
@@ -462,8 +470,17 @@ impl TypeChecker {
                 Ok(())
             }
             ControlStmt::Return(expr) => {
-                if let Some(e) = expr {
-                    self.infer_data_expr(e)?;
+                let actual = match expr {
+                    Some(e) => self.infer_data_expr(e)?,
+                    None => Type::Unit,
+                };
+                if let Some(expected) = &self.return_type {
+                    if &actual != expected {
+                        return Err(JtvError::TypeError(format!(
+                            "Return type must be {}, got {}",
+                            expected, actual
+                        )));
+                    }
                 }
                 Ok(())
             }
@@ -615,12 +632,10 @@ impl TypeChecker {
                 let expr_ty = self.infer_data_expr(expr)?;
                 let target_ty = self.env.get_var(target).cloned().unwrap_or(Type::Any);
 
-                if target_ty.add_result(&expr_ty).is_none() {
-                    return Err(JtvError::TypeError(format!(
-                        "Cannot add {} to {}",
-                        expr_ty, target_ty
-                    )));
-                }
+                let result = target_ty.add_result(&expr_ty).ok_or_else(|| {
+                    JtvError::TypeError(format!("Cannot add {} to {}", expr_ty, target_ty))
+                })?;
+                self.env.set_var(target.clone(), result);
                 Ok(())
             }
             ReversibleStmt::If(if_stmt) => {
@@ -672,17 +687,16 @@ impl TypeChecker {
 
                 if let Some((param_types, ret_ty, purity)) = func_info {
                     // Harvard Architecture enforcement: Data expressions
-                    // may ONLY call Pure or Total functions. Impure functions
-                    // could loop or perform IO, breaking the Totality guarantee
-                    // that makes code injection grammatically impossible.
+                    // may only call Total functions; Pure functions may loop.
+                    // The grammar admits calls regardless of their grade.
                     let purity = purity.clone();
                     let ret_ty = ret_ty.clone();
                     let param_types = param_types.clone();
 
-                    if purity == Purity::Impure {
+                    if purity != Purity::Total {
                         return Err(JtvError::PurityViolation(format!(
-                            "Data expression calls impure function '{}'. \
-                             Only @pure or @total functions may be called \
+                            "Data expression calls non-total function '{}'. \
+                             Only @total functions may be called \
                              from data expressions (Harvard Architecture rule)",
                             call.qualified_name()
                         )));

@@ -14,7 +14,7 @@
 // params) and the parallel `@epi(...)` surface remain later slices.
 
 use crate::ast::*;
-use crate::echo::{function_echo_in_env, CarrierEnv, Echo};
+use crate::echo::{function_echo_in_env, CarrierEnv, Echo, ReturnCarriers};
 use crate::epistemic::{function_epistemic, Epistemic};
 use std::collections::HashMap;
 
@@ -48,9 +48,9 @@ impl FunctionEffect {
 /// seed a `CarrierEnv`, so a `reverse { x += v }` over a `float` parameter grades
 /// `Neutral` (lossy reverse-add) rather than `Safe`. See `echo::carrier_echo` and
 /// `JtvEcho.lean` SECTION 6.
-pub fn own_effect(func: &FunctionDecl) -> FunctionEffect {
+pub fn own_effect(func: &FunctionDecl, returns: &ReturnCarriers) -> FunctionEffect {
     FunctionEffect {
-        echo: function_echo_in_env(&func.body, &param_carrier_env(func)),
+        echo: function_echo_in_env(&func.body, &param_carrier_env(func), returns),
         epi: function_epistemic(func),
     }
 }
@@ -74,9 +74,24 @@ fn param_carrier_env(func: &FunctionDecl) -> CarrierEnv {
 /// terminates — recursion and mutual recursion included.
 pub fn resolved_effects(program: &Program) -> HashMap<String, FunctionEffect> {
     let funcs = collect_functions(program);
+    let returns: ReturnCarriers = funcs
+        .iter()
+        .filter_map(|f| match &f.return_type {
+            Some(TypeAnnotation::Basic(
+                bt @ (BasicType::Int
+                | BasicType::Float
+                | BasicType::Rational
+                | BasicType::Complex
+                | BasicType::Hex
+                | BasicType::Binary
+                | BasicType::Symbolic),
+            )) => Some((f.name.clone(), bt.clone())),
+            _ => None,
+        })
+        .collect();
     let mut env: HashMap<String, FunctionEffect> = funcs
         .iter()
-        .map(|f| (f.name.clone(), own_effect(f)))
+        .map(|f| (f.name.clone(), own_effect(f, &returns)))
         .collect();
     let callees: HashMap<String, Vec<String>> = funcs
         .iter()
