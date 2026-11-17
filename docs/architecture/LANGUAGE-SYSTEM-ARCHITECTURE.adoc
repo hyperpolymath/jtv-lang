@@ -363,7 +363,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |fixed for direct `+=`/`-=` steps (jtv-core tests pass); `if` branches open under H20–H21
 
 |H26 (review of #127; fixed 2026-11-17)
-|The reverse gate graded a step by its *target's* carrier only, so a step whose operand promotes the target was graded `Safe`. `reverse { x += 0.5 }` over an Int passed `jtv check`; running it turned 9007199254740993 into 9007199254740992. A token-bound `Int += 1/2` followed by `reverse tok` left `Rational(1/1)`, not `Int(1)`. The gate now grades by `step_echo` (shape ⊔ target tier ⊔ result tier ⊔ `Neutral` on any change of carrier), and the runtime snapshots every step whose result is in a different carrier.
+|The reverse gate graded a step by its *target's* carrier only, so a step whose operand promotes the target was graded `Safe`. `reverse { x += 0.5 }` over an Int passed `jtv check`; running it turned 9007199254740993 into 9007199254740992. A token-bound `Int += 1/2` followed by `reverse tok` left `Rational(1/1)`, not `Int(1)`. The gate now grades by `step_echo` (shape ⊔ target tier ⊔ result tier ⊔ `Neutral` on any change of carrier), the checker records the carrier a reversible step leaves its target in (so a later block is graded against it), and the runtime snapshots every step whose result is in a different carrier. A call operand with a known numeric return declaration is graded by that carrier; unknown return carriers grade `Neutral` (H29).
 |`theory/agda/src/Jtv/Promotion.agda` (`safe-grade-sound`, `result-bounds-grade`, `RoundTrip.promoted-add-not-restored`), rechecked in `jtv_proofs/JtvPromotion.lean`; `echo.rs` `step_echo`/`promote`; `reversible.rs` `needs_snapshot`; `tests/promotion_grading.rs`
 |fixed; the rule is proved (`PWG-3`), the Rust table is tested against `Value::add` on all 49 carrier pairs. The proof takes the carrier tier map as a parameter, so it does not settle H10/H19
 
@@ -371,6 +371,16 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |The checker and the runtime disagree on which sums exist. `Type::add_result` accepts `Int + Complex`, `Hex + Int` and `Binary + Int`; `Value::add` has no arm for them and returns a handled type error. Such a program passes `jtv check` and fails at run time. Which side is right is a language decision (ADR-0010).
 |`typechecker.rs` `add_result`; `number.rs` `Value::add`; probes `x = 1`, `z = 2+3i`, `y = x + z` and `x = 0x10`, `y = x + 1`: check 0, run 1
 |verified; not fixed
+
+|H28 (new, 2026-11-17)
+|The checker's types are flow-insensitive, so the reverse gate can grade a variable by a carrier it does not hold. After `x = 9007199254740993.0` and `if c == 1 { x = 1 }`, the checker records `x` as Int; with `c = 0` it is still a Float at run time, and a tokenless `reverse { x += 1 }` passes as a Safe Int step. In the other direction, after `reverse tok` the runtime restores the old carrier while the static type stays promoted, which only over-rejects. A sound fix joins the branch types to "unknown" and grades unknown non-Safe, which is H19.
+|`typechecker.rs` `check_control_stmt` (`If`, `While`, `For` arms); probe: the program in the first column, check 0
+|verified; not fixed (carrier lane with H19; ADR-0017 for the typing rule)
+
+|H29 (new, 2026-11-17)
+|Returned expressions are now checked against the enclosing function's declared return type. Both the reverse gate and function-effect inference use known numeric return declarations, and unknown call carriers remain `Neutral`. Separately, the reversible interpreter still refuses every function call inside a `reverse` or `reversible` block ("Function calls not supported in reversible context"), although the checker can accept them.
+|`typechecker.rs` `check_function`, `Return` arm; `reversible.rs` `eval_data_expr`; `tests/promotion_grading.rs` `tokenless_reverse_grades_a_call_by_its_return_carrier`
+|return-expression checking fixed; running calls in reversible blocks remains open
 |===
 
 === Stated vs verified (selected)

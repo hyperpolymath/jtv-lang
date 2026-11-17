@@ -635,6 +635,9 @@ impl TypeChecker {
                 let result = target_ty.add_result(&expr_ty).ok_or_else(|| {
                     JtvError::TypeError(format!("Cannot add {} to {}", expr_ty, target_ty))
                 })?;
+                // Grade later blocks using the carrier left by this forward
+                // step. A reverse token restores the runtime carrier, but the
+                // static carrier stays promoted until token flow is tracked.
                 self.env.set_var(target.clone(), result);
                 Ok(())
             }
