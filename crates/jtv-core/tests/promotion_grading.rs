@@ -171,30 +171,37 @@ fn tokenless_reverse_admits_steps_that_keep_the_carrier() {
     check("x = 1/2\nreverse {\n  x += 2\n}\n").expect("Rational += Int");
 }
 
-// Return declarations are checked, so known call carriers can be used by
-// both the reverse gate and the function-effect classifier.
+// A call operand is graded by the carrier the callee returns.
+// A call operand has an unknown carrier: the checker does not compare `return`
+// values with a function's declared return type, so the declaration cannot be
+// trusted here. The step is `Neutral`, whatever the function is declared to
+// return, and the tokenless gate rejects it.
 #[test]
-fn tokenless_reverse_grades_a_call_by_its_return_carrier() {
-    check("@total fn two(): Int { return 2 } x = 1 reverse { x += two() }")
-        .expect("Int += call returning Int");
+fn tokenless_reverse_rejects_a_call_operand() {
+    for ret in ["Int", "Float"] {
+        let src =
+            format!("@total fn f(): {ret} {{\n  return 2\n}}\nx = 1\nreverse {{\n  x += f()\n}}\n");
+        assert!(
+            matches!(check(&src), Err(JtvError::EchoViolation(_))),
+            "call declared to return {ret}"
+        );
+    }
+    // The case the declaration would get wrong: declared Int, returns a Float.
     assert!(matches!(
-        check("@total fn half(): Float { return 0.5 } x = 1 reverse { x += half() }"),
+        check("@total fn half(): Int {\n  return 0.5\n}\nx = 1\nreverse {\n  x += half()\n}\n"),
         Err(JtvError::EchoViolation(_))
-    ));
-    // A dishonest declaration is rejected before the gate trusts its carrier.
-    assert!(matches!(
-        check("@total fn half(): Int { return 0.5 } x = 1 reverse { x += half() }"),
-        Err(JtvError::TypeError(_))
     ));
 }
 
+// The reverse gate and the function-effect path grade the same block the same
+// way, so `@echo(Safe)` cannot disagree with the gate about a call operand.
 #[test]
 fn effect_path_agrees_with_the_gate_on_a_call_operand() {
-    let src = "@total fn two(): Int { return 2 } fn bump(x: Int): Int { reverse { x += two() } return x }";
+    let src = "@total fn two(): Int {\n  return 2\n}\nfn bump(x: Int): Int {\n  reverse {\n    x += two()\n  }\n  return x\n}\n";
     let program = parse_program(src).expect("parses");
     let effects = jtv_core::effect::resolved_effects(&program);
-    assert_eq!(effects["bump"].echo, Echo::Safe);
-    check(src).expect("both classifiers recognize the enforced Int return");
+    assert_eq!(effects["bump"].echo, Echo::Neutral);
+    assert!(matches!(check(src), Err(JtvError::EchoViolation(_))));
 }
 
 // A reversible step leaves its target in the carrier of the sum, and later

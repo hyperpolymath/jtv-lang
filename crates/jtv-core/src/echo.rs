@@ -152,10 +152,6 @@ fn carrier_of(env: &CarrierEnv, var: &str) -> BasicType {
     env.get(var).cloned().unwrap_or(BasicType::Int)
 }
 
-/// The numeric carriers function calls return, by function name (qualified
-/// `Module::f` or bare). A call whose callee is absent has an unknown carrier.
-pub type ReturnCarriers = HashMap<String, BasicType>;
-
 /// The carrier of `a + b`, or `None` where the sum is a type error or is not
 /// numeric. This is the table `promote` in `theory/agda/src/Jtv/Promotion.agda`
 /// and mirrors the numeric arms of `Value::add`: the seven same-carrier arms,
@@ -197,17 +193,9 @@ pub fn step_echo(shape: Echo, target: &BasicType, result: Option<&BasicType>) ->
     shape.join(carrier_echo(target)).join(result_tier)
 }
 
-/// What classification may consult about carriers: the variables in scope and
-/// the carriers function calls return.
-#[derive(Clone, Copy)]
-struct Carriers<'a> {
-    vars: &'a CarrierEnv,
-    returns: &'a ReturnCarriers,
-}
-
 /// The carrier of an operand expression, or `None` when it cannot be known
-/// here (a call to an unlisted function, or a non-numeric expression).
-fn operand_carrier(expr: &DataExpr, cx: Carriers<'_>) -> Option<BasicType> {
+/// here (a function call, or a non-numeric expression).
+fn operand_carrier(expr: &DataExpr, env: &CarrierEnv) -> Option<BasicType> {
     match expr {
         DataExpr::Number(n) => Some(match n {
             Number::Int(_) => BasicType::Int,
@@ -218,15 +206,17 @@ fn operand_carrier(expr: &DataExpr, cx: Carriers<'_>) -> Option<BasicType> {
             Number::Binary(_) => BasicType::Binary,
             Number::Symbolic(_) => BasicType::Symbolic,
         }),
-        DataExpr::Identifier(name) => Some(carrier_of(cx.vars, name)),
-        DataExpr::Add(l, r) => promote(&operand_carrier(l, cx)?, &operand_carrier(r, cx)?),
+        DataExpr::Identifier(name) => Some(carrier_of(env, name)),
+        DataExpr::Add(l, r) => promote(&operand_carrier(l, env)?, &operand_carrier(r, env)?),
         // Negation keeps the carrier (`neg-tag` in the Agda model).
-        DataExpr::Negate(inner) => operand_carrier(inner, cx),
-        DataExpr::FunctionCall(call) => cx
-            .returns
-            .get(&call.qualified_name())
-            .or_else(|| cx.returns.get(&call.name))
-            .cloned(),
+        DataExpr::Negate(inner) => operand_carrier(inner, env),
+        // A call's carrier is unknown here, so the step grades `Neutral`. A
+        // declared return type cannot stand in for it: the checker does not
+        // compare `return` values with the declaration, so a function declared
+        // `Int` may return a Float. The reversible interpreter also refuses to
+        // evaluate a call inside a reverse block, so nothing that runs today is
+        // rejected by this.
+        DataExpr::FunctionCall(_) => None,
         DataExpr::StringLit(_) | DataExpr::List(_) | DataExpr::Tuple(_) => None,
     }
 }
@@ -258,19 +248,7 @@ fn data_expr_uses(expr: &DataExpr, var: &str) -> bool {
 ///   3. *promotion* — an operand that moves the target to another carrier
 ///      (`Int += Float`, `Int += Rational`) cannot be undone by arithmetic
 ///      inversion, so the step is at least `Neutral`.
-///
-/// Calls have unknown carriers here; use `classify_stmts_with` to supply them.
 pub fn classify_reversible_stmt_in_env(stmt: &ReversibleStmt, env: &CarrierEnv) -> Echo {
-    classify_stmt(
-        stmt,
-        Carriers {
-            vars: env,
-            returns: &ReturnCarriers::new(),
-        },
-    )
-}
-
-fn classify_stmt(stmt: &ReversibleStmt, cx: Carriers<'_>) -> Echo {
     match stmt {
         ReversibleStmt::AddAssign(target, expr) | ReversibleStmt::SubAssign(target, expr) => {
             // Shape: self-reference is `Neutral` (token-recoverable, Bennett),
@@ -284,16 +262,16 @@ fn classify_stmt(stmt: &ReversibleStmt, cx: Carriers<'_>) -> Echo {
             };
             // Carrier and promotion: grade by the carrier the step produces,
             // not the target's alone. `x -= v` adds `neg v`, same carrier.
-            let target_ty = carrier_of(cx.vars, target);
-            let result = operand_carrier(expr, cx).and_then(|v| promote(&target_ty, &v));
+            let target_ty = carrier_of(env, target);
+            let result = operand_carrier(expr, env).and_then(|v| promote(&target_ty, &v));
             step_echo(shape, &target_ty, result.as_ref())
         }
         // A reversible `if` is as lossy as its lossiest branch. The Data guard
         // is pure (Safe); branches are classified conservatively.
         ReversibleStmt::If(if_stmt) => {
-            let then_echo = classify_control_stmts(&if_stmt.then_branch, cx);
+            let then_echo = classify_control_stmts_in_env(&if_stmt.then_branch, env);
             let else_echo = match &if_stmt.else_branch {
-                Some(b) => classify_control_stmts(b, cx),
+                Some(b) => classify_control_stmts_in_env(b, env),
                 None => Echo::Safe,
             };
             then_echo.join(else_echo)
@@ -303,28 +281,10 @@ fn classify_stmt(stmt: &ReversibleStmt, cx: Carriers<'_>) -> Echo {
 
 /// Aggregate echo of reversible statements under a carrier env: the join of
 /// their echoes (from `Safe`). Matches `blockEcho` in `JtvEcho.lean`.
-pub fn classify_stmts_in_env(
-    stmts: &[ReversibleStmt],
-    env: &CarrierEnv,
-    returns: &ReturnCarriers,
-) -> Echo {
-    classify_stmts_with(stmts, env, returns)
-}
-
-/// As `classify_stmts_in_env`, with the carriers function calls return, so an
-/// operand such as `f(y)` is graded by `f`'s return carrier, not as unknown.
-pub fn classify_stmts_with(
-    stmts: &[ReversibleStmt],
-    env: &CarrierEnv,
-    returns: &ReturnCarriers,
-) -> Echo {
-    classify_block(stmts, Carriers { vars: env, returns })
-}
-
-fn classify_block(stmts: &[ReversibleStmt], cx: Carriers<'_>) -> Echo {
+pub fn classify_stmts_in_env(stmts: &[ReversibleStmt], env: &CarrierEnv) -> Echo {
     stmts
         .iter()
-        .map(|s| classify_stmt(s, cx))
+        .map(|s| classify_reversible_stmt_in_env(s, env))
         .fold(Echo::Safe, Echo::join)
 }
 
@@ -332,12 +292,12 @@ fn classify_block(stmts: &[ReversibleStmt], cx: Carriers<'_>) -> Echo {
 /// env. Plain assignments are reversible (Safe); nested reverse blocks recurse
 /// (carrying the env on so their `+=` carriers are seen); anything else is
 /// treated conservatively as `Neutral`.
-fn classify_control_stmts(stmts: &[ControlStmt], cx: Carriers<'_>) -> Echo {
+fn classify_control_stmts_in_env(stmts: &[ControlStmt], env: &CarrierEnv) -> Echo {
     stmts
         .iter()
         .map(|s| match s {
             ControlStmt::Assignment(_) => Echo::Safe,
-            ControlStmt::ReverseBlock(b) => classify_block(&b.body, cx),
+            ControlStmt::ReverseBlock(b) => classify_stmts_in_env(&b.body, env),
             _ => Echo::Neutral,
         })
         .fold(Echo::Safe, Echo::join)
@@ -353,7 +313,7 @@ pub fn classify_reversible_stmt(stmt: &ReversibleStmt) -> Echo {
 
 /// Shape-only aggregate echo of reversible statements (empty carrier env).
 pub fn classify_stmts(stmts: &[ReversibleStmt]) -> Echo {
-    classify_stmts_in_env(stmts, &CarrierEnv::new(), &ReturnCarriers::new())
+    classify_stmts_in_env(stmts, &CarrierEnv::new())
 }
 
 // ============================================================================
@@ -370,33 +330,29 @@ pub fn classify_stmts(stmts: &[ReversibleStmt]) -> Echo {
 /// Computes a function's *own* body grade; resolving the grade of
 /// `FunctionCall`s (joining the callee's into the caller's) is `resolved_effects`
 /// in `effect.rs`.
-pub fn function_echo_in_env(
-    body: &[ControlStmt],
-    env: &CarrierEnv,
-    returns: &ReturnCarriers,
-) -> Echo {
+pub fn function_echo_in_env(body: &[ControlStmt], env: &CarrierEnv) -> Echo {
     body.iter()
-        .map(|s| control_stmt_echo_in_env(s, env, returns))
+        .map(|s| control_stmt_echo_in_env(s, env))
         .fold(Echo::Safe, Echo::join)
 }
 
-fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv, returns: &ReturnCarriers) -> Echo {
+fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv) -> Echo {
     match s {
         // Addition-only data assignment: no loss.
         ControlStmt::Assignment(_) => Echo::Safe,
         ControlStmt::If(i) => {
-            let then_echo = function_echo_in_env(&i.then_branch, env, returns);
+            let then_echo = function_echo_in_env(&i.then_branch, env);
             match &i.else_branch {
-                Some(b) => then_echo.join(function_echo_in_env(b, env, returns)),
+                Some(b) => then_echo.join(function_echo_in_env(b, env)),
                 None => then_echo,
             }
         }
-        ControlStmt::While(w) => function_echo_in_env(&w.body, env, returns),
-        ControlStmt::For(f) => function_echo_in_env(&f.body, env, returns),
+        ControlStmt::While(w) => function_echo_in_env(&w.body, env),
+        ControlStmt::For(f) => function_echo_in_env(&f.body, env),
         // Reverse / reversible blocks carry their own block echo (carrier-aware).
-        ControlStmt::ReverseBlock(b) => classify_stmts_in_env(&b.body, env, returns),
-        ControlStmt::ReversibleBlock(b) => classify_stmts_in_env(&b.body, env, returns),
-        ControlStmt::Block(ss) => function_echo_in_env(ss, env, returns),
+        ControlStmt::ReverseBlock(b) => classify_stmts_in_env(&b.body, env),
+        ControlStmt::ReversibleBlock(b) => classify_stmts_in_env(&b.body, env),
+        ControlStmt::Block(ss) => function_echo_in_env(ss, env),
         // Reading, printing, and token consumption induce no data loss here.
         ControlStmt::Return(_)
         | ControlStmt::Print(_)
@@ -408,7 +364,7 @@ fn control_stmt_echo_in_env(s: &ControlStmt, env: &CarrierEnv, returns: &ReturnC
 /// Shape-only function-body echo (no carrier context): every carrier defaults to
 /// JtV's `Int` (Safe). Equivalent to `function_echo_in_env` with an empty env.
 pub fn function_echo(body: &[ControlStmt]) -> Echo {
-    function_echo_in_env(body, &CarrierEnv::new(), &ReturnCarriers::new())
+    function_echo_in_env(body, &CarrierEnv::new())
 }
 
 #[cfg(test)]
@@ -572,10 +528,7 @@ mod tests {
             )],
         })];
         let float_env = CarrierEnv::from([("x".to_string(), BasicType::Float)]);
-        assert_eq!(
-            function_echo_in_env(&body, &float_env, &ReturnCarriers::new()),
-            Echo::Neutral
-        );
+        assert_eq!(function_echo_in_env(&body, &float_env), Echo::Neutral);
         // Without carrier context, default int -> Safe.
         assert_eq!(function_echo(&body), Echo::Safe);
     }
