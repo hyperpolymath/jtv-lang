@@ -188,7 +188,10 @@ inside a Data expression at parse time; the word-boundary case.
   (ADR-0017 supplies name resolution, which the call graph needs).
 * D6 needs a grammar, AST, resolver and inference change. No lane of the
   current plan implements it; it is scheduled after the owner reviews this
-  proposal. Until then a non-`Total` function cannot be called (fail closed).
+  proposal. Between the purity lane implementing D4 and a later lane
+  implementing D6, a non-`Total` function can be defined but not called (fail
+  closed). Before D4 is implemented that is not yet true: see the note under
+  D5.
 * ADR-0009 D4 is amended: purity is now inside the effect row.
 * `@pure` changes meaning for any program that relied on one of the three old
   definitions; the semver-0.x API break (Q32) covers this.
