@@ -219,6 +219,10 @@ impl Default for TypeEnv {
 pub struct TypeChecker {
     env: TypeEnv,
     errors: Vec<JtvError>,
+    /// For each bound reversal token, the type every target of its block had
+    /// before the block ran. `reverse tok` restores those values at run time,
+    /// carrier included, so the checker restores the types with it.
+    token_types: HashMap<String, Vec<(String, Type)>>,
 }
 
 impl TypeChecker {
@@ -226,6 +230,7 @@ impl TypeChecker {
         TypeChecker {
             env: TypeEnv::new(),
             errors: vec![],
+            token_types: HashMap::new(),
         }
     }
 
@@ -504,16 +509,44 @@ impl TypeChecker {
                 } else {
                     self.check_echo_admissible(&rb.body)?;
                 }
+                // The types the block's direct targets have now, which is
+                // what `reverse tok` will bring back. Only direct `+=`/`-=`
+                // steps are recorded at run time, so only those are restored.
+                let before: Vec<(String, Type)> = rb
+                    .body
+                    .iter()
+                    .filter_map(|stmt| match stmt {
+                        ReversibleStmt::AddAssign(target, _)
+                        | ReversibleStmt::SubAssign(target, _) => {
+                            Some((target.clone(), self.env.get_var(target)?.clone()))
+                        }
+                        ReversibleStmt::If(_) => None,
+                    })
+                    .collect();
                 for stmt in &rb.body {
                     self.check_reversible_stmt(stmt)?;
                 }
-                // token binding is a runtime opaque value; no type to check statically
+                if let Some(tok) = &rb.token_binding {
+                    self.token_types.insert(tok.clone(), before);
+                }
                 Ok(())
             }
             ControlStmt::ReverseToken(tok) => {
                 // tok must be bound; we can't verify it's a ReversalToken statically
                 // (the variable may be assigned at runtime). Accept unconditionally.
-                let _ = tok;
+                //
+                // Reversing restores each target's old value and carrier, so
+                // its type goes back too. Leaving the promoted type in place
+                // is unsound, not merely strict: after `Int += 1/2` and
+                // `reverse tok` the variable is an Int again, and a tokenless
+                // `reverse { x += 1/2 }` graded as Rational += Rational would
+                // be admitted while it promotes at run time. Every entry was
+                // read before the block's first step.
+                if let Some(before) = self.token_types.remove(tok) {
+                    for (target, ty) in before {
+                        self.env.set_var(target, ty);
+                    }
+                }
                 Ok(())
             }
             ControlStmt::AbandonToken(tok) => {
@@ -613,9 +646,8 @@ impl TypeChecker {
                 // after a token-bound `x += 0.5` an Int `x` holds a Float, and
                 // a tokenless `reverse { x += 1 }` must not be graded as Int.
                 // An `Any` target stays `Any`. `reverse tok` restores the old
-                // value and carrier at run time; the static type stays
-                // promoted, because tracking tokens through branches needs a
-                // flow-sensitive checker.
+                // value and carrier at run time, and the `ReverseToken` arm
+                // restores the type to match.
                 if target_ty != Type::Any {
                     self.env.set_var(target.clone(), result_ty);
                 }

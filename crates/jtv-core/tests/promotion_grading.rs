@@ -219,6 +219,21 @@ fn a_later_block_is_graded_by_the_carrier_the_step_left() {
         .expect("Rational += Rational after the promotion");
 }
 
+// `reverse tok` restores the old value and carrier, so the checker restores
+// the type with it. Leaving the promoted type in place admitted an unsafe
+// step: `x` is an Int again, and `reverse { x += 1/2 }` promotes it.
+#[test]
+fn reverse_tok_restores_the_carrier_the_checker_grades_by() {
+    assert!(matches!(
+        check("x = 1\nreversible {\n  x += 1/2\n} -> tok\nreverse tok\nreverse {\n  x += 1/2\n}\n"),
+        Err(JtvError::EchoViolation(_))
+    ));
+    // And the Int steps the variable supports again are admitted.
+    let src = "x = 1\nreversible {\n  x += 0.5\n} -> tok\nreverse tok\nreverse {\n  x += 1\n}\n";
+    check(src).expect("Int += Int after the token is reversed");
+    assert!(matches!(get_var(&run(src), "x"), Some(Value::Int(_))));
+}
+
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`
 // restores the original value and carrier from the snapshot.
 #[test]
