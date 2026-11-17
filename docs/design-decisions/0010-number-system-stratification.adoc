@@ -127,8 +127,11 @@ echo(x += v)  =  shape(x += v)
 * `change` is `Neutral` when the result is in a different carrier from the
   target, else `Safe`: an arithmetic inverse stays in the promoted carrier,
   so only a snapshot restores the original value.
-* When the operand's carrier cannot be determined statically (a call with an
-  unknown return type, a non-numeric expression) the step is `Neutral`.
+* When the operand's carrier cannot be determined statically (a function
+  call, a non-numeric expression) the step is `Neutral`. A call's declared
+  return type is not used: the checker does not yet enforce it (hole H29).
+* After the step the checker records the target as having the result's
+  carrier, so a later block is graded against the carrier the variable holds.
 
 The rule is `stepEcho` in `theory/agda/src/Jtv/Promotion.agda`, rechecked in
 `jtv_proofs/JtvPromotion.lean`. Proved there: the grade is at least the tier of

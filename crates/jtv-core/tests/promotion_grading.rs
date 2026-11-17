@@ -172,14 +172,51 @@ fn tokenless_reverse_admits_steps_that_keep_the_carrier() {
 }
 
 // A call operand is graded by the carrier the callee returns.
+// A call operand has an unknown carrier: the checker does not compare `return`
+// values with a function's declared return type, so the declaration cannot be
+// trusted here. The step is `Neutral`, whatever the function is declared to
+// return, and the tokenless gate rejects it.
 #[test]
-fn tokenless_reverse_grades_a_call_by_its_return_carrier() {
-    check("@total fn two(): Int {\n  return 2\n}\nx = 1\nreverse {\n  x += two()\n}\n")
-        .expect("Int += call returning Int");
+fn tokenless_reverse_rejects_a_call_operand() {
+    for ret in ["Int", "Float"] {
+        let src =
+            format!("@total fn f(): {ret} {{\n  return 2\n}}\nx = 1\nreverse {{\n  x += f()\n}}\n");
+        assert!(
+            matches!(check(&src), Err(JtvError::EchoViolation(_))),
+            "call declared to return {ret}"
+        );
+    }
+    // The case the declaration would get wrong: declared Int, returns a Float.
     assert!(matches!(
-        check("@total fn half(): Float {\n  return 0.5\n}\nx = 1\nreverse {\n  x += half()\n}\n"),
+        check("@total fn half(): Int {\n  return 0.5\n}\nx = 1\nreverse {\n  x += half()\n}\n"),
         Err(JtvError::EchoViolation(_))
     ));
+}
+
+// The reverse gate and the function-effect path grade the same block the same
+// way, so `@echo(Safe)` cannot disagree with the gate about a call operand.
+#[test]
+fn effect_path_agrees_with_the_gate_on_a_call_operand() {
+    let src = "@total fn two(): Int {\n  return 2\n}\nfn bump(x: Int): Int {\n  reverse {\n    x += two()\n  }\n  return x\n}\n";
+    let program = parse_program(src).expect("parses");
+    let effects = jtv_core::effect::resolved_effects(&program);
+    assert_eq!(effects["bump"].echo, Echo::Neutral);
+    assert!(matches!(check(src), Err(JtvError::EchoViolation(_))));
+}
+
+// A reversible step leaves its target in the carrier of the sum, and later
+// blocks are graded against that carrier. After a token-bound `x += 0.5` an Int
+// `x` holds a Float, so a tokenless `reverse { x += 1 }` is a Float step.
+#[test]
+fn a_later_block_is_graded_by_the_carrier_the_step_left() {
+    assert!(matches!(
+        check("x = 1\nreversible {\n  x += 0.5\n} -> tok\nreverse {\n  x += 1\n}\n"),
+        Err(JtvError::EchoViolation(_))
+    ));
+    // Int promoted to Rational: a further Rational step keeps the carrier, so
+    // the tokenless block is Safe and is admitted.
+    check("x = 1\nreversible {\n  x += 1/2\n} -> tok\nreverse {\n  x += 1/2\n}\n")
+        .expect("Rational += Rational after the promotion");
 }
 
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`

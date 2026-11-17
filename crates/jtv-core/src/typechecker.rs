@@ -547,18 +547,6 @@ impl TypeChecker {
             .collect()
     }
 
-    /// The numeric carrier each known function returns, for grading a call
-    /// operand such as `x += f(y)` by the carrier it produces. A function whose
-    /// return type is not a known numeric type is left out, so a call to it has
-    /// an unknown carrier and fails closed in `echo::step_echo`.
-    fn return_carriers(&self) -> echo::ReturnCarriers {
-        self.env
-            .funcs
-            .iter()
-            .filter_map(|(name, (_, ret, _))| Some((name.clone(), numeric_carrier(ret)?)))
-            .collect()
-    }
-
     /// Enforce the Echo admissibility rule for a plain `reverse { }` block (and
     /// a tokenless `reversible { }`) (spec v2 §9) under the **Safe-only**
     /// reversal policy: the block is well-typed iff its aggregate echo is
@@ -569,8 +557,7 @@ impl TypeChecker {
     /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`; the
     /// residue (token) policy is `check_echo_admissible_with_residue`.
     fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate =
-            echo::classify_stmts_with(body, &self.carrier_env(), &self.return_carriers());
+        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
         if !aggregate.admissible_in_reverse() {
             return Err(JtvError::EchoViolation(format!(
                 "reverse block has echo {aggregate}: it is not fully reversible. \
@@ -593,8 +580,7 @@ impl TypeChecker {
     /// the type-checker realisation of `blockEcho_admissibleWithResidue` in
     /// `jtv_proofs/JtvEcho.lean` (the v2 "(c)" Neutral bridge).
     fn check_echo_admissible_with_residue(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate =
-            echo::classify_stmts_with(body, &self.carrier_env(), &self.return_carriers());
+        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
         if !aggregate.admissible_with_residue() {
             return Err(JtvError::EchoViolation(format!(
                 "reversible block has echo {aggregate}: it destroys information. \
@@ -615,11 +601,23 @@ impl TypeChecker {
                 let expr_ty = self.infer_data_expr(expr)?;
                 let target_ty = self.env.get_var(target).cloned().unwrap_or(Type::Any);
 
-                if target_ty.add_result(&expr_ty).is_none() {
+                let Some(result_ty) = target_ty.add_result(&expr_ty) else {
                     return Err(JtvError::TypeError(format!(
                         "Cannot add {} to {}",
                         expr_ty, target_ty
                     )));
+                };
+                // The step leaves the target in the carrier of the sum. Record
+                // it, as a plain assignment would, so that a later reverse
+                // block is graded against the carrier the variable now has:
+                // after a token-bound `x += 0.5` an Int `x` holds a Float, and
+                // a tokenless `reverse { x += 1 }` must not be graded as Int.
+                // An `Any` target stays `Any`. `reverse tok` restores the old
+                // value and carrier at run time; the static type stays
+                // promoted, because tracking tokens through branches needs a
+                // flow-sensitive checker.
+                if target_ty != Type::Any {
+                    self.env.set_var(target.clone(), result_ty);
                 }
                 Ok(())
             }

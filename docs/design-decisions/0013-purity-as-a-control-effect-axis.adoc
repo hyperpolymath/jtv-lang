@@ -108,9 +108,15 @@ annotated `@total` or called from Data; `data_calls_looping_pure` calls a
 looping function from a Data expression.
 
 Today's grammar has only Data calls: `function_call` is a factor of
-`data_expr`, so D4 applies to every call and a non-`Total` function can be
-defined but not called. D6 specifies the form that lifts this. Until it is
-implemented, non-`Total` calls remain rejected.
+`data_expr`. Under D4 every call therefore needs a `Total` callee, so once D4
+is implemented a non-`Total` function can be defined but not called. D6
+specifies the form that lifts this.
+
+*D4 is not yet what the checker does.* Today it rejects only a callee declared
+impure. A `@pure` function that contains a `while` loop can still be called
+from a Data expression, and that call may not terminate (holes H6, H7, H17,
+H18; `docs/architecture/probes/pure_loop_in_data.jtv` passes `jtv check`).
+The Wave 1 purity lane implements D2–D5 and closes this.
 
 === D6 — A non-`Total` call is an effect operation
 
@@ -129,8 +135,10 @@ function_call = qualified_name, "(", [ data_expr, { ",", data_expr } ], ")" ;
 
 * `perform Diverge f(n)` and `x = perform Diverge f(n)` call `f` from Control
   code. `perform_stmt` is a `control_stmt` alternative. It is *not* a factor of
-  `data_expr`, so no Data expression can contain one: D4 stays a property of
-  the grammar, not of a check that could be skipped.
+  `data_expr`, so no Data expression can contain one. That much is
+  grammatical. D4 itself is not: the grammar accepts `f(n)` in a Data
+  expression whatever the grade of `f`, and it is the static grade check of D4
+  that rejects a non-`Total` callee. D6 adds no way round that check.
 * *The named effect is an upper bound*, checked like an annotation (D3): the
   callee's computed grade must be at most the grade of the named operation.
   `perform Diverge f(n)` with an `Effectful` `f` is a check-time error;
