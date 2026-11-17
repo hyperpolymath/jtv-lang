@@ -3,8 +3,8 @@
 
 = ADR-0015: Symbolic Values as the Free Abelian Group over Atoms (amends ADR-0010 D2)
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:revdate: 2026-11-09
-:revnumber: 0.1
+:revdate: 2026-11-17
+:revnumber: 0.2
 :toc: left
 :sectnums:
 
@@ -70,11 +70,16 @@ approximate group and its reversible steps are `Neutral`: they are recoverable
 only from a `Snapshot` of the old value. A future exact-component complex type
 (Gaussian integers, or rational components) would be `Safe`.
 
-`ReversibleInterpreter::execute_reversible_stmt` (`reversible.rs`) records a
-`Snapshot` for both `+=` and `-=` when the old or resulting value is float,
-complex or string-backed symbolic, as well as for self-reference. Reversal
-restores the original value, including its type and floating-point bits; it
-does not attempt subtraction to recover these carriers (H25).
+For a *direct* `+=` or `-=` step, `ReversibleInterpreter::execute_reversible_stmt`
+(`reversible.rs`, `needs_snapshot`) records a `Snapshot` when the old or
+resulting value is float, complex or string-backed symbolic, when the step
+changes the value's carrier (H26), and for self-reference. Reversing such a
+step restores the original value, including its type and floating-point bits;
+it does not attempt subtraction (H25).
+
+This covers direct steps only. An assignment inside a reversible `if` branch
+is executed but not recorded, so `reverse tok` does not restore it on any
+carrier (H20–H21, owner question Q44).
 
 === D4 — Interim: fail closed
 
@@ -82,11 +87,13 @@ Until D1 is implemented, the checker rejects a tokenless `reverse { }` on a
 `symbolic` or `complex` target (the Wave 1 carrier lane), and the runtime grade
 `Value::reversal_echo` stops reporting them `Safe`.
 
-A token-bound `reversible { } -> tok` on a float, complex or symbolic target is
-recoverable using the snapshots described in D3, whether or not the step
-refers to itself. The Wave 1 reversible-if lane must preserve this safeguard
-and its bit-identical round-trip tests. Implementations without snapshot
-recording must reject these token-bound operations until it is supported.
+A direct `+=` or `-=` step in a token-bound `reversible { } -> tok` on a
+float, complex or symbolic target is recoverable using the snapshots described
+in D3, whether or not the step refers to itself. Steps inside an `if` branch
+are not (H20–H21). The Wave 1 reversible-if lane must preserve the safeguard
+for direct steps and its bit-identical round-trip tests, and extend recording
+to branches or reject them. Implementations without snapshot recording must
+reject these token-bound operations until it is supported.
 
 == Proof obligations
 

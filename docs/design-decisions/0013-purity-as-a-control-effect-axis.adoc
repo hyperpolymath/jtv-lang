@@ -3,8 +3,8 @@
 
 = ADR-0013: Purity and Totality as a Third Axis of the Function Effect Row
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:revdate: 2026-11-09
-:revnumber: 0.1
+:revdate: 2026-11-17
+:revnumber: 0.2
 :toc: left
 :sectnums:
 
@@ -22,6 +22,13 @@ rows" chosen over separate computed purity levels, local annotation checks and
 structural recursion). The lattice points, the inference rules and the
 interaction with ADR-0017 below are this ADR's *proposal* and await owner
 review. *Amends ADR-0009 D4*, which kept purity outside the effect row.
+
+*D6 decided in direction by the owner, 2026-11-17* (owner question Q45: a call
+to a non-`Total` function is an explicit effect operation handled at Control
+level, chosen over a dedicated `call` statement). Revision 0.1 as merged
+stated a `call` keyword as if it were decided; that text came from an
+automated review fix, not from the owner, and revision 0.2 replaces it. The
+syntax and rules in D6 are this ADR's *proposal* and await owner review.
 
 == Context
 
@@ -101,32 +108,54 @@ annotated `@total` or called from Data; `data_calls_looping_pure` calls a
 looping function from a Data expression.
 
 Today's grammar has only Data calls: `function_call` is a factor of
-`data_expr`. D6 specifies the Control form the grammar lane must add to
-deliver D5; until implemented, non-`Total` calls remain rejected.
+`data_expr`, so D4 applies to every call and a non-`Total` function can be
+defined but not called. D6 specifies the form that lifts this. Until it is
+implemented, non-`Total` calls remain rejected.
 
-=== D6 — A Control call form
+=== D6 — A non-`Total` call is an effect operation
 
-A Control call is an explicit statement, optionally binding its result:
+The `Control` axis is read as an effect signature with two operations, one per
+point above `Total`: `Diverge` (grade `Divergent`) and `IO` (grade
+`Effectful`). Calling a function whose grade is not `Total` *performs* one of
+them. The operation is a statement of the Control language and is handled
+there:
 
 [source,ebnf]
 ----
-control_call = [ identifier, "=" ], "call", function_call ;
+perform_stmt  = [ identifier, "=" ], "perform", effect_name, function_call ;
+effect_name   = "Diverge" | "IO" ;
 function_call = qualified_name, "(", [ data_expr, { ",", data_expr } ], ")" ;
 ----
 
-The grammar adds `control_call` as a `control_stmt` alternative before
-assignment and reserves `call` as a keyword. It is not a `data_expr` factor.
-Thus `call f(n)` and `x = call f(n)` may call a recursive function; its
-computed grade is joined into the caller's grade (D2). Arguments remain Data
-expressions subject to D4, including nested calls.
+* `perform Diverge f(n)` and `x = perform Diverge f(n)` call `f` from Control
+  code. `perform_stmt` is a `control_stmt` alternative. It is *not* a factor of
+  `data_expr`, so no Data expression can contain one: D4 stays a property of
+  the grammar, not of a check that could be skipped.
+* *The named effect is an upper bound*, checked like an annotation (D3): the
+  callee's computed grade must be at most the grade of the named operation.
+  `perform Diverge f(n)` with an `Effectful` `f` is a check-time error;
+  `perform IO f(n)` accepts any callee.
+* *The caller's grade* is the join of its own grade and the callee's *computed*
+  grade (D2), not of the name. Naming a larger effect than the callee has does
+  not make the caller worse.
+* *Handling.* v1 has one handler, the Control level itself: a `Diverge` is
+  discharged by running the callee, an `IO` by the host interface ADR-0018
+  defines. Data has no handler and no `perform`, which is the effect-system
+  reading of "Data is total". User-written handlers are not part of v1 (see
+  Open).
+* Arguments are Data expressions and stay subject to D4, nested calls included.
+* The existing `function_call` factor in Data is unchanged: `x = f(n)`,
+  `return f(n)` and `x = 1 + f(n)` reject a non-`Total` callee. To return the
+  result of a performed call, bind it first: `x = perform Diverge f(n)`, then
+  `return x`.
+* `perform`, `Diverge` and `IO` are reserved words, matched at a word
+  boundary: `performance = 1` remains an assignment to an identifier.
 
-The existing `function_call` factor in Data remains subject to D4:
-`x = f(n)`, `return f(n)` and `x = 1 + f(n)` reject non-`Total` callees.
-To return a Control call's result, bind it first:
-`x = call f(n)` followed by `return x`. Annotations still obey D3.
-Parser, AST, resolver and grade inference must preserve this distinction;
-acceptance tests must cover self and mutual recursion through Control calls,
-and rejection of the same callees in Data and under `@total`.
+Parser, AST, resolver and grade inference must keep the two call forms
+distinct. Acceptance tests: self and mutual recursion called through
+`perform Diverge`; the same callees rejected in Data and under `@total`; an
+`Effectful` callee rejected under `perform Diverge`; `perform` rejected
+inside a Data expression at parse time; the word-boundary case.
 
 == Proof obligations
 
@@ -137,14 +166,21 @@ and rejection of the same callees in Data and under `@total`.
 * *Soundness:* "a function computed `Total` terminates without IO" over the Data
   model with calls. This is the totality theorem the plan's rank-certificate rung
   (PR1) targets; until it exists the D2 rules are argued, not proved.
+* *Effect operations (D6):* state in Agda that `perform` is the only
+  introduction form for a non-`Total` grade through a call, and derive "every
+  Data expression has grade `Total`" from D4 and the grammar. Until that
+  exists, D6's guarantee is argued from the grammar, not proved.
 * *Engineering:* the certificate format (`jtv check --cert --json`) records the
   computed grade per function, so a checker independent of the compiler can
   re-derive it.
 
 == Consequences
 
-* The purity lane of Wave 1 implements D2–D6 in `purity.rs` / the resolver
+* The purity lane of Wave 1 implements D2–D5 in `purity.rs` / the resolver
   (ADR-0017 supplies name resolution, which the call graph needs).
+* D6 needs a grammar, AST, resolver and inference change. No lane of the
+  current plan implements it; it is scheduled after the owner reviews this
+  proposal. Until then a non-`Total` function cannot be called (fail closed).
 * ADR-0009 D4 is amended: purity is now inside the effect row.
 * `@pure` changes meaning for any program that relied on one of the three old
   definitions; the semver-0.x API break (Q32) covers this.
@@ -154,10 +190,15 @@ and rejection of the same callees in Data and under `@total`.
 * Whether a later termination checker (size-change, or the PR1 rank certificate)
   may grade some recursion `Total`.
 * Whether `Effectful` should split by capability once the host IO mechanism
-  (ADR-0018) exists.
+  (ADR-0018) exists. Under D6 that is a refinement of the `IO` operation into
+  one operation per capability, with the same upper-bound rule.
+* Whether a later version admits user-written handlers (`handle … with`), for
+  example a fuel-bounded handler for `Diverge`. v1 has only the implicit
+  Control-level handler.
+* The spelling of the operation names (`Diverge`, `IO`).
 
 == References
 
 * `docs/design-decisions/0009-echo-epistemic-first-class-function-effects.adoc`
 * `docs/architecture/LANGUAGE-SYSTEM-ARCHITECTURE.adoc` — hole register H6, H7,
-  H17, H18; owner question Q26.
+  H17, H18; owner questions Q26 and Q45.

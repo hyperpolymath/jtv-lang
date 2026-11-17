@@ -6,6 +6,7 @@
 //! jtv-proof-ledger receipt lean   # lake build + #print axioms, write verification/receipts/lean.json
 //! jtv-proof-ledger render         # write verification/ledger/PWG.adoc
 //! jtv-proof-ledger check          # fail if PWG.adoc differs from a fresh render
+//! jtv-proof-ledger check --require-current   # ... and fail if either receipt is missing or stale
 //! ```
 //!
 //! `receipt agda` needs `AGDA` (optional) and `AGDA_STDLIB`; `receipt lean`
@@ -13,7 +14,9 @@
 //! read the committed receipts and hash the files on disk.
 
 use jtv_proof_ledger::render::{render, Inputs};
-use jtv_proof_ledger::{current_inputs, receipt, Prover, Receipt, Records};
+use jtv_proof_ledger::{
+    currency, current_inputs, receipt, require_current, Prover, Receipt, Records,
+};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -70,6 +73,34 @@ fn rendered(root: &Path) -> Result<String, String> {
     }))
 }
 
+/// Compare the committed ledger with a fresh render.
+fn check(root: &Path) -> Result<(), String> {
+    let fresh = rendered(root)?;
+    let committed =
+        std::fs::read_to_string(root.join(RENDERED)).map_err(|e| format!("{RENDERED}: {e}"))?;
+    if committed == fresh {
+        println!("{RENDERED} matches the receipts and records");
+        Ok(())
+    } else {
+        Err(format!(
+            "{RENDERED} does not match a fresh render: a proof file, a receipt or \
+             theorems.json changed. Re-run the receipt for the prover whose sources \
+             changed, then `jtv-proof-ledger render`."
+        ))
+    }
+}
+
+/// Fail unless both receipts describe the proof files on disk.
+fn receipts_current(root: &Path) -> Result<(), String> {
+    for prover in [Prover::Agda, Prover::Lean] {
+        let receipt = read_receipt(root, prover)?;
+        let now = current_inputs(root, prover).map_err(|e| e.to_string())?;
+        require_current(prover, &currency(receipt.as_ref(), &now))?;
+    }
+    println!("both receipts are current");
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let root = root();
@@ -86,21 +117,11 @@ fn main() -> ExitCode {
             .and_then(|r| write_json(&root.join("verification/receipts/lean.json"), &r)),
         ["render"] => rendered(&root)
             .and_then(|text| std::fs::write(root.join(RENDERED), text).map_err(|e| e.to_string())),
-        ["check"] => rendered(&root).and_then(|fresh| {
-            let committed = std::fs::read_to_string(root.join(RENDERED))
-                .map_err(|e| format!("{RENDERED}: {e}"))?;
-            if committed == fresh {
-                println!("{RENDERED} matches the receipts and records");
-                Ok(())
-            } else {
-                Err(format!(
-                    "{RENDERED} does not match a fresh render: a proof file, a receipt or \
-                     theorems.json changed. Re-run the receipt for the prover whose sources \
-                     changed, then `jtv-proof-ledger render`."
-                ))
-            }
-        }),
-        _ => Err("usage: jtv-proof-ledger receipt agda|lean | render | check".into()),
+        ["check"] => check(&root),
+        ["check", "--require-current"] => check(&root).and_then(|()| receipts_current(&root)),
+        _ => Err(
+            "usage: jtv-proof-ledger receipt agda|lean | render | check [--require-current]".into(),
+        ),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

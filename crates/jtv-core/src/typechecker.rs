@@ -543,19 +543,19 @@ impl TypeChecker {
         self.env
             .vars
             .iter()
-            .filter_map(|(name, ty)| {
-                let bt = match ty {
-                    Type::Int => BasicType::Int,
-                    Type::Float => BasicType::Float,
-                    Type::Rational => BasicType::Rational,
-                    Type::Complex => BasicType::Complex,
-                    Type::Hex => BasicType::Hex,
-                    Type::Binary => BasicType::Binary,
-                    Type::Symbolic => BasicType::Symbolic,
-                    _ => return None,
-                };
-                Some((name.clone(), bt))
-            })
+            .filter_map(|(name, ty)| Some((name.clone(), numeric_carrier(ty)?)))
+            .collect()
+    }
+
+    /// The numeric carrier each known function returns, for grading a call
+    /// operand such as `x += f(y)` by the carrier it produces. A function whose
+    /// return type is not a known numeric type is left out, so a call to it has
+    /// an unknown carrier and fails closed in `echo::step_echo`.
+    fn return_carriers(&self) -> echo::ReturnCarriers {
+        self.env
+            .funcs
+            .iter()
+            .filter_map(|(name, (_, ret, _))| Some((name.clone(), numeric_carrier(ret)?)))
             .collect()
     }
 
@@ -569,7 +569,8 @@ impl TypeChecker {
     /// realisation of `blockEcho_admissible` in `jtv_proofs/JtvEcho.lean`; the
     /// residue (token) policy is `check_echo_admissible_with_residue`.
     fn check_echo_admissible(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
+        let aggregate =
+            echo::classify_stmts_with(body, &self.carrier_env(), &self.return_carriers());
         if !aggregate.admissible_in_reverse() {
             return Err(JtvError::EchoViolation(format!(
                 "reverse block has echo {aggregate}: it is not fully reversible. \
@@ -592,7 +593,8 @@ impl TypeChecker {
     /// the type-checker realisation of `blockEcho_admissibleWithResidue` in
     /// `jtv_proofs/JtvEcho.lean` (the v2 "(c)" Neutral bridge).
     fn check_echo_admissible_with_residue(&self, body: &[ReversibleStmt]) -> Result<()> {
-        let aggregate = echo::classify_stmts_in_env(body, &self.carrier_env());
+        let aggregate =
+            echo::classify_stmts_with(body, &self.carrier_env(), &self.return_carriers());
         if !aggregate.admissible_with_residue() {
             return Err(JtvError::EchoViolation(format!(
                 "reversible block has echo {aggregate}: it destroys information. \
@@ -767,6 +769,21 @@ impl TypeChecker {
             Number::Symbolic(_) => Type::Symbolic,
         }
     }
+}
+
+/// The numeric carrier of a type, or `None` for a non-numeric or
+/// not-yet-inferred (`Any`) type.
+fn numeric_carrier(ty: &Type) -> Option<BasicType> {
+    Some(match ty {
+        Type::Int => BasicType::Int,
+        Type::Float => BasicType::Float,
+        Type::Rational => BasicType::Rational,
+        Type::Complex => BasicType::Complex,
+        Type::Hex => BasicType::Hex,
+        Type::Binary => BasicType::Binary,
+        Type::Symbolic => BasicType::Symbolic,
+        _ => return None,
+    })
 }
 
 impl Default for TypeChecker {

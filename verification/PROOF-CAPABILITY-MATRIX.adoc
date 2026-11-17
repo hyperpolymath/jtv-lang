@@ -22,7 +22,7 @@ proof of a theory statement is **target-only evidence** ("the Agda row stays
 
 Consequence, stated plainly: the `verified` marks below are true *as matrix
 statements* (mechanised, `sorry`-free, in Lean). A subset now also has an Agda
-source (`theory/agda/`, four modules, receipted 2026-11-01) and therefore a
+source (`theory/agda/`, five modules; current receipt `verification/receipts/agda.json`) and therefore a
 mathesis grade — see `theory/agda/README.adoc` for the per-theorem Lean↔Agda
 correspondence, and `verification/PROOF-STATUS.adoc` §2.1b for the graded rows.
 The Lean-only remainder still confers **no grade**. JtV's proof ledger, the estate legs
@@ -147,12 +147,13 @@ in that table — the two vocabularies are deliberately not mixed.
 | `Jtv.Reversal` | `typechecks` | Safe/Neutral reversal, full-state (`∀ y`) round trip.
 | `Jtv.Echo` | `typechecks` | Echo lattice + fibre correspondence.
 | `Jtv.Conditional` | `typechecks` | Tokenless-`if` counterexample, plus the additive recorded-branch repair proved by `reversible-if-with-residue`; overwriting branches remain out of scope.
+| `Jtv.Promotion` | `typechecks` | Grade of a reversible step by the carrier it produces: the grade bounds the promoted result's tier, a `Safe` step keeps its carrier, and arithmetic inversion cannot undo a promotion. The carrier tier map is a parameter; the promotion table's agreement with `Value::add` is tested, not proved.
 |===
 
 `typechecks` here means: the module builds under `agda --safe --without-K
 --cubical-compatible` with the receipt's toolchain, with a clean hole/postulate
 scan. Proof Witness Grades are derived in `verification/ledger/PWG.adoc`
-(`PWG-3` for these four modules; `PWG-2i` waits on the owner's review of the
+(`PWG-3` for these five modules; `PWG-2i` waits on the owner's review of the
 Lean comparisons). Receipt: `verification/receipts/agda.json`.
 
 == Key theorems

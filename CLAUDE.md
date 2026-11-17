@@ -186,11 +186,11 @@ Two rules with teeth for this repo:
   a Lean-only proof of a theory statement is *target-only evidence*; the Agda row
   stays `open`. JtV now has an Agda layer for **part** of the model
   (`theory/agda/`: `Jtv.Core`, `Jtv.Reversal`, `Jtv.Echo`, `Jtv.Conditional`,
-  `PWG-3`, derived from `verification/receipts/*.json` into
+  `Jtv.Promotion`, `PWG-3`, derived from `verification/receipts/*.json` into
   `verification/ledger/PWG.adoc`). The *remaining* Lean
   theorems — Control-plane, `JtvExtended`, **all of `JtvTypes` type preservation
   including the `isIntRepr` family**, `JtvSecurity`'s AOLD bundle — are still
-  Lean-only and carry **no grade**. (None of the four Agda modules defines
+  Lean-only and carry **no grade**. (None of the five Agda modules defines
   `JtvType`, `isIntRepr` or any type-preservation theorem, so a type-preservation
   claim cannot be part of the graded subset; this sentence said "the *non*-
   `isIntRepr` type preservation", which wrongly implied the integer family had
