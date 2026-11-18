@@ -395,6 +395,10 @@ impl TypeChecker {
     fn check_function(&mut self, func: &FunctionDecl) -> Result<()> {
         // Create new scope with parameters
         let old_env = self.env.clone();
+        // Token records are scoped like variables: a block in this body must
+        // not replace or consume the record of an outer token of the same
+        // name.
+        let old_tokens = self.token_types.clone();
 
         for param in &func.params {
             let ty = self.annotation_to_type(&param.type_annotation);
@@ -408,6 +412,7 @@ impl TypeChecker {
 
         // Restore environment
         self.env = old_env;
+        self.token_types = old_tokens;
         Ok(())
     }
 
@@ -526,7 +531,31 @@ impl TypeChecker {
                     })
                     .collect();
                 for stmt in &rb.body {
+                    // An assignment inside an `if` branch is run but not
+                    // recorded, so `reverse tok` does not undo it (H21). If
+                    // it changes the type of a target this block records, the
+                    // carrier after `reverse tok` depends on whether the
+                    // branch ran, and no single restored type is right. Only
+                    // token-bound blocks restore types, so only they need this.
+                    let guarded: Vec<(&String, Option<Type>)> =
+                        if rb.token_binding.is_some() && matches!(stmt, ReversibleStmt::If(_)) {
+                            before
+                                .iter()
+                                .map(|(target, _)| (target, self.env.get_var(target).cloned()))
+                                .collect()
+                        } else {
+                            Vec::new()
+                        };
                     self.check_reversible_stmt(stmt)?;
+                    for (target, ty) in guarded {
+                        if self.env.get_var(target).cloned() != ty {
+                            return Err(JtvError::TypeError(format!(
+                                "an `if` branch in this reversible block changes the type of \
+                                 `{target}`, which the block also updates with `+=` or `-=`; \
+                                 reversing the block's token could not restore it"
+                            )));
+                        }
+                    }
                 }
                 if let Some(tok) = &rb.token_binding {
                     // One entry per target, however many steps update it:
@@ -579,7 +608,8 @@ impl TypeChecker {
                 Ok(())
             }
             ControlStmt::AbandonToken(tok) => {
-                let _ = tok;
+                // An abandoned token is never reversed, so its record is dead.
+                self.token_types.remove(tok);
                 Ok(())
             }
             ControlStmt::Block(stmts) => {

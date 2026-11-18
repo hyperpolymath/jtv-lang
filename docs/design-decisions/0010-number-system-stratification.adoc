@@ -136,7 +136,11 @@ echo(x += v)  =  shape(x += v)
   holds. This is exact for straight-line code only (hole H28). If the target
   was given another type between the block and `reverse tok`, the checker
   rejects the reversal: the carrier it would leave depends on which inverse
-  the runtime recorded.
+  the runtime recorded. For the same reason an `if` branch inside a
+  token-bound block may not change the type of a target the block updates:
+  branch assignments are not recorded (hole H21). The generated test
+  `tests/reverse_gate_soundness.rs` compares the gate's verdict with the
+  carriers the interpreter produces on several hundred such programs.
 
 The rule is `stepEcho` in `theory/agda/src/Jtv/Promotion.agda`, rechecked in
 `jtv_proofs/JtvPromotion.lean`. Proved there: the grade is at least the tier of

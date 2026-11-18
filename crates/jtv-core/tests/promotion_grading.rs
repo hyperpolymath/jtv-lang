@@ -260,6 +260,28 @@ fn reverse_tok_is_rejected_after_the_target_changes_type() {
         .expect("same type as the block left");
 }
 
+// Token records are scoped to the function body that makes them. A block in
+// a function must not replace the record of an outer token of the same name.
+#[test]
+fn a_token_in_a_function_body_does_not_disturb_an_outer_token() {
+    let src = "x = 1\nreversible {\n  x += 0.5\n} -> tok\nfn f(x: Int): Int {\n  reversible {\n    x += 1\n  } -> tok\n  return x\n}\nreverse tok\nreverse {\n  x += 1\n}\n";
+    check(src).expect("the outer token restores the outer x");
+}
+
+// An `if` branch that changes the type of a target the block also updates is
+// rejected: the branch assignment is not recorded, so the carrier `reverse tok`
+// leaves would depend on whether the branch ran.
+#[test]
+fn a_branch_may_not_change_the_type_of_a_recorded_target() {
+    assert!(matches!(
+        check("x = 1\nreversible {\n  if x == 1 {\n    x = 2.5\n  }\n  x += 1\n} -> tok\n"),
+        Err(JtvError::TypeError(_))
+    ));
+    // A branch assignment that keeps the type is still admitted.
+    check("x = 1\nreversible {\n  if x == 1 {\n    x = 7\n  }\n  x += 1\n} -> tok\nreverse tok\n")
+        .expect("same type in the branch");
+}
+
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`
 // restores the original value and carrier from the snapshot.
 #[test]
