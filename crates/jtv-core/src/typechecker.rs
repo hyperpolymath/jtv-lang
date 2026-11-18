@@ -215,16 +215,26 @@ impl Default for TypeEnv {
     }
 }
 
+/// What one token-bound block did to the types of its direct targets:
+/// `(target, type before the block, type after it)`.
+type TokenRecord = Vec<(String, Type, Type)>;
+
 /// Type checker for JtV programs
 pub struct TypeChecker {
     env: TypeEnv,
     errors: Vec<JtvError>,
-    /// For each bound reversal token and each direct target of its block: the
-    /// type the target had before the block, and the type the block left it
-    /// with. `reverse tok` restores the old value at run time, carrier
+    /// For each reversal token name, the records of every block the live
+    /// token may have come from. A record holds, for each direct target of its
+    /// block, the type the target had before the block and the type the block
+    /// left it with. `reverse tok` restores the old value at run time, carrier
     /// included, so the checker restores the type with it, but only while the
     /// target still has the type the block left.
-    token_types: HashMap<String, Vec<(String, Type, Type)>>,
+    ///
+    /// There is more than one record when a block that may not run (one in a
+    /// branch or a loop) binds a name that already has a record: the token is
+    /// then the new one on the path where the block ran and the old one
+    /// otherwise.
+    token_types: HashMap<String, Vec<TokenRecord>>,
     /// While an `if` inside a token-bound block is being checked: the targets
     /// that block records, with the type each must keep. Empty otherwise.
     guarded: Vec<(String, Type)>,
@@ -593,7 +603,7 @@ impl TypeChecker {
                     // every entry holds the type before the whole block, and
                     // a second one would be compared with the type the first
                     // had just restored.
-                    let mut recorded: Vec<(String, Type, Type)> = Vec::new();
+                    let mut recorded: TokenRecord = Vec::new();
                     for (target, ty) in before {
                         if recorded.iter().any(|(seen, _, _)| *seen == target) {
                             continue;
@@ -602,7 +612,15 @@ impl TypeChecker {
                             recorded.push((target, ty, after));
                         }
                     }
-                    self.token_types.insert(tok.clone(), recorded);
+                    // Where this block is sure to run, the name now holds its
+                    // token and nothing else. In a branch or a loop it may not
+                    // run, and a token bound earlier under the same name may
+                    // still be the live one, so its record is kept alongside.
+                    let live = self.token_types.entry(tok.clone()).or_default();
+                    if self.conditional_depth == 0 {
+                        live.clear();
+                    }
+                    live.push(recorded);
                 }
                 Ok(())
             }
@@ -633,24 +651,32 @@ impl TypeChecker {
                 // run, that later reversal fails at run time (the token is
                 // gone), so keeping the record admits nothing wrong.
                 let sure_to_run = self.conditional_depth == 0;
-                let record = if sure_to_run {
+                let records = if sure_to_run {
                     self.token_types.remove(tok)
                 } else {
                     self.token_types.get(tok).cloned()
-                };
-                if let Some(recorded) = record {
-                    // Inside a branch or a loop the reversal may not run. If
-                    // the block changed a target's type, the type afterwards
-                    // then depends on the path, and restoring it here would
-                    // describe only the path where the reversal ran.
-                    if !sure_to_run {
+                }
+                .unwrap_or_default();
+                // The type afterwards is known exactly only when this
+                // reversal is sure to run and the token can have come from
+                // one block only. Otherwise it depends on the path: on
+                // whether the reversal ran, or on which block bound the
+                // token. That is harmless only if no candidate block changed
+                // a type, so that every path leaves the same types.
+                let one_candidate = records.len() == 1;
+                for recorded in records {
+                    if !sure_to_run || !one_candidate {
                         if let Some((target, before, after)) =
                             recorded.iter().find(|(_, before, after)| before != after)
                         {
+                            let why = if sure_to_run {
+                                "the token may come from more than one reversible block"
+                            } else {
+                                "whether this reversal runs is not known when checking"
+                            };
                             return Err(JtvError::TypeError(format!(
-                                "cannot reverse `{tok}` inside a branch or a loop: its block \
-                                 changed `{target}` from {before} to {after}, and whether \
-                                 this reversal runs is not known when checking"
+                                "cannot reverse `{tok}` here: a block that binds it changed \
+                                 `{target}` from {before} to {after}, and {why}"
                             )));
                         }
                     }

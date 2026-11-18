@@ -137,14 +137,17 @@ echo(x += v)  =  shape(x += v)
   rejected when its block changed a type. For the same reason a `reverse tok`
   or an `abandon tok` there does not retire the token's record: the token may
   still be live afterwards, and a later `reverse tok` is checked against the
-  same record. If the target
+  same record. Likewise a token-bound block in a branch or a loop that reuses
+  a token name adds a record instead of replacing the earlier one, because
+  either token may be the live one; `reverse tok` is then rejected if any
+  candidate block changed a type. If the target
   was given another type between the block and `reverse tok`, the checker
   rejects the reversal: the carrier it would leave depends on which inverse
   the runtime recorded. For the same reason an `if` branch inside a
   token-bound block may not change the type of a target the block updates:
   branch assignments are not recorded (hole H21). The generated test
   `tests/reverse_gate_soundness.rs` compares the gate's verdict with the
-  carriers the interpreter produces on 12,960 such programs.
+  carriers the interpreter produces on 18,144 such programs.
 
 The rule is `stepEcho` in `theory/agda/src/Jtv/Promotion.agda`, rechecked in
 `jtv_proofs/JtvPromotion.lean`. Proved there: the grade is at least the tier of

@@ -6,8 +6,8 @@
 // step `Safe`. For that grade to mean anything, the step the runtime then
 // executes must keep the value in its carrier, and the carrier must not be an
 // approximate one. This test generates small programs that put `x` through a
-// token-bound block, an optional conditional `reverse tok` or `abandon tok`, an
-// optional reassignment and an optional unconditional one, then end with a
+// token-bound block, an optional conditional `reverse tok`, `abandon tok` or
+// second block under the same token name, an optional reassignment and an optional unconditional one, then end with a
 // tokenless reverse step, and compares the checker's verdict with the carriers
 // the interpreter actually produces.
 //
@@ -71,6 +71,12 @@ fn programs() -> Vec<(String, String)> {
         "if c == 1 {\n  reverse tok\n}\n",
         "if c == 0 {\n  abandon tok\n}\n",
         "if c == 1 {\n  abandon tok\n}\n",
+        // A second block under the same token name, in a branch. `x += x`
+        // keeps whatever carrier `x` has, so the branch itself changes no
+        // type (that would be hole H28, not a token question). Where the
+        // branch does not run, the first token is still the live one.
+        "if c == 0 {\n  reversible {\n    x += x\n  } -> tok\n}\n",
+        "if c == 1 {\n  reversible {\n    x += x\n  } -> tok\n}\n",
     ];
     let unconditional = ["", "reverse tok\n", "abandon tok\n"];
     let finals = ["1", "1/2"];

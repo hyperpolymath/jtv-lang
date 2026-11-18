@@ -327,6 +327,31 @@ fn a_conditional_reverse_tok_does_not_retire_the_token_record() {
 }
 
 #[test]
+fn a_conditional_block_does_not_replace_a_live_token_record() {
+    // `c` is 0, so the second block does not run and `tok` is still the
+    // first token: `reverse tok` brings the Int back, and the tokenless step
+    // is Int += Rational. The checker cannot tell which token is live.
+    let src = "c = 0\nx = 1\nreversible {\n  x += 1/2\n} -> tok\n\
+               if c == 1 {\n  reversible {\n    x += 1/2\n  } -> tok\n}\n\
+               reverse tok\nreverse {\n  x += 1/2\n}\n";
+    assert!(matches!(check(src), Err(JtvError::TypeError(_))));
+    // Reusing a token name across branches is fine while no block changes a
+    // type: every path then leaves the same types.
+    check(
+        "a = 0\nx = 1\nif a == 0 {\n  reversible {\n    x += 1\n  } -> tok\n  reverse tok\n}\n\
+         if a == 0 {\n  reversible {\n    x += 1\n  } -> tok\n  reverse tok\n}\n\
+         reverse {\n  x += 1\n}\n",
+    )
+    .expect("no block changes a type");
+    // A block that is sure to run does replace the record.
+    check(
+        "x = 1\nreversible {\n  x += 1/2\n} -> tok\nreversible {\n  x += 1/2\n} -> tok\n\
+         reverse tok\nreverse {\n  x += 1/2\n}\n",
+    )
+    .expect("the second block leaves a Rational and its reversal restores a Rational");
+}
+
+#[test]
 fn a_nested_token_bound_block_keeps_the_enclosing_guards() {
     // The inner block has no `+=` or `-=` of its own, so it adds no guard;
     // the outer block's guard on `x` must still apply inside it. The runtime
