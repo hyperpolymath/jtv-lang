@@ -6,9 +6,10 @@
 // step `Safe`. For that grade to mean anything, the step the runtime then
 // executes must keep the value in its carrier, and the carrier must not be an
 // approximate one. This test generates small programs that put `x` through a
-// token-bound block, an optional reassignment and an optional `reverse tok`,
-// then end with a tokenless reverse step, and compares the checker's verdict
-// with the carriers the interpreter actually produces.
+// token-bound block, an optional conditional `reverse tok` or `abandon tok`, an
+// optional reassignment and an optional unconditional one, then end with a
+// tokenless reverse step, and compares the checker's verdict with the carriers
+// the interpreter actually produces.
 //
 // It exists because the checker tracks carriers statically while tokens are
 // reversed dynamically, and review of that tracking found several programs the
@@ -39,7 +40,9 @@ fn run_x(src: &str) -> Option<Value> {
 }
 
 fn programs() -> Vec<(String, String)> {
-    let inits = ["x = 1", "x = 1/2"];
+    // A Float start matters: a Float step is undone from a snapshot, which
+    // brings the old carrier back whatever `x` holds by then.
+    let inits = ["x = 1", "x = 1/2", "x = 0.5"];
     let operands = ["1", "1/2", "0.5"];
     let mut blocks: Vec<String> = Vec::new();
     for k in operands {
@@ -59,27 +62,33 @@ fn programs() -> Vec<(String, String)> {
         }
     }
     let between = ["", "x = 5\n", "x = 2/3\n", "x = 2.5\n"];
-    // `c` is 0 in every program, so the first conditional reversal runs and
-    // the second does not. The checker cannot tell them apart.
-    let token_action = [
+    // `c` is 0 in every program, so a statement under `c == 0` runs and one
+    // under `c == 1` does not. The checker cannot tell them apart, so a token
+    // it has seen reversed or abandoned in a branch may still be live.
+    let conditional = [
         "",
-        "reverse tok\n",
         "if c == 0 {\n  reverse tok\n}\n",
         "if c == 1 {\n  reverse tok\n}\n",
+        "if c == 0 {\n  abandon tok\n}\n",
+        "if c == 1 {\n  abandon tok\n}\n",
     ];
+    let unconditional = ["", "reverse tok\n", "abandon tok\n"];
     let finals = ["1", "1/2"];
 
     let mut out = Vec::new();
     for init in inits {
         for block in &blocks {
-            for mid in between {
-                for action in token_action {
-                    for k in finals {
-                        let prefix = format!(
-                            "c = 0\n{init}\nreversible {{\n{block}}} -> tok\n{mid}{action}"
-                        );
-                        let full = format!("{prefix}reverse {{\n  x += {k}\n}}\n");
-                        out.push((prefix, full));
+            for first in conditional {
+                for mid in between {
+                    for last in unconditional {
+                        for k in finals {
+                            let prefix = format!(
+                                "c = 0\n{init}\nreversible {{\n{block}}} -> tok\n\
+                                 {first}{mid}{last}"
+                            );
+                            let full = format!("{prefix}reverse {{\n  x += {k}\n}}\n");
+                            out.push((prefix, full));
+                        }
                     }
                 }
             }

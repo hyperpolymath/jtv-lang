@@ -304,6 +304,39 @@ fn a_conditional_reverse_tok_is_rejected_when_its_block_changed_a_type() {
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`
 // restores the original value and carrier from the snapshot.
 #[test]
+fn a_conditional_abandon_does_not_retire_the_token_record() {
+    // `c` is 0, so the `abandon` does not run and `reverse tok` brings the
+    // Int back. The tokenless step is then Int += Rational, which promotes.
+    let src = "c = 0\nx = 1\nreversible {\n  x += 1/2\n} -> tok\n\
+               if c == 1 {\n  abandon tok\n}\nreverse tok\nreverse {\n  x += 1/2\n}\n";
+    assert!(matches!(check(src), Err(JtvError::EchoViolation(_))));
+    // Where the `abandon` is sure to run the record is retired, and `x`
+    // keeps the type the block left it with.
+    check("x = 1\nreversible {\n  x += 1/2\n} -> tok\nabandon tok\nreverse {\n  x += 1/2\n}\n")
+        .expect("x is Rational after the block, and Rational += Rational is Safe");
+}
+
+#[test]
+fn a_conditional_reverse_tok_does_not_retire_the_token_record() {
+    // The conditional reversal does not run, so the token is still live when
+    // `x` becomes an Int. The Float step was recorded as a snapshot, so the
+    // unconditional `reverse tok` then brings a Float back.
+    let src = "c = 0\nx = 0.5\nreversible {\n  x += 0.5\n} -> tok\n\
+               if c == 1 {\n  reverse tok\n}\nx = 1\nreverse tok\n";
+    assert!(matches!(check(src), Err(JtvError::TypeError(_))));
+}
+
+#[test]
+fn a_nested_token_bound_block_keeps_the_enclosing_guards() {
+    // The inner block has no `+=` or `-=` of its own, so it adds no guard;
+    // the outer block's guard on `x` must still apply inside it. The runtime
+    // rejects the nested block today, so this is a checker-only case.
+    let src = "c = 0\nx = 1\nreversible {\n  x += 1\n  if c == 0 {\n    reversible {\n      \
+               if c == 0 {\n        x = 1/2\n      }\n    } -> t2\n  }\n} -> tok\n";
+    assert!(matches!(check(src), Err(JtvError::TypeError(_))));
+}
+
+#[test]
 fn token_bound_promotion_is_admitted_and_restored_exactly() {
     for (setup, operand, expected) in [
         ("x = 1", "1/2", Value::Int(1)),

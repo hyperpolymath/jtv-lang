@@ -574,7 +574,13 @@ impl TypeChecker {
                                 Some((target.clone(), self.env.get_var(target)?.clone()))
                             })
                             .collect();
-                        let outer = std::mem::replace(&mut self.guarded, kept);
+                        // A token-bound block nested in a branch of another
+                        // adds its guards to the enclosing ones; it does not
+                        // replace them. The enclosing entries stay first,
+                        // because `set_var_guarded` takes the first match.
+                        let mut scoped = self.guarded.clone();
+                        scoped.extend(kept);
+                        let outer = std::mem::replace(&mut self.guarded, scoped);
                         let checked = self.check_reversible_stmt(stmt);
                         self.guarded = outer;
                         checked?;
@@ -619,12 +625,25 @@ impl TypeChecker {
                 // inverse was recorded: a snapshot brings back the old carrier,
                 // an arithmetic inverse keeps the new one. The checker cannot
                 // tell which, so it rejects the reversal instead of guessing.
-                if let Some(recorded) = self.token_types.remove(tok) {
+                //
+                // The record is dropped only where this statement is sure to
+                // run. In a branch or a loop the token may still be live
+                // afterwards, and a later `reverse tok` must be checked
+                // against the same record. On the path where this one did
+                // run, that later reversal fails at run time (the token is
+                // gone), so keeping the record admits nothing wrong.
+                let sure_to_run = self.conditional_depth == 0;
+                let record = if sure_to_run {
+                    self.token_types.remove(tok)
+                } else {
+                    self.token_types.get(tok).cloned()
+                };
+                if let Some(recorded) = record {
                     // Inside a branch or a loop the reversal may not run. If
                     // the block changed a target's type, the type afterwards
                     // then depends on the path, and restoring it here would
                     // describe only the path where the reversal ran.
-                    if self.conditional_depth > 0 {
+                    if !sure_to_run {
                         if let Some((target, before, after)) =
                             recorded.iter().find(|(_, before, after)| before != after)
                         {
@@ -648,8 +667,15 @@ impl TypeChecker {
                 Ok(())
             }
             ControlStmt::AbandonToken(tok) => {
-                // An abandoned token is never reversed, so its record is dead.
-                self.token_types.remove(tok);
+                // An abandoned token is never reversed, so its record is dead,
+                // but only where the `abandon` is sure to run. In a branch or
+                // a loop the token may still be live afterwards; dropping the
+                // record there would let a later `reverse tok` bring back a
+                // type the checker no longer knows about. On the path where
+                // the `abandon` did run, that reversal fails at run time.
+                if self.conditional_depth == 0 {
+                    self.token_types.remove(tok);
+                }
                 Ok(())
             }
             ControlStmt::Block(stmts) => {
