@@ -219,10 +219,12 @@ impl Default for TypeEnv {
 pub struct TypeChecker {
     env: TypeEnv,
     errors: Vec<JtvError>,
-    /// For each bound reversal token, the type every target of its block had
-    /// before the block ran. `reverse tok` restores those values at run time,
-    /// carrier included, so the checker restores the types with it.
-    token_types: HashMap<String, Vec<(String, Type)>>,
+    /// For each bound reversal token and each direct target of its block: the
+    /// type the target had before the block, and the type the block left it
+    /// with. `reverse tok` restores the old value at run time, carrier
+    /// included, so the checker restores the type with it, but only while the
+    /// target still has the type the block left.
+    token_types: HashMap<String, Vec<(String, Type, Type)>>,
 }
 
 impl TypeChecker {
@@ -527,7 +529,14 @@ impl TypeChecker {
                     self.check_reversible_stmt(stmt)?;
                 }
                 if let Some(tok) = &rb.token_binding {
-                    self.token_types.insert(tok.clone(), before);
+                    let recorded = before
+                        .into_iter()
+                        .filter_map(|(target, ty)| {
+                            let after = self.env.get_var(&target)?.clone();
+                            Some((target, ty, after))
+                        })
+                        .collect();
+                    self.token_types.insert(tok.clone(), recorded);
                 }
                 Ok(())
             }
@@ -542,9 +551,23 @@ impl TypeChecker {
                 // `reverse { x += 1/2 }` graded as Rational += Rational would
                 // be admitted while it promotes at run time. Every entry was
                 // read before the block's first step.
-                if let Some(before) = self.token_types.remove(tok) {
-                    for (target, ty) in before {
-                        self.env.set_var(target, ty);
+                //
+                // That holds only while the target still has the type the
+                // block left it with. If it was reassigned to another type in
+                // between, the recorded inverse is applied to a value the block
+                // never produced, and the carrier it leaves depends on which
+                // inverse was recorded: a snapshot brings back the old carrier,
+                // an arithmetic inverse keeps the new one. The checker cannot
+                // tell which, so it rejects the reversal instead of guessing.
+                if let Some(recorded) = self.token_types.remove(tok) {
+                    for (target, before, after) in recorded {
+                        if self.env.get_var(&target) != Some(&after) {
+                            return Err(JtvError::TypeError(format!(
+                                "cannot reverse `{tok}`: `{target}` had type {after} when its \
+                                 reversible block ended and has been given another type since"
+                            )));
+                        }
+                        self.env.set_var(target, before);
                     }
                 }
                 Ok(())

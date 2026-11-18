@@ -234,6 +234,27 @@ fn reverse_tok_restores_the_carrier_the_checker_grades_by() {
     assert!(matches!(get_var(&run(src), "x"), Some(Value::Int(_))));
 }
 
+// If a target is given another type between its block and `reverse tok`, the
+// carrier the reversal leaves depends on which inverse the runtime recorded,
+// which the checker cannot see. Restoring the old type let a Float be graded
+// as an Int; leaving the new one let an Int be graded as a Rational. The
+// reversal is rejected.
+#[test]
+fn reverse_tok_is_rejected_after_the_target_changes_type() {
+    for src in [
+        "x = 1\nreversible {\n  x += 1\n} -> tok\nx = 9007199254740996.0\nreverse tok\nreverse {\n  x += 1\n}\n",
+        "x = 1\nreversible {\n  x += 0.5\n} -> tok\nx = 2/3\nreverse tok\nreverse {\n  x += 1/2\n}\n",
+    ] {
+        assert!(
+            matches!(check(src), Err(JtvError::TypeError(_))),
+            "{src}"
+        );
+    }
+    // Reassigning with the type the block left is still reversible.
+    check("x = 1\nreversible {\n  x += 1\n} -> tok\nx = 5\nreverse tok\nreverse {\n  x += 1\n}\n")
+        .expect("same type as the block left");
+}
+
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`
 // restores the original value and carrier from the snapshot.
 #[test]
