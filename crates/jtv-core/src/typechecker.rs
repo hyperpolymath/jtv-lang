@@ -228,6 +228,9 @@ pub struct TypeChecker {
     /// While an `if` inside a token-bound block is being checked: the targets
     /// that block records, with the type each must keep. Empty otherwise.
     guarded: Vec<(String, Type)>,
+    /// How many branches or loop bodies enclose the statement being checked.
+    /// Inside one, a statement may or may not run.
+    conditional_depth: usize,
 }
 
 impl TypeChecker {
@@ -237,6 +240,7 @@ impl TypeChecker {
             errors: vec![],
             token_types: HashMap::new(),
             guarded: Vec::new(),
+            conditional_depth: 0,
         }
     }
 
@@ -420,6 +424,16 @@ impl TypeChecker {
         Ok(())
     }
 
+    /// Check the statements of a branch or a loop body, which may not run.
+    fn check_conditional_body(&mut self, stmts: &[ControlStmt]) -> Result<()> {
+        self.conditional_depth += 1;
+        let checked = stmts
+            .iter()
+            .try_for_each(|stmt| self.check_control_stmt(stmt));
+        self.conditional_depth -= 1;
+        checked
+    }
+
     /// Give `name` the type `ty`, unless `name` is a guarded target and `ty`
     /// is not the type it must keep.
     ///
@@ -457,22 +471,15 @@ impl TypeChecker {
                 // Condition must be evaluable
                 self.infer_control_expr(&if_stmt.condition)?;
 
-                for stmt in &if_stmt.then_branch {
-                    self.check_control_stmt(stmt)?;
-                }
+                self.check_conditional_body(&if_stmt.then_branch)?;
                 if let Some(else_branch) = &if_stmt.else_branch {
-                    for stmt in else_branch {
-                        self.check_control_stmt(stmt)?;
-                    }
+                    self.check_conditional_body(else_branch)?;
                 }
                 Ok(())
             }
             ControlStmt::While(while_stmt) => {
                 self.infer_control_expr(&while_stmt.condition)?;
-                for stmt in &while_stmt.body {
-                    self.check_control_stmt(stmt)?;
-                }
-                Ok(())
+                self.check_conditional_body(&while_stmt.body)
             }
             ControlStmt::For(for_stmt) => {
                 // Range endpoints must be integers
@@ -495,10 +502,7 @@ impl TypeChecker {
                 // Loop variable is Int
                 self.set_var_guarded(&for_stmt.variable, Type::Int)?;
 
-                for stmt in &for_stmt.body {
-                    self.check_control_stmt(stmt)?;
-                }
-                Ok(())
+                self.check_conditional_body(&for_stmt.body)
             }
             ControlStmt::Return(expr) => {
                 if let Some(e) = expr {
@@ -616,6 +620,21 @@ impl TypeChecker {
                 // an arithmetic inverse keeps the new one. The checker cannot
                 // tell which, so it rejects the reversal instead of guessing.
                 if let Some(recorded) = self.token_types.remove(tok) {
+                    // Inside a branch or a loop the reversal may not run. If
+                    // the block changed a target's type, the type afterwards
+                    // then depends on the path, and restoring it here would
+                    // describe only the path where the reversal ran.
+                    if self.conditional_depth > 0 {
+                        if let Some((target, before, after)) =
+                            recorded.iter().find(|(_, before, after)| before != after)
+                        {
+                            return Err(JtvError::TypeError(format!(
+                                "cannot reverse `{tok}` inside a branch or a loop: its block \
+                                 changed `{target}` from {before} to {after}, and whether \
+                                 this reversal runs is not known when checking"
+                            )));
+                        }
+                    }
                     for (target, before, after) in recorded {
                         if self.env.get_var(&target) != Some(&after) {
                             return Err(JtvError::TypeError(format!(
@@ -735,13 +754,9 @@ impl TypeChecker {
             }
             ReversibleStmt::If(if_stmt) => {
                 self.infer_control_expr(&if_stmt.condition)?;
-                for stmt in &if_stmt.then_branch {
-                    self.check_control_stmt(stmt)?;
-                }
+                self.check_conditional_body(&if_stmt.then_branch)?;
                 if let Some(else_branch) = &if_stmt.else_branch {
-                    for stmt in else_branch {
-                        self.check_control_stmt(stmt)?;
-                    }
+                    self.check_conditional_body(else_branch)?;
                 }
                 Ok(())
             }

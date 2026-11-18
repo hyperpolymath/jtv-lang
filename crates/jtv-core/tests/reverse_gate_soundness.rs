@@ -59,7 +59,14 @@ fn programs() -> Vec<(String, String)> {
         }
     }
     let between = ["", "x = 5\n", "x = 2/3\n", "x = 2.5\n"];
-    let token_action = ["", "reverse tok\n"];
+    // `c` is 0 in every program, so the first conditional reversal runs and
+    // the second does not. The checker cannot tell them apart.
+    let token_action = [
+        "",
+        "reverse tok\n",
+        "if c == 0 {\n  reverse tok\n}\n",
+        "if c == 1 {\n  reverse tok\n}\n",
+    ];
     let finals = ["1", "1/2"];
 
     let mut out = Vec::new();
@@ -68,8 +75,9 @@ fn programs() -> Vec<(String, String)> {
             for mid in between {
                 for action in token_action {
                     for k in finals {
-                        let prefix =
-                            format!("{init}\nreversible {{\n{block}}} -> tok\n{mid}{action}");
+                        let prefix = format!(
+                            "c = 0\n{init}\nreversible {{\n{block}}} -> tok\n{mid}{action}"
+                        );
                         let full = format!("{prefix}reverse {{\n  x += {k}\n}}\n");
                         out.push((prefix, full));
                     }

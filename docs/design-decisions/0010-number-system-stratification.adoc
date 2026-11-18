@@ -133,7 +133,8 @@ echo(x += v)  =  shape(x += v)
 * After the step the checker records the target as having the result's
   carrier, and at `reverse tok` it restores the carrier the target had before
   the block, so a later block is graded against the carrier the variable
-  holds. This is exact for straight-line code only (hole H28). If the target
+  holds. A `reverse tok` inside a branch or a loop may not run, so it is
+  rejected when its block changed a type. If the target
   was given another type between the block and `reverse tok`, the checker
   rejects the reversal: the carrier it would leave depends on which inverse
   the runtime recorded. For the same reason an `if` branch inside a

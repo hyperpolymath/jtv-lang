@@ -373,7 +373,7 @@ H1–H12 come from the merged plan. H13–H19 are red-team findings checked this
 |verified; not fixed
 
 |H28 (new, 2026-11-17)
-|The checker's types are flow-insensitive, so the reverse gate can grade a variable by a carrier it does not hold. After `x = 9007199254740993.0` and `if c == 1 { x = 1 }`, the checker records `x` as Int; with `c = 0` it is still a Float at run time, and a tokenless `reverse { x += 1 }` passes as a Safe Int step. The same gap applies to tokens: the checker restores a target's type at `reverse tok`, but a `reverse tok` inside a branch or a called function that does not run leaves the static and runtime carriers apart. A sound fix joins the branch types to "unknown" and grades unknown non-Safe, which is H19.
+|The checker's types are flow-insensitive, so the reverse gate can grade a variable by a carrier it does not hold. After `x = 9007199254740993.0` and `if c == 1 { x = 1 }`, the checker records `x` as Int; with `c = 0` it is still a Float at run time, and a tokenless `reverse { x += 1 }` passes as a Safe Int step. Tokens are handled separately: the checker restores a target's type at `reverse tok`, and rejects the reversal when it sits in a branch or a loop and its block changed a type. A `reverse tok` inside a called function is still not tracked: a function's effect on its caller's variables is invisible to the checker (H15). A sound fix joins the branch types to "unknown" and grades unknown non-Safe, which is H19.
 |`typechecker.rs` `check_control_stmt` (`If`, `While`, `For` arms); probe: the program in the first column, check 0
 |verified; not fixed (carrier lane with H19; ADR-0017 for the typing rule)
 

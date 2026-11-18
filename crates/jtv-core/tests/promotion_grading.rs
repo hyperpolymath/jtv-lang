@@ -288,6 +288,19 @@ fn a_branch_may_not_change_the_type_of_a_recorded_target() {
         .expect("same type in the branch");
 }
 
+// A `reverse tok` inside a branch may not run. If its block changed a
+// target's type, the checker cannot say which type the target has afterwards,
+// so it rejects the reversal. A block that changed no type is unaffected.
+#[test]
+fn a_conditional_reverse_tok_is_rejected_when_its_block_changed_a_type() {
+    assert!(matches!(
+        check("c = 0\nx = 1\nreversible {\n  x += 0.5\n} -> tok\nif c == 1 {\n  reverse tok\n}\n"),
+        Err(JtvError::TypeError(_))
+    ));
+    check("c = 0\nx = 1\nreversible {\n  x += 1\n} -> tok\nif c == 1 {\n  reverse tok\n}\n")
+        .expect("no type change, so nothing to restore");
+}
+
 // With a token the promoting step is admitted (`Neutral`), and `reverse tok`
 // restores the original value and carrier from the snapshot.
 #[test]
