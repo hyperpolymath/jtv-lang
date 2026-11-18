@@ -250,6 +250,11 @@ fn reverse_tok_is_rejected_after_the_target_changes_type() {
             "{src}"
         );
     }
+    // A block that updates one target twice is reversible: the target is
+    // recorded once, with the type before the block and the type after it.
+    let twice = "x = 1\nreversible {\n  x += 1\n  x += 0.5\n} -> tok\nreverse tok\nreverse {\n  x += 1\n}\n";
+    check(twice).expect("two steps on one target, then reverse tok");
+    assert_eq!(get_var(&run(twice), "x"), Some(Value::Int(0)));
     // Reassigning with the type the block left is still reversible.
     check("x = 1\nreversible {\n  x += 1\n} -> tok\nx = 5\nreverse tok\nreverse {\n  x += 1\n}\n")
         .expect("same type as the block left");

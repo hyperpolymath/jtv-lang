@@ -529,13 +529,19 @@ impl TypeChecker {
                     self.check_reversible_stmt(stmt)?;
                 }
                 if let Some(tok) = &rb.token_binding {
-                    let recorded = before
-                        .into_iter()
-                        .filter_map(|(target, ty)| {
-                            let after = self.env.get_var(&target)?.clone();
-                            Some((target, ty, after))
-                        })
-                        .collect();
+                    // One entry per target, however many steps update it:
+                    // every entry holds the type before the whole block, and
+                    // a second one would be compared with the type the first
+                    // had just restored.
+                    let mut recorded: Vec<(String, Type, Type)> = Vec::new();
+                    for (target, ty) in before {
+                        if recorded.iter().any(|(seen, _, _)| *seen == target) {
+                            continue;
+                        }
+                        if let Some(after) = self.env.get_var(&target).cloned() {
+                            recorded.push((target, ty, after));
+                        }
+                    }
                     self.token_types.insert(tok.clone(), recorded);
                 }
                 Ok(())
