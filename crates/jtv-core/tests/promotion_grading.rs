@@ -277,6 +277,12 @@ fn a_branch_may_not_change_the_type_of_a_recorded_target() {
         check("x = 1\nreversible {\n  if x == 1 {\n    x = 2.5\n  }\n  x += 1\n} -> tok\n"),
         Err(JtvError::TypeError(_))
     ));
+    // An `else` branch that sets the type back does not hide the change:
+    // at run time only one of the two branches runs.
+    assert!(matches!(
+        check("x = 1\nreversible {\n  if x == 1 {\n    x = 2.5\n  } else {\n    x = 1\n  }\n  x += 1\n} -> tok\n"),
+        Err(JtvError::TypeError(_))
+    ));
     // A branch assignment that keeps the type is still admitted.
     check("x = 1\nreversible {\n  if x == 1 {\n    x = 7\n  }\n  x += 1\n} -> tok\nreverse tok\n")
         .expect("same type in the branch");

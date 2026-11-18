@@ -225,6 +225,9 @@ pub struct TypeChecker {
     /// included, so the checker restores the type with it, but only while the
     /// target still has the type the block left.
     token_types: HashMap<String, Vec<(String, Type, Type)>>,
+    /// While an `if` inside a token-bound block is being checked: the targets
+    /// that block records, with the type each must keep. Empty otherwise.
+    guarded: Vec<(String, Type)>,
 }
 
 impl TypeChecker {
@@ -233,6 +236,7 @@ impl TypeChecker {
             env: TypeEnv::new(),
             errors: vec![],
             token_types: HashMap::new(),
+            guarded: Vec::new(),
         }
     }
 
@@ -416,6 +420,30 @@ impl TypeChecker {
         Ok(())
     }
 
+    /// Give `name` the type `ty`, unless `name` is a guarded target and `ty`
+    /// is not the type it must keep.
+    ///
+    /// Statements inside an `if` branch of a token-bound block are run but not
+    /// recorded, so `reverse tok` does not undo them (H21). If one of them
+    /// gives a recorded target another type, the carrier after `reverse tok`
+    /// depends on which path ran, and no single restored type is right. The
+    /// check is made at every statement that sets a type, on every path, not
+    /// on the net effect of the `if`: an `else` branch that sets the type back
+    /// does not undo what the `then` branch did at run time.
+    fn set_var_guarded(&mut self, name: &str, ty: Type) -> Result<()> {
+        if let Some((_, kept)) = self.guarded.iter().find(|(target, _)| target == name) {
+            if *kept != ty {
+                return Err(JtvError::TypeError(format!(
+                    "an `if` branch in a reversible block gives `{name}` the type {ty}, \
+                     but the block also updates `{name}` (type {kept}) with `+=` or `-=`; \
+                     reversing the block's token could not restore it"
+                )));
+            }
+        }
+        self.env.set_var(name.to_string(), ty);
+        Ok(())
+    }
+
     fn check_control_stmt(&mut self, stmt: &ControlStmt) -> Result<()> {
         match stmt {
             ControlStmt::Assignment(assign) => {
@@ -423,8 +451,7 @@ impl TypeChecker {
                     Expr::Data(expr) => self.infer_data_expr(expr)?,
                     Expr::Control(expr) => self.infer_control_expr(expr)?,
                 };
-                self.env.set_var(assign.target.clone(), ty);
-                Ok(())
+                self.set_var_guarded(&assign.target, ty)
             }
             ControlStmt::If(if_stmt) => {
                 // Condition must be evaluable
@@ -466,7 +493,7 @@ impl TypeChecker {
                 }
 
                 // Loop variable is Int
-                self.env.set_var(for_stmt.variable.clone(), Type::Int);
+                self.set_var_guarded(&for_stmt.variable, Type::Int)?;
 
                 for stmt in &for_stmt.body {
                     self.check_control_stmt(stmt)?;
@@ -531,30 +558,24 @@ impl TypeChecker {
                     })
                     .collect();
                 for stmt in &rb.body {
-                    // An assignment inside an `if` branch is run but not
-                    // recorded, so `reverse tok` does not undo it (H21). If
-                    // it changes the type of a target this block records, the
-                    // carrier after `reverse tok` depends on whether the
-                    // branch ran, and no single restored type is right. Only
-                    // token-bound blocks restore types, so only they need this.
-                    let guarded: Vec<(&String, Option<Type>)> =
-                        if rb.token_binding.is_some() && matches!(stmt, ReversibleStmt::If(_)) {
-                            before
-                                .iter()
-                                .map(|(target, _)| (target, self.env.get_var(target).cloned()))
-                                .collect()
-                        } else {
-                            Vec::new()
-                        };
-                    self.check_reversible_stmt(stmt)?;
-                    for (target, ty) in guarded {
-                        if self.env.get_var(target).cloned() != ty {
-                            return Err(JtvError::TypeError(format!(
-                                "an `if` branch in this reversible block changes the type of \
-                                 `{target}`, which the block also updates with `+=` or `-=`; \
-                                 reversing the block's token could not restore it"
-                            )));
-                        }
+                    // Only token-bound blocks restore types at `reverse tok`,
+                    // so only their `if` statements are guarded (see
+                    // `set_var_guarded`). Each recorded target must keep, on
+                    // every path through the `if`, the type it has when the
+                    // `if` begins.
+                    if rb.token_binding.is_some() && matches!(stmt, ReversibleStmt::If(_)) {
+                        let kept: Vec<(String, Type)> = before
+                            .iter()
+                            .filter_map(|(target, _)| {
+                                Some((target.clone(), self.env.get_var(target)?.clone()))
+                            })
+                            .collect();
+                        let outer = std::mem::replace(&mut self.guarded, kept);
+                        let checked = self.check_reversible_stmt(stmt);
+                        self.guarded = outer;
+                        checked?;
+                    } else {
+                        self.check_reversible_stmt(stmt)?;
                     }
                 }
                 if let Some(tok) = &rb.token_binding {
@@ -602,7 +623,7 @@ impl TypeChecker {
                                  reversible block ended and has been given another type since"
                             )));
                         }
-                        self.env.set_var(target, before);
+                        self.set_var_guarded(&target, before)?;
                     }
                 }
                 Ok(())
@@ -708,7 +729,7 @@ impl TypeChecker {
                 // value and carrier at run time, and the `ReverseToken` arm
                 // restores the type to match.
                 if target_ty != Type::Any {
-                    self.env.set_var(target.clone(), result_ty);
+                    self.set_var_guarded(target, result_ty)?;
                 }
                 Ok(())
             }

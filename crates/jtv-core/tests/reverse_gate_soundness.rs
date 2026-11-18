@@ -48,6 +48,14 @@ fn programs() -> Vec<(String, String)> {
         blocks.push(format!("  x -= {k}\n"));
         for v in ["7", "2.5", "2/3"] {
             blocks.push(format!("  if x == 1 {{\n    x = {v}\n  }}\n  x += {k}\n"));
+            // The same branch with an `else` that sets an Int: a checker that
+            // looks only at the net effect of the `if` misses the change.
+            blocks.push(format!(
+                "  if x == 1 {{\n    x = {v}\n  }} else {{\n    x = 1\n  }}\n  x += {k}\n"
+            ));
+            blocks.push(format!(
+                "  if x == 2 {{\n    x = 1\n  }} else {{\n    x = {v}\n  }}\n  x += {k}\n"
+            ));
         }
     }
     let between = ["", "x = 5\n", "x = 2/3\n", "x = 2.5\n"];
