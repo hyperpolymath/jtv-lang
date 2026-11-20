@@ -39,6 +39,12 @@ lean_lib JtvConditional where
   -- recorded-branch repair is (Lean counterpart of theory/agda Jtv.Conditional)
   roots := #[`JtvConditional]
 
+lean_lib JtvPromotion where
+  -- Promotion-aware reversal grading: the grade bounds the promoted carrier,
+  -- and arithmetic inversion cannot undo a promotion (Lean counterpart of
+  -- theory/agda Jtv.Promotion)
+  roots := #[`JtvPromotion]
+
 lean_lib JtvExtended where
   -- Extended metatheory: algebraic cancellation/distribution, expression
   -- size/complexity, semantic-equivalence congruences, optimization
@@ -49,4 +55,4 @@ lean_lib JtvExtended where
 -- Build all proofs
 @[default_target]
 lean_lib JtvAll where
-  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho, `JtvConditional, `JtvExtended]
+  roots := #[`JtvCore, `JtvTheorems, `JtvOperational, `JtvTypes, `JtvSecurity, `JtvEcho, `JtvConditional, `JtvPromotion, `JtvExtended]

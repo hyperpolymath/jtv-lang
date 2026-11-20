@@ -503,14 +503,21 @@ fn check_reversible_stmt(stmt: &ReversibleStmt) -> Result<()> {
     }
 }
 
-// These carriers cannot be restored exactly by arithmetic inversion.
+/// Whether undoing a step needs the old value, not an arithmetic inverse.
+///
+/// Two cases. The first is proved in `theory/agda/src/Jtv/Promotion.agda`; the
+/// second is the carrier classification of ADR-0010 as amended by ADR-0015:
+///   * the step changed the value's carrier (`Int` to `Rational` or `Float`,
+///     `Float` to `Complex`): the inverse stays in the promoted carrier, so it
+///     never returns the original (`promoted-add-not-restored`);
+///   * the carrier is not an exact group here (`Float`, `Complex`, and the
+///     string-backed `Symbolic`), so the inverse does not cancel.
 fn needs_snapshot(current: &Value, result: &Value) -> bool {
-    [current, result].iter().any(|value| {
-        matches!(
-            value,
+    std::mem::discriminant(current) != std::mem::discriminant(result)
+        || matches!(
+            current,
             Value::Float(_) | Value::Complex(_) | Value::Symbolic(_)
         )
-    })
 }
 
 fn expr_contains_var(expr: &DataExpr, var: &str) -> bool {

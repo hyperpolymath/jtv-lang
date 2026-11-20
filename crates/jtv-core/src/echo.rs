@@ -143,15 +143,81 @@ pub fn carrier_echo(ty: &BasicType) -> Echo {
 /// carrier (e.g. float) is graded by the carrier, not just the statement shape.
 pub type CarrierEnv = HashMap<String, BasicType>;
 
-/// The carrier echo of a variable. A variable absent from the env is treated as
-/// JtV's default numeric carrier `Int` (an exact abelian group → `Safe`): JtV
-/// numeric literals default to `int` (cf. `inferType (lit _) = int` in Lean), so
-/// an unannotated numeric *is* `int`. The default is therefore sound — only an
-/// explicitly-`float` carrier (recorded in the env) lifts a `+=` to `Neutral`.
-fn carrier_echo_of(env: &CarrierEnv, var: &str) -> Echo {
-    match env.get(var) {
-        Some(ty) => carrier_echo(ty),
-        None => Echo::Safe,
+/// The carrier of a variable. A variable absent from the env is treated as
+/// JtV's default numeric carrier `Int`: JtV numeric literals default to `int`
+/// (cf. `inferType (lit _) = int` in Lean), so an unannotated numeric *is*
+/// `int`. Targets and operands share this one default, so a later change to it
+/// (ADR-0010's amendment narrows it to bound names) applies to both.
+fn carrier_of(env: &CarrierEnv, var: &str) -> BasicType {
+    env.get(var).cloned().unwrap_or(BasicType::Int)
+}
+
+/// The carrier of `a + b`, or `None` where the sum is a type error or is not
+/// numeric. This is the table `promote` in `theory/agda/src/Jtv/Promotion.agda`
+/// and mirrors the numeric arms of `Value::add`: the seven same-carrier arms,
+/// then the six coercions.
+pub fn promote(a: &BasicType, b: &BasicType) -> Option<BasicType> {
+    use BasicType::*;
+    match (a, b) {
+        (Int, Int) => Some(Int),
+        (Rational, Rational) => Some(Rational),
+        (Float, Float) => Some(Float),
+        (Complex, Complex) => Some(Complex),
+        (Hex, Hex) => Some(Hex),
+        (Binary, Binary) => Some(Binary),
+        (Symbolic, Symbolic) => Some(Symbolic),
+        (Int, Float) | (Float, Int) => Some(Float),
+        (Int, Rational) | (Rational, Int) => Some(Rational),
+        (Float, Complex) | (Complex, Float) => Some(Complex),
+        _ => None,
+    }
+}
+
+/// The grade of one reversible step: `stepEcho` in `Jtv/Promotion.agda`.
+///
+/// It joins the statement `shape`, the tier of the `target`'s carrier, the tier
+/// of the `result`'s carrier, and `Neutral` for any change of carrier. An
+/// unknown result (`None`) is graded as a change, so it fails closed.
+///
+/// Proved there for every tier map: the grade is at least the tier of the
+/// promoted result (`result-bounds-grade`), and a `Safe` grade implies no
+/// change of carrier (`safe-grade-sound`). A step that changes carrier cannot
+/// be undone by arithmetic inversion (`promoted-add-not-restored`), which is
+/// why it is never `Safe`.
+pub fn step_echo(shape: Echo, target: &BasicType, result: Option<&BasicType>) -> Echo {
+    let result_tier = match result {
+        Some(c) if c == target => carrier_echo(c),
+        Some(c) => Echo::Neutral.join(carrier_echo(c)),
+        None => Echo::Neutral,
+    };
+    shape.join(carrier_echo(target)).join(result_tier)
+}
+
+/// The carrier of an operand expression, or `None` when it cannot be known
+/// here (a function call, or a non-numeric expression).
+fn operand_carrier(expr: &DataExpr, env: &CarrierEnv) -> Option<BasicType> {
+    match expr {
+        DataExpr::Number(n) => Some(match n {
+            Number::Int(_) => BasicType::Int,
+            Number::Float(_) => BasicType::Float,
+            Number::Rational(_, _) => BasicType::Rational,
+            Number::Complex(_, _) => BasicType::Complex,
+            Number::Hex(_) => BasicType::Hex,
+            Number::Binary(_) => BasicType::Binary,
+            Number::Symbolic(_) => BasicType::Symbolic,
+        }),
+        DataExpr::Identifier(name) => Some(carrier_of(env, name)),
+        DataExpr::Add(l, r) => promote(&operand_carrier(l, env)?, &operand_carrier(r, env)?),
+        // Negation keeps the carrier (`neg-tag` in the Agda model).
+        DataExpr::Negate(inner) => operand_carrier(inner, env),
+        // A call's carrier is unknown here, so the step grades `Neutral`. A
+        // declared return type cannot stand in for it: the checker does not
+        // compare `return` values with the declaration, so a function declared
+        // `Int` may return a Float. The reversible interpreter also refuses to
+        // evaluate a call inside a reverse block, so nothing that runs today is
+        // rejected by this.
+        DataExpr::FunctionCall(_) => None,
+        DataExpr::StringLit(_) | DataExpr::List(_) | DataExpr::Tuple(_) => None,
     }
 }
 
@@ -173,12 +239,15 @@ fn data_expr_uses(expr: &DataExpr, var: &str) -> bool {
 
 /// Classify the echo of a single reversible statement under a carrier env.
 ///
-/// Two independent sources of loss are joined:
+/// Three independent sources of loss are joined (`step_echo`):
 ///   1. statement *shape* — self-reference (`x += x`) destroys the original
 ///      value, recoverable only from a retained residue/token (`Neutral`);
 ///   2. the *carrier* — over a non-group / approximate number system (e.g.
 ///      `float`) reverse-add is itself lossy, so the carrier lifts the grade
-///      regardless of shape (`carrier_echo`, mirroring Lean SECTION 6).
+///      regardless of shape (`carrier_echo`, mirroring Lean SECTION 6);
+///   3. *promotion* — an operand that moves the target to another carrier
+///      (`Int += Float`, `Int += Rational`) cannot be undone by arithmetic
+///      inversion, so the step is at least `Neutral`.
 pub fn classify_reversible_stmt_in_env(stmt: &ReversibleStmt, env: &CarrierEnv) -> Echo {
     match stmt {
         ReversibleStmt::AddAssign(target, expr) | ReversibleStmt::SubAssign(target, expr) => {
@@ -191,8 +260,11 @@ pub fn classify_reversible_stmt_in_env(stmt: &ReversibleStmt, env: &CarrierEnv) 
             } else {
                 Echo::Safe
             };
-            // Carrier: a lossy number system (float) grades the reverse-add up.
-            shape.join(carrier_echo_of(env, target))
+            // Carrier and promotion: grade by the carrier the step produces,
+            // not the target's alone. `x -= v` adds `neg v`, same carrier.
+            let target_ty = carrier_of(env, target);
+            let result = operand_carrier(expr, env).and_then(|v| promote(&target_ty, &v));
+            step_echo(shape, &target_ty, result.as_ref())
         }
         // A reversible `if` is as lossy as its lossiest branch. The Data guard
         // is pure (Safe); branches are classified conservatively.

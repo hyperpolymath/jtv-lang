@@ -260,6 +260,29 @@ pub fn currency(receipt: Option<&Receipt>, now: &BTreeMap<String, String>) -> Cu
     }
 }
 
+/// Fail unless a receipt describes the files on disk now.
+///
+/// `check` alone accepts a stale receipt as long as the rendered ledger says
+/// so (the affected theorems drop to `ungraded`). A gate that needs the grades
+/// themselves to hold calls this as well: it turns a missing or stale receipt
+/// into an error naming the prover and the files that changed.
+pub fn require_current(prover: Prover, c: &Currency) -> Result<(), String> {
+    match c {
+        Currency::Current => Ok(()),
+        Currency::Missing => Err(format!(
+            "no {} receipt: run `jtv-proof-ledger receipt {}`",
+            prover.name(),
+            prover.name()
+        )),
+        Currency::Stale(files) => Err(format!(
+            "the {} receipt is stale ({}): run `jtv-proof-ledger receipt {}`, then `render`",
+            prover.name(),
+            files.join(", "),
+            prover.name()
+        )),
+    }
+}
+
 /// §5 tokens, as the ledger records them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
@@ -557,6 +580,20 @@ mod tests {
         let mut t = theorem(Correspondence::Reconciled);
         t.agda = None;
         assert_eq!(derive(&t, &ev(&a, &l, true, true)).pwg, Pwg::Ungraded);
+    }
+
+    #[test]
+    fn require_current_rejects_missing_and_stale_receipts() {
+        assert!(require_current(Prover::Agda, &Currency::Current).is_ok());
+        let missing = require_current(Prover::Lean, &Currency::Missing).unwrap_err();
+        assert!(missing.contains("receipt lean"), "{missing}");
+        let stale = require_current(
+            Prover::Lean,
+            &Currency::Stale(vec!["jtv_proofs/New.lean".into()]),
+        )
+        .unwrap_err();
+        assert!(stale.contains("jtv_proofs/New.lean"), "{stale}");
+        assert!(stale.contains("stale"), "{stale}");
     }
 
     #[test]

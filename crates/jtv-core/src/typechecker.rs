@@ -215,10 +215,32 @@ impl Default for TypeEnv {
     }
 }
 
+/// What one token-bound block did to the types of its direct targets:
+/// `(target, type before the block, type after it)`.
+type TokenRecord = Vec<(String, Type, Type)>;
+
 /// Type checker for JtV programs
 pub struct TypeChecker {
     env: TypeEnv,
     errors: Vec<JtvError>,
+    /// For each reversal token name, the records of every block the live
+    /// token may have come from. A record holds, for each direct target of its
+    /// block, the type the target had before the block and the type the block
+    /// left it with. `reverse tok` restores the old value at run time, carrier
+    /// included, so the checker restores the type with it, but only while the
+    /// target still has the type the block left.
+    ///
+    /// There is more than one record when a block that may not run (one in a
+    /// branch or a loop) binds a name that already has a record: the token is
+    /// then the new one on the path where the block ran and the old one
+    /// otherwise.
+    token_types: HashMap<String, Vec<TokenRecord>>,
+    /// While an `if` inside a token-bound block is being checked: the targets
+    /// that block records, with the type each must keep. Empty otherwise.
+    guarded: Vec<(String, Type)>,
+    /// How many branches or loop bodies enclose the statement being checked.
+    /// Inside one, a statement may or may not run.
+    conditional_depth: usize,
 }
 
 impl TypeChecker {
@@ -226,6 +248,9 @@ impl TypeChecker {
         TypeChecker {
             env: TypeEnv::new(),
             errors: vec![],
+            token_types: HashMap::new(),
+            guarded: Vec::new(),
+            conditional_depth: 0,
         }
     }
 
@@ -388,6 +413,10 @@ impl TypeChecker {
     fn check_function(&mut self, func: &FunctionDecl) -> Result<()> {
         // Create new scope with parameters
         let old_env = self.env.clone();
+        // Token records are scoped like variables: a block in this body must
+        // not replace or consume the record of an outer token of the same
+        // name.
+        let old_tokens = self.token_types.clone();
 
         for param in &func.params {
             let ty = self.annotation_to_type(&param.type_annotation);
@@ -401,6 +430,41 @@ impl TypeChecker {
 
         // Restore environment
         self.env = old_env;
+        self.token_types = old_tokens;
+        Ok(())
+    }
+
+    /// Check the statements of a branch or a loop body, which may not run.
+    fn check_conditional_body(&mut self, stmts: &[ControlStmt]) -> Result<()> {
+        self.conditional_depth += 1;
+        let checked = stmts
+            .iter()
+            .try_for_each(|stmt| self.check_control_stmt(stmt));
+        self.conditional_depth -= 1;
+        checked
+    }
+
+    /// Give `name` the type `ty`, unless `name` is a guarded target and `ty`
+    /// is not the type it must keep.
+    ///
+    /// Statements inside an `if` branch of a token-bound block are run but not
+    /// recorded, so `reverse tok` does not undo them (H21). If one of them
+    /// gives a recorded target another type, the carrier after `reverse tok`
+    /// depends on which path ran, and no single restored type is right. The
+    /// check is made at every statement that sets a type, on every path, not
+    /// on the net effect of the `if`: an `else` branch that sets the type back
+    /// does not undo what the `then` branch did at run time.
+    fn set_var_guarded(&mut self, name: &str, ty: Type) -> Result<()> {
+        if let Some((_, kept)) = self.guarded.iter().find(|(target, _)| target == name) {
+            if *kept != ty {
+                return Err(JtvError::TypeError(format!(
+                    "an `if` branch in a reversible block gives `{name}` the type {ty}, \
+                     but the block also updates `{name}` (type {kept}) with `+=` or `-=`; \
+                     reversing the block's token could not restore it"
+                )));
+            }
+        }
+        self.env.set_var(name.to_string(), ty);
         Ok(())
     }
 
@@ -411,29 +475,21 @@ impl TypeChecker {
                     Expr::Data(expr) => self.infer_data_expr(expr)?,
                     Expr::Control(expr) => self.infer_control_expr(expr)?,
                 };
-                self.env.set_var(assign.target.clone(), ty);
-                Ok(())
+                self.set_var_guarded(&assign.target, ty)
             }
             ControlStmt::If(if_stmt) => {
                 // Condition must be evaluable
                 self.infer_control_expr(&if_stmt.condition)?;
 
-                for stmt in &if_stmt.then_branch {
-                    self.check_control_stmt(stmt)?;
-                }
+                self.check_conditional_body(&if_stmt.then_branch)?;
                 if let Some(else_branch) = &if_stmt.else_branch {
-                    for stmt in else_branch {
-                        self.check_control_stmt(stmt)?;
-                    }
+                    self.check_conditional_body(else_branch)?;
                 }
                 Ok(())
             }
             ControlStmt::While(while_stmt) => {
                 self.infer_control_expr(&while_stmt.condition)?;
-                for stmt in &while_stmt.body {
-                    self.check_control_stmt(stmt)?;
-                }
-                Ok(())
+                self.check_conditional_body(&while_stmt.body)
             }
             ControlStmt::For(for_stmt) => {
                 // Range endpoints must be integers
@@ -454,12 +510,9 @@ impl TypeChecker {
                 }
 
                 // Loop variable is Int
-                self.env.set_var(for_stmt.variable.clone(), Type::Int);
+                self.set_var_guarded(&for_stmt.variable, Type::Int)?;
 
-                for stmt in &for_stmt.body {
-                    self.check_control_stmt(stmt)?;
-                }
-                Ok(())
+                self.check_conditional_body(&for_stmt.body)
             }
             ControlStmt::Return(expr) => {
                 if let Some(e) = expr {
@@ -504,20 +557,151 @@ impl TypeChecker {
                 } else {
                     self.check_echo_admissible(&rb.body)?;
                 }
+                // The types the block's direct targets have now, which is
+                // what `reverse tok` will bring back. Only direct `+=`/`-=`
+                // steps are recorded at run time, so only those are restored.
+                let before: Vec<(String, Type)> = rb
+                    .body
+                    .iter()
+                    .filter_map(|stmt| match stmt {
+                        ReversibleStmt::AddAssign(target, _)
+                        | ReversibleStmt::SubAssign(target, _) => {
+                            Some((target.clone(), self.env.get_var(target)?.clone()))
+                        }
+                        ReversibleStmt::If(_) => None,
+                    })
+                    .collect();
                 for stmt in &rb.body {
-                    self.check_reversible_stmt(stmt)?;
+                    // Only token-bound blocks restore types at `reverse tok`,
+                    // so only their `if` statements are guarded (see
+                    // `set_var_guarded`). Each recorded target must keep, on
+                    // every path through the `if`, the type it has when the
+                    // `if` begins.
+                    if rb.token_binding.is_some() && matches!(stmt, ReversibleStmt::If(_)) {
+                        let kept: Vec<(String, Type)> = before
+                            .iter()
+                            .filter_map(|(target, _)| {
+                                Some((target.clone(), self.env.get_var(target)?.clone()))
+                            })
+                            .collect();
+                        // A token-bound block nested in a branch of another
+                        // adds its guards to the enclosing ones; it does not
+                        // replace them. The enclosing entries stay first,
+                        // because `set_var_guarded` takes the first match.
+                        let mut scoped = self.guarded.clone();
+                        scoped.extend(kept);
+                        let outer = std::mem::replace(&mut self.guarded, scoped);
+                        let checked = self.check_reversible_stmt(stmt);
+                        self.guarded = outer;
+                        checked?;
+                    } else {
+                        self.check_reversible_stmt(stmt)?;
+                    }
                 }
-                // token binding is a runtime opaque value; no type to check statically
+                if let Some(tok) = &rb.token_binding {
+                    // One entry per target, however many steps update it:
+                    // every entry holds the type before the whole block, and
+                    // a second one would be compared with the type the first
+                    // had just restored.
+                    let mut recorded: TokenRecord = Vec::new();
+                    for (target, ty) in before {
+                        if recorded.iter().any(|(seen, _, _)| *seen == target) {
+                            continue;
+                        }
+                        if let Some(after) = self.env.get_var(&target).cloned() {
+                            recorded.push((target, ty, after));
+                        }
+                    }
+                    // Where this block is sure to run, the name now holds its
+                    // token and nothing else. In a branch or a loop it may not
+                    // run, and a token bound earlier under the same name may
+                    // still be the live one, so its record is kept alongside.
+                    let live = self.token_types.entry(tok.clone()).or_default();
+                    if self.conditional_depth == 0 {
+                        live.clear();
+                    }
+                    live.push(recorded);
+                }
                 Ok(())
             }
             ControlStmt::ReverseToken(tok) => {
                 // tok must be bound; we can't verify it's a ReversalToken statically
                 // (the variable may be assigned at runtime). Accept unconditionally.
-                let _ = tok;
+                //
+                // Reversing restores each target's old value and carrier, so
+                // its type goes back too. Leaving the promoted type in place
+                // is unsound, not merely strict: after `Int += 1/2` and
+                // `reverse tok` the variable is an Int again, and a tokenless
+                // `reverse { x += 1/2 }` graded as Rational += Rational would
+                // be admitted while it promotes at run time. Every entry was
+                // read before the block's first step.
+                //
+                // That holds only while the target still has the type the
+                // block left it with. If it was reassigned to another type in
+                // between, the recorded inverse is applied to a value the block
+                // never produced, and the carrier it leaves depends on which
+                // inverse was recorded: a snapshot brings back the old carrier,
+                // an arithmetic inverse keeps the new one. The checker cannot
+                // tell which, so it rejects the reversal instead of guessing.
+                //
+                // The record is dropped only where this statement is sure to
+                // run. In a branch or a loop the token may still be live
+                // afterwards, and a later `reverse tok` must be checked
+                // against the same record. On the path where this one did
+                // run, that later reversal fails at run time (the token is
+                // gone), so keeping the record admits nothing wrong.
+                let sure_to_run = self.conditional_depth == 0;
+                let records = if sure_to_run {
+                    self.token_types.remove(tok)
+                } else {
+                    self.token_types.get(tok).cloned()
+                }
+                .unwrap_or_default();
+                // The type afterwards is known exactly only when this
+                // reversal is sure to run and the token can have come from
+                // one block only. Otherwise it depends on the path: on
+                // whether the reversal ran, or on which block bound the
+                // token. That is harmless only if no candidate block changed
+                // a type, so that every path leaves the same types.
+                let one_candidate = records.len() == 1;
+                for recorded in records {
+                    if !sure_to_run || !one_candidate {
+                        if let Some((target, before, after)) =
+                            recorded.iter().find(|(_, before, after)| before != after)
+                        {
+                            let why = if sure_to_run {
+                                "the token may come from more than one reversible block"
+                            } else {
+                                "whether this reversal runs is not known when checking"
+                            };
+                            return Err(JtvError::TypeError(format!(
+                                "cannot reverse `{tok}` here: a block that binds it changed \
+                                 `{target}` from {before} to {after}, and {why}"
+                            )));
+                        }
+                    }
+                    for (target, before, after) in recorded {
+                        if self.env.get_var(&target) != Some(&after) {
+                            return Err(JtvError::TypeError(format!(
+                                "cannot reverse `{tok}`: `{target}` had type {after} when its \
+                                 reversible block ended and has been given another type since"
+                            )));
+                        }
+                        self.set_var_guarded(&target, before)?;
+                    }
+                }
                 Ok(())
             }
             ControlStmt::AbandonToken(tok) => {
-                let _ = tok;
+                // An abandoned token is never reversed, so its record is dead,
+                // but only where the `abandon` is sure to run. In a branch or
+                // a loop the token may still be live afterwards; dropping the
+                // record there would let a later `reverse tok` bring back a
+                // type the checker no longer knows about. On the path where
+                // the `abandon` did run, that reversal fails at run time.
+                if self.conditional_depth == 0 {
+                    self.token_types.remove(tok);
+                }
                 Ok(())
             }
             ControlStmt::Block(stmts) => {
@@ -543,19 +727,7 @@ impl TypeChecker {
         self.env
             .vars
             .iter()
-            .filter_map(|(name, ty)| {
-                let bt = match ty {
-                    Type::Int => BasicType::Int,
-                    Type::Float => BasicType::Float,
-                    Type::Rational => BasicType::Rational,
-                    Type::Complex => BasicType::Complex,
-                    Type::Hex => BasicType::Hex,
-                    Type::Binary => BasicType::Binary,
-                    Type::Symbolic => BasicType::Symbolic,
-                    _ => return None,
-                };
-                Some((name.clone(), bt))
-            })
+            .filter_map(|(name, ty)| Some((name.clone(), numeric_carrier(ty)?)))
             .collect()
     }
 
@@ -613,23 +785,30 @@ impl TypeChecker {
                 let expr_ty = self.infer_data_expr(expr)?;
                 let target_ty = self.env.get_var(target).cloned().unwrap_or(Type::Any);
 
-                if target_ty.add_result(&expr_ty).is_none() {
+                let Some(result_ty) = target_ty.add_result(&expr_ty) else {
                     return Err(JtvError::TypeError(format!(
                         "Cannot add {} to {}",
                         expr_ty, target_ty
                     )));
+                };
+                // The step leaves the target in the carrier of the sum. Record
+                // it, as a plain assignment would, so that a later reverse
+                // block is graded against the carrier the variable now has:
+                // after a token-bound `x += 0.5` an Int `x` holds a Float, and
+                // a tokenless `reverse { x += 1 }` must not be graded as Int.
+                // An `Any` target stays `Any`. `reverse tok` restores the old
+                // value and carrier at run time, and the `ReverseToken` arm
+                // restores the type to match.
+                if target_ty != Type::Any {
+                    self.set_var_guarded(target, result_ty)?;
                 }
                 Ok(())
             }
             ReversibleStmt::If(if_stmt) => {
                 self.infer_control_expr(&if_stmt.condition)?;
-                for stmt in &if_stmt.then_branch {
-                    self.check_control_stmt(stmt)?;
-                }
+                self.check_conditional_body(&if_stmt.then_branch)?;
                 if let Some(else_branch) = &if_stmt.else_branch {
-                    for stmt in else_branch {
-                        self.check_control_stmt(stmt)?;
-                    }
+                    self.check_conditional_body(else_branch)?;
                 }
                 Ok(())
             }
@@ -767,6 +946,21 @@ impl TypeChecker {
             Number::Symbolic(_) => Type::Symbolic,
         }
     }
+}
+
+/// The numeric carrier of a type, or `None` for a non-numeric or
+/// not-yet-inferred (`Any`) type.
+fn numeric_carrier(ty: &Type) -> Option<BasicType> {
+    Some(match ty {
+        Type::Int => BasicType::Int,
+        Type::Float => BasicType::Float,
+        Type::Rational => BasicType::Rational,
+        Type::Complex => BasicType::Complex,
+        Type::Hex => BasicType::Hex,
+        Type::Binary => BasicType::Binary,
+        Type::Symbolic => BasicType::Symbolic,
+        _ => return None,
+    })
 }
 
 impl Default for TypeChecker {

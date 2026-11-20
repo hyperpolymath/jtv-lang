@@ -26,6 +26,13 @@ unannotated; a `reverse` target that is not bound at all is not thereby an
 integer, and the Wave 1 carrier lane rejects it (fail closed; this narrowing is
 a proposal awaiting owner review). The rest of this ADR stands.
 
+NOTE: *Amended 2026-11-17 (hole H26)*: D4's grade now also joins the tier of
+the *result's* carrier and a `Neutral` for any change of carrier, because
+`Int += Float` and `Int += Rational` were graded `Safe`. The owner chose the
+proof-first route for the fix; the rule is `stepEcho` in
+`theory/agda/src/Jtv/Promotion.agda`. The wording of D4 below is this
+amendment's proposal and awaits owner review.
+
 *Decided (2026-06-18).* Proof, type-, value-level classifiers and the
 carrier-aware typechecker gate all landed (PRs #44, #45, and the float-locals
 slice). Realizes ADR-0007 D6; refines its tier vocabulary for the floating-point
@@ -99,18 +106,59 @@ the same decomposition, and float is why:
 
 === D4 — Carrier-aware Echo classification
 
-Echo classification of a reversible `+=` is graded by the *join* of two
-independent loss sources:
+Echo classification of a reversible `+=` is graded by the *join* of four
+loss sources (_amended 2026-11-17_; the rule as first written used only the
+first two, which graded `Int += Float` as `Safe` — hole H26):
 
 [source]
 ----
-echo(x += v)  =  shape(x += v)  ⊔  carrier_echo(typeof x)
+echo(x += v)  =  shape(x += v)
+              ⊔  carrier_echo(typeof x)          -- the target's carrier
+              ⊔  carrier_echo(typeof (x + v))    -- the carrier of the result
+              ⊔  change(typeof x, typeof (x + v))
 ----
 
 * `shape` — self-reference (`x += x`) is `Neutral` (token-recoverable), else
   `Safe`.
-* `carrier_echo` — the D1 map applied to the target's number system; `float`
-  lifts the grade to `Neutral` regardless of shape.
+* `carrier_echo` — the D1 map applied to a number system; `float` lifts the
+  grade to `Neutral` regardless of shape.
+* `typeof (x + v)` follows the promotion table of `Value::add`
+  (`Int + Float` is `Float`, `Int + Rational` is `Rational`, and so on).
+* `change` is `Neutral` when the result is in a different carrier from the
+  target, else `Safe`: an arithmetic inverse stays in the promoted carrier,
+  so only a snapshot restores the original value.
+* When the operand's carrier cannot be determined statically (a function
+  call, a non-numeric expression) the step is `Neutral`. A call's declared
+  return type is not used: the checker does not yet enforce it (hole H29).
+* After the step the checker records the target as having the result's
+  carrier, and at `reverse tok` it restores the carrier the target had before
+  the block, so a later block is graded against the carrier the variable
+  holds. A `reverse tok` inside a branch or a loop may not run, so it is
+  rejected when its block changed a type. For the same reason a `reverse tok`
+  or an `abandon tok` there does not retire the token's record: the token may
+  still be live afterwards, and a later `reverse tok` is checked against the
+  same record. Likewise a token-bound block in a branch or a loop that reuses
+  a token name adds a record instead of replacing the earlier one, because
+  either token may be the live one; `reverse tok` is then rejected if any
+  candidate block changed a type. If the target
+  was given another type between the block and `reverse tok`, the checker
+  rejects the reversal: the carrier it would leave depends on which inverse
+  the runtime recorded. For the same reason an `if` branch inside a
+  token-bound block may not change the type of a target the block updates:
+  branch assignments are not recorded (hole H21). The generated test
+  `tests/reverse_gate_soundness.rs` compares the gate's verdict with the
+  carriers the interpreter produces on 18,144 such programs.
+
+The rule is `stepEcho` in `theory/agda/src/Jtv/Promotion.agda`, rechecked in
+`jtv_proofs/JtvPromotion.lean`. Proved there: the grade is at least the tier of
+the result's carrier (`result-bounds-grade`); a step graded `Safe` has a Safe
+shape, Safe carriers and no change of carrier (`safe-grade-sound`); and for
+any implementation whose `add` follows the promotion table, undoing a
+promoting step by arithmetic inversion does not return the original value
+(`RoundTrip.promoted-add-not-restored`). The tier map is a parameter of those
+theorems, so they hold whichever carriers D2 calls `Safe`. `echo.rs`
+implements the rule as `step_echo`; `tests/promotion_grading.rs` checks its
+promotion table against `Value::add` on every carrier pair.
 
 A `CarrierEnv` (variable -> `BasicType`) is threaded through classification.
 *Default-carrier soundness:* a variable absent from the env is treated as `Int`

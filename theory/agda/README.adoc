@@ -49,7 +49,7 @@ assignable at all.
 | `jtv_proofs/JtvEcho.lean`
 
 | `Jtv.Conditional`
-| **New** (not in Lean): the reversible `if`. Proves that the tokenless
+| The reversible `if` (Agda first; Lean counterpart added 2026-11-09). Proves that the tokenless
   strategy — re-evaluating the guard on the reversed state — is *not* an
   identity (`tokenless-conditional-not-identity`), and *proves* the repair
   rather than modelling it: `reversible-if-with-residue` shows that
@@ -57,7 +57,21 @@ assignable at all.
   for an arbitrary guard, including one whose truth changes under the step.
   This mechanises finding **F3** of
   `docs/reports/audit/audit-2026-11-01-jtv-v2-independence.adoc` §8.1.
-| —
+| `jtv_proofs/JtvConditional.lean` (added 2026-11-09)
+
+| `Jtv.Promotion`
+| The grade of a reversible step `x += v` when the operand promotes the
+  target to another carrier (`Int += Float`, `Int += Rational`). Defines the
+  promotion table and the grade `stepEcho` (shape ⊔ target tier ⊔ result tier ⊔
+  `Neutral` on a change of carrier). Proves that the grade bounds the tier of
+  the promoted result (`result-bounds-grade`), that a step graded `Safe` keeps
+  its carrier (`safe-grade-sound`), and that for any implementation whose
+  `add` follows the table, undoing a promoting step by arithmetic inversion
+  does not return the original value (`RoundTrip.promoted-add-not-restored`).
+  Written before the fix for hole H26, which it specifies. The carrier tier map
+  is a parameter; the table's agreement with `Value::add` is tested in Rust, not
+  proved.
+| `jtv_proofs/JtvPromotion.lean` (no axioms)
 |===
 
 == 2. Toolchain, pinned
@@ -242,6 +256,15 @@ Per §2.2 the transport route would be preferable and is open work.
 | New Agda theorems closing gaps the 2026-11-01 review found: the token path for
   subtraction, the converse that makes the residue-policy lemma a real iff, and
   the agreement of the order with the join (which Lean has by definition).
+
+| `promote-absorb`, `target-bounds-grade`, `result-bounds-grade`, `safe-grade-sound`, `promoting-step-not-safe`, `promoting-step-at-least-neutral`, `RoundTrip.promoted-add-not-restored`, `RoundTrip.promoted-sub-not-restored`, `RoundTrip.safe-step-keeps-carrier`, `int-plus-float-not-restored`, `int-plus-rational-not-restored` (`Jtv.Promotion`, added 2026-11-17)
+| The same names in snake case under `Jtv.Promotion` (`JtvPromotion.lean`)
+| re-proved
+| Same statements. Agda decides carrier equality through a ℕ encoding, Lean
+  through the derived `DecidableEq`. Agda's `RoundTrip` is a parameterised
+  module; Lean passes the same five parameters as explicit arguments. Lean's
+  `le_trans'` re-proves transitivity by cases so that nothing in the file
+  depends on `propext`.
 |===
 
 === 4.1 What is deliberately not modelled
@@ -277,7 +300,7 @@ Stated so no reader infers more coverage than exists:
 == 5. Status
 
 See `verification/PROOF-STATUS.adoc` for the ledger and the grade. In one
-line: the theorems of these four modules are `PWG-3` (Agda, canonical flags,
+line: the theorems of these five modules are `PWG-3` (Agda, canonical flags,
 no escape hatches, current receipt `verification/receipts/agda.json`); every one
 except `loss-is-real` now has a Lean statement of equal strength (Lean's
 `residue_lossy` is a weaker existential), each recorded `BRIDGE-PENDING` until the
