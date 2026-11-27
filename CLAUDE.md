@@ -88,7 +88,7 @@ Must-read files for context:
 ### Next Steps (Priority Order)
 
 1. **WASM Compilation**: `just build-wasm` using wasm-pack
-2. **ReScript PWA**: Scaffold with Vite
+2. **AffineScript PWA**: Scaffold with Vite
 3. **Router Visualization** (THE KILLER DEMO):
    - Animate Control (blue) vs Data (red) channel separation
    - Show "bridge" when data results cross to control variables
