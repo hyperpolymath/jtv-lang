@@ -302,9 +302,9 @@ Two separate questions, often conflated:
   statement's source of truth is **Agda**; under
   `hyperpolymath/standards:3-practice/PROOF-POLICY.adoc` §3 a Lean-only theory
   proof is *target-only evidence* and the Agda row stays `open`.
-  **The theorems of the four modules in `theory/agda/` are `PWG-3`** — the Data
-  model, the Safe/Neutral reversal theorems, the Echo lattice + fibre, and the
-  tokenless-`if` counterexample — checked with the canonical invocation and
+  **The theorems of the five modules in `theory/agda/` are `PWG-3`** — the Data
+  model, the Safe/Neutral reversal theorems, the Echo lattice + fibre, the
+  tokenless-`if` counterexample, and the promotion-aware reversal grade — checked with the canonical invocation and
   receipted. The Lean-only remainder (Control-plane, `JtvExtended`, all of the
   `JtvTypes` type preservation including the `isIntRepr` family
   `type_preservation` / `type_preservation_int`, the AOLD bundle) is
