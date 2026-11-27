@@ -25,7 +25,7 @@ banned-patterns = [
   ".unwrap() → .expect('TODO') anti-pattern (Rust)"
 ]
 banned-languages = [
-  "TypeScript (use ReScript)",
+  "TypeScript (use AffineScript)",
   "Python (no SaltStack here)",
   "Go (use Rust)",
   "zig (banned 2026-04-10 → migrate to Zig)"
